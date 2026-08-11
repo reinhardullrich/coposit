@@ -1,0 +1,36 @@
+[build-system]
+requires = ["scikit-build-core>=1.0"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "pycoposit"
+version = "0.1.0"
+description = "Exact strict-copositivity checks for symmetric integer matrices"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
+authors = [{ name = "Reinhard Ullrich" }]
+
+[tool.scikit-build]
+cmake.source-dir = "cpp"
+cmake.build-type = "Release"
+wheel.packages = ["python/pycoposit"]
+sdist.inclusion-mode = "manual"
+sdist.exclude = ["**"]
+sdist.include = [
+    "README.md",
+    "pyproject.toml",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "cpp/CMakeLists.txt",
+    "cpp/include/**",
+    "models/**/solver.cpp",
+    "cpp/python_module.cpp",
+    "python/run_results.py",
+    "python/pycoposit/*.py",
+]
+
+[tool.scikit-build.cmake.define]
+BUILD_TESTING = false
+COPOSIT_BUILD_PYTHON = true

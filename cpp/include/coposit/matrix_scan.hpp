@@ -1,0 +1,157 @@
+#pragma once
+
+#include <coposit/matrix_integer.hpp>
+#include <coposit/small_copositivity.hpp>
+#include <coposit/support.hpp>
+#include <coposit/timeout.hpp>
+
+#include <cstddef>
+#include <stdexcept>
+#include <utility>
+#include <vector>
+
+namespace coposit {
+
+struct matrix_scan_requirements {
+    bool negative_part_row_sums = false;
+    bool all_ones = false;
+    bool negative_graph = false;
+    bool ordinary_principal_pairs = false;
+    bool strict_principal_pairs = false;
+    bool frank_wolfe = false;
+};
+
+struct matrix_scan_result {
+    size_t dimension = 0;
+    bool all_diagonals_nonnegative = true;
+    bool all_diagonals_positive = true;
+    bool has_negative_off_diagonal = false;
+    bool all_principal_pairs_copositive = true;
+    bool all_principal_pairs_strictly_copositive = true;
+    integer all_ones_quadratic_value;
+    integer maximum_absolute_entry;
+    std::vector<int> diagonal_signs;
+    std::vector<integer> negative_part_row_sums;
+    std::vector<integer> full_row_sums;
+    std::vector<support> negative_neighbors;
+};
+
+namespace matrix_scan_detail {
+
+inline matrix_scan_result initialize(size_t dimension, const matrix_scan_requirements& requirements)
+{
+    matrix_scan_result result;
+    result.dimension = dimension;
+    result.diagonal_signs.resize(dimension);
+    if (requirements.negative_part_row_sums) result.negative_part_row_sums.resize(dimension);
+    if (requirements.frank_wolfe) result.full_row_sums.resize(dimension);
+    if (requirements.negative_graph) {
+        result.negative_neighbors.reserve(dimension);
+        for (size_t index = 0; index < dimension; ++index) result.negative_neighbors.emplace_back(dimension);
+    }
+    return result;
+}
+
+inline void observe_diagonal(matrix_scan_result& result, const matrix_scan_requirements& requirements, size_t index,
+                             integer::const_reference diagonal)
+{
+    const int sign = diagonal.sign();
+    result.diagonal_signs[index] = sign;
+    result.all_diagonals_nonnegative &= sign >= 0;
+    result.all_diagonals_positive &= sign > 0;
+    if (requirements.negative_part_row_sums) result.negative_part_row_sums[index] = diagonal;
+    if (requirements.all_ones) result.all_ones_quadratic_value += diagonal;
+    if (requirements.frank_wolfe) {
+        result.full_row_sums[index] = diagonal;
+        if (diagonal.compare_abs(result.maximum_absolute_entry) > 0) result.maximum_absolute_entry.set_abs(diagonal);
+    }
+}
+
+inline void observe_off_diagonal(matrix_scan_result& result, const matrix_scan_requirements& requirements, size_t row,
+                                 size_t column, integer::const_reference entry, integer::const_reference row_diagonal,
+                                 integer::const_reference column_diagonal)
+{
+    if (entry.sign() < 0) {
+        result.has_negative_off_diagonal = true;
+        if (requirements.negative_part_row_sums) {
+            result.negative_part_row_sums[row] += entry;
+            result.negative_part_row_sums[column] += entry;
+        }
+        if (requirements.negative_graph) {
+            result.negative_neighbors[row].set(column);
+            result.negative_neighbors[column].set(row);
+        }
+        if (requirements.ordinary_principal_pairs) {
+            result.all_principal_pairs_copositive &= small_copositivity::check_2x2<model::copositivity_mode::copositive>(
+                row_diagonal, entry, column_diagonal);
+        }
+        if (requirements.strict_principal_pairs) {
+            result.all_principal_pairs_strictly_copositive &=
+                small_copositivity::check_2x2<model::copositivity_mode::strictly_copositive>(
+                    row_diagonal, entry, column_diagonal);
+        }
+    }
+    if (requirements.all_ones) {
+        result.all_ones_quadratic_value += entry;
+        result.all_ones_quadratic_value += entry;
+    }
+    if (requirements.frank_wolfe) {
+        result.full_row_sums[row] += entry;
+        result.full_row_sums[column] += entry;
+        if (entry.compare_abs(result.maximum_absolute_entry) > 0) result.maximum_absolute_entry.set_abs(entry);
+    }
+}
+
+} // namespace matrix_scan_detail
+
+inline matrix_scan_result scan_matrix(const matrix_integer& matrix, const matrix_scan_requirements& requirements)
+{
+    const size_t dimension = matrix.rows();
+    if (dimension == 0 || matrix.cols() != dimension) throw std::invalid_argument("matrix must be nonempty and square");
+
+    matrix_scan_result result = matrix_scan_detail::initialize(dimension, requirements);
+    for (size_t index = 0; index < dimension; ++index) {
+        timeout_checkpoint();
+        matrix_scan_detail::observe_diagonal(result, requirements, index, matrix(index, index));
+    }
+
+    for (size_t row = 0; row < dimension; ++row) {
+        timeout_checkpoint();
+        for (size_t column = row + 1; column < dimension; ++column) {
+            if (matrix(row, column).compare(matrix(column, row)) != 0) throw std::invalid_argument("matrix must be symmetric");
+            matrix_scan_detail::observe_off_diagonal(result, requirements, row, column, matrix(row, column), matrix(row, row),
+                                                      matrix(column, column));
+        }
+    }
+    return result;
+}
+
+struct scanned_principal_matrix {
+    matrix_integer matrix;
+    matrix_scan_result scan;
+};
+
+inline scanned_principal_matrix scan_principal_matrix(const matrix_integer& source, const std::vector<size_t>& indices,
+                                                      const matrix_scan_requirements& requirements)
+{
+    const size_t dimension = indices.size();
+    scanned_principal_matrix result{matrix_integer(dimension, dimension),
+                                    matrix_scan_detail::initialize(dimension, requirements)};
+
+    for (size_t row = 0; row < dimension; ++row) {
+        timeout_checkpoint();
+        const size_t source_row = indices[row];
+        result.matrix(row, row) = source(source_row, source_row);
+        matrix_scan_detail::observe_diagonal(result.scan, requirements, row, result.matrix(row, row));
+        for (size_t column = row + 1; column < dimension; ++column) {
+            const size_t source_column = indices[column];
+            result.matrix(row, column) = source(source_row, source_column);
+            result.matrix(column, row) = result.matrix(row, column);
+            matrix_scan_detail::observe_off_diagonal(result.scan, requirements, row, column, result.matrix(row, column),
+                                                      result.matrix(row, row), source(source_column, source_column));
+        }
+    }
+    return result;
+}
+
+} // namespace coposit
