@@ -93,6 +93,19 @@ class WrapperTests(unittest.TestCase):
             self.assertEqual(result["status"], StatusCode.OK)
             self.assertIs(result["is_copositive"], False)
 
+            (matrix_directory / "8.mtx").write_text(
+                "%%MatrixMarket matrix coordinate integer symmetric\n3 3 4\n1 1 1\n3 1 -2\n2 2 1\n3 3 1\n",
+                encoding="ascii",
+            )
+            sparse = Matrix(
+                8,
+                "file:matrices/8.mtx",
+                {"dimension": 3, "base_directory": temporary_directory},
+            )
+            sparse_result = run("hadeler_1983", sparse, "copositive")
+            self.assertEqual(sparse_result["status"], StatusCode.OK)
+            self.assertIs(sparse_result["is_copositive"], False)
+
     def test_every_native_model(self):
         for algorithm in ALGORITHMS:
             with self.subTest(algorithm=algorithm):

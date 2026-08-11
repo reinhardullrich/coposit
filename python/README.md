@@ -83,8 +83,8 @@ if __name__ == "__main__":
 
 `Matrix.matrix` normally contains `dimension#upper-triangle-values`. Values-only text is also accepted when
 `Matrix.metadata["dimension"]` is an integer. It may instead contain `file:<relative-path>` for an exact symmetric integer Matrix
-Market array; file references additionally require `Matrix.metadata["base_directory"]`. Corpus references are relative to the SQLite
-database directory.
+Market array or coordinate file; file references additionally require `Matrix.metadata["base_directory"]`. Corpus references are
+relative to the SQLite database directory.
 
 Every result contains `algorithm`, `mode`, `matrix_id`, integer `status`, `is_copositive`, `is_strictly_copositive`, `elapsed_ns`,
 `error_message`, and the input `metadata`. For `copositive` or `strictly_copositive`, only the selected field contains `True` or

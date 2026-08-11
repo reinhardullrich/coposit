@@ -76,48 +76,73 @@ def _matrix_cli_string(matrix: Matrix) -> str:
 
 
 def _read_matrix_market(path: Path, expected_dimension: int) -> str:
-    """Read an exact symmetric integer Matrix Market array into Coposit's packed text form."""
+    """Read an exact symmetric integer Matrix Market array or coordinate file."""
 
-    values: list[str] = []
-    size_seen = False
     with path.open("r", encoding="ascii") as source:
         try:
             header = next(source).strip().lower().split()
         except StopIteration as error:
             raise ValueError(f"empty Matrix Market file: {path}") from error
-        if header != ["%%matrixmarket", "matrix", "array", "integer", "symmetric"]:
+        if (len(header) != 5 or header[:2] != ["%%matrixmarket", "matrix"] or header[2] not in ("array", "coordinate")
+                or header[3:] != ["integer", "symmetric"]):
             raise ValueError(f"unsupported Matrix Market header in {path}")
 
-        for line_number, line in enumerate(source, 2):
-            stripped = line.strip()
-            if not stripped or stripped.startswith("%"):
-                continue
-            fields = stripped.split()
-            if not size_seen:
-                if len(fields) != 2 or any(not field.isascii() or not field.isdigit() for field in fields):
-                    raise ValueError(f"invalid Matrix Market size at {path}:{line_number}")
-                rows, columns = map(int, fields)
-                if rows != expected_dimension or columns != expected_dimension:
-                    raise ValueError(
-                        f"Matrix Market size {rows}x{columns} does not match database dimension {expected_dimension} in {path}"
-                    )
-                size_seen = True
-                continue
+        data = (
+            (line_number, stripped.split())
+            for line_number, line in enumerate(source, 2)
+            if (stripped := line.strip()) and not stripped.startswith("%")
+        )
+        try:
+            size_line, size = next(data)
+        except StopIteration as error:
+            raise ValueError(f"Matrix Market file has no size line: {path}") from error
 
-            if len(fields) != 1:
-                raise ValueError(f"expected one Matrix Market integer at {path}:{line_number}")
-            token = fields[0]
-            digits = token[1:] if token[:1] in ("+", "-") else token
-            if not digits or not digits.isascii() or not digits.isdigit():
-                raise ValueError(f"invalid Matrix Market integer at {path}:{line_number}")
-            values.append(token)
+        expected_size_fields = 2 if header[2] == "array" else 3
+        if len(size) != expected_size_fields or any(not field.isascii() or not field.isdigit() for field in size):
+            raise ValueError(f"invalid Matrix Market size at {path}:{size_line}")
+        rows, columns = map(int, size[:2])
+        if rows != expected_dimension or columns != expected_dimension:
+            raise ValueError(
+                f"Matrix Market size {rows}x{columns} does not match database dimension {expected_dimension} in {path}"
+            )
 
-    if not size_seen:
-        raise ValueError(f"Matrix Market file has no size line: {path}")
-    expected_values = expected_dimension * (expected_dimension + 1) // 2
-    if len(values) != expected_values:
-        raise ValueError(f"Matrix Market file {path} has {len(values)} values; expected {expected_values}")
-    return f"{expected_dimension}#{','.join(values)}"
+        expected_values = expected_dimension * (expected_dimension + 1) // 2
+        if header[2] == "array":
+            values = []
+            for line_number, fields in data:
+                if len(fields) != 1 or not _is_exact_integer(fields[0]):
+                    raise ValueError(f"invalid Matrix Market integer at {path}:{line_number}")
+                values.append(fields[0])
+            if len(values) != expected_values:
+                raise ValueError(f"Matrix Market file {path} has {len(values)} values; expected {expected_values}")
+        else:
+            declared_entries = int(size[2])
+            values = ["0"] * expected_values
+            seen = bytearray(expected_values)
+            actual_entries = 0
+            for line_number, fields in data:
+                if (len(fields) != 3 or any(not field.isascii() or not field.isdigit() for field in fields[:2])
+                        or not _is_exact_integer(fields[2])):
+                    raise ValueError(f"invalid Matrix Market coordinate at {path}:{line_number}")
+                row, column = map(int, fields[:2])
+                if not 1 <= column <= row <= expected_dimension:
+                    raise ValueError(f"Matrix Market coordinate must lie in the lower triangle at {path}:{line_number}")
+                zero_based_column = column - 1
+                index = zero_based_column * expected_dimension - zero_based_column * (zero_based_column - 1) // 2 + row - column
+                if seen[index]:
+                    raise ValueError(f"duplicate Matrix Market coordinate at {path}:{line_number}")
+                seen[index] = 1
+                values[index] = fields[2]
+                actual_entries += 1
+            if actual_entries != declared_entries:
+                raise ValueError(f"Matrix Market file {path} has {actual_entries} entries; expected {declared_entries}")
+
+        return f"{expected_dimension}#{','.join(values)}"
+
+
+def _is_exact_integer(token: str) -> bool:
+    digits = token[1:] if token[:1] in ("+", "-") else token
+    return bool(digits) and digits.isascii() and digits.isdigit()
 
 
 def compute_matrix(

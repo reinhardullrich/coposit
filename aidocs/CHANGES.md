@@ -5,10 +5,13 @@ This append-only file records meaningful decisions, results, and evidence that a
 ## 2026-08-11 — Large corpus matrices moved to Matrix Market files
 
 - Added exact `file:<relative-path>` matrix references at the Python corpus boundary. References are confined to the database
-  directory and accept the standard Matrix Market `matrix array integer symmetric` form; every C++ model still receives the same
-  `dimension#upper-triangle-values` input.
+  directory and accept the standard Matrix Market `matrix array integer symmetric` and `matrix coordinate integer symmetric` forms;
+  every C++ model still receives the same `dimension#upper-triangle-values` input.
 - Externalized the 201 matrix rows larger than 500 KB into `testdata/matrices/<matrix_id>.mtx`. Symmetric Matrix Market lower-triangle
   column-major order is identical to Coposit's packed upper-triangle row-major order, so no matrix value or classification changed.
+- Compared the actual encoded byte counts and retained the smaller exact representation per file: 132 arrays and 69 coordinates. All
+  69 coordinate files have below one-percent stored-triangle density; every retained array is at least 75% dense. External matrix
+  storage fell from 729,009,854 to 458,287,571 bytes (37%). Streaming canonical hashes matched for all 201 matrices.
 - Compacted `Copos_testdata.sqlite3` from 1.54 GB to 76 MB. Compared all 201 reconstructed value strings byte-for-byte with the
   pre-migration database, retained all 164,681 result rows, passed SQLite integrity and foreign-key checks, all 20 Python tests, and
   all 35 Release CTest checks.

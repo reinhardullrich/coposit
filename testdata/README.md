@@ -15,9 +15,10 @@ optional source, optional family, and four independent Boolean benchmark flags: 
 and `scale_set`. Strict copositivity requires ordinary copositivity. `is_copositive = NULL` means that ordinary copositivity has not
 been established; it must not be read as false. The current corpus has no such rows. New rows default to no benchmark set.
 Small matrices keep their comma-separated upper triangle inline. Large rows contain `file:matrices/<matrix_id>.mtx`, resolved relative
-to the database directory. Those files use the standard Matrix Market `array integer symmetric` format. Its lower-triangle
-column-major sequence is identical to Coposit's upper-triangle row-major sequence for a symmetric matrix, so the conversion changes
-only storage, never a value. `externalize_large_matrices.py` performs the conversion and compacts the database.
+to the database directory. Those files use whichever standard Matrix Market `array integer symmetric` or
+`coordinate integer symmetric` representation is smaller in bytes. Symmetric array order and sorted symmetric coordinates both encode
+the lower triangle; coordinate files omit zeros. `externalize_large_matrices.py` performs the conversion, chooses the smaller exact
+representation for every external file, and compacts the database when it moves new rows.
 `assign_benchmark_sets_2026_08_10.sql` preserves the guarded pre-consensus assignment procedure; the stored flags remain unchanged
 after the ordinary classifications were completed. `aidocs/BENCHMARK_SETS.md` explains the assignment and current composition.
 Source strings flatten the former one-to-one provenance rows; every retained representative preserves the origins of projectively

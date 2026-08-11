@@ -684,8 +684,10 @@ matrices with dimensions 1 through 3,361: stable ID, dimension, exact matrix dat
 ordinary-copositivity result, optional source, optional family, and the independent `smoke_set`, `representative_core`, `stress_test`,
 and `scale_set` Boolean flags. Matrices up to 500 KB keep their packed upper triangle inline. The 201 larger rows use
 `file:matrices/<matrix_id>.mtx` references relative to the database directory; these files are exact symmetric integer Matrix Market
-arrays and are resolved by the Python corpus readers. Ordinary classifications comprise 674 strict matrices, 1,179 copositive
-boundary matrices, and 589 non-copositive matrices. No ordinary classification remains unknown. The nullable field still reserves
+files and are resolved by the Python corpus readers. Each file uses the smaller of the standard symmetric array and coordinate
+encodings: 132 use array and the 69 matrices below one-percent stored-triangle density use coordinate. Ordinary classifications
+comprise 674 strict matrices, 1,179 copositive boundary matrices, and 589 non-copositive matrices. No ordinary classification remains
+unknown. The nullable field still reserves
 `NULL` for “not established,” never false.
 The guarded dated benchmark assignment and exact composition are documented in `BENCHMARK_SETS.md`. The `results` table stores canonical
 matrix/model/parameter-text/native-binary outcomes with `ok`, `timeout`, `node_limit`, and

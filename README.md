@@ -79,4 +79,5 @@ decomposes each COPOMATRIX projection child before adaptive restart and is retai
 models performs a one-time root split.
 
 Small corpus matrices remain inline in SQLite. Large matrices are exact symmetric integer Matrix Market files under
-`testdata/matrices/`; database rows reference them with `file:<relative-path>`, which the Python corpus runner resolves automatically.
+`testdata/matrices/`; each uses whichever standard symmetric array or coordinate representation is smaller. Database rows reference
+them with `file:<relative-path>`, which the Python corpus runner resolves automatically.
