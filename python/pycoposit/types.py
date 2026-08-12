@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import IntEnum
 import os
-from typing import Any, Literal
+from typing import Literal
 
 Algorithm = Literal[
     "dutour_2018",
@@ -17,6 +17,7 @@ Algorithm = Literal[
     "adaptive_zischg_sponsel_copomatrix",
     "hadeler_1983",
     "dickinson_2019",
+    "dickinson_final",
     "support_pruned_dickinson",
     "nullity_support_pruned_dickinson",
     "rhs_dickinson",
@@ -43,6 +44,7 @@ COMBINED_CLASSIFICATION_ALGORITHMS: tuple[Algorithm, ...] = (
     "danninger_1990",
     "hadeler_1983",
     "dickinson_2019",
+    "dickinson_final",
 )
 
 ALGORITHMS: tuple[Algorithm, ...] = (
@@ -55,6 +57,7 @@ ALGORITHMS: tuple[Algorithm, ...] = (
     "adaptive_zischg_sponsel_copomatrix",
     "hadeler_1983",
     "dickinson_2019",
+    "dickinson_final",
     "support_pruned_dickinson",
     "nullity_support_pruned_dickinson",
     "rhs_dickinson",
@@ -107,21 +110,19 @@ class StatusCode(IntEnum):
 
 @dataclass(slots=True)
 class Matrix:
-    """One matrix submitted for analysis."""
+    """Matrix text or path with an optional correlation ID."""
 
-    matrix_id: int
     matrix: str
-    metadata: dict[str, Any] | None = None
+    matrix_id: int | None = None
 
     def __post_init__(self) -> None:
-        if type(self.matrix_id) is not int:
-            raise TypeError("Matrix.matrix_id must be an int")
-        if not -(1 << 63) <= self.matrix_id < (1 << 63):
-            raise ValueError("Matrix.matrix_id must fit in a signed 64-bit integer")
         if not isinstance(self.matrix, str):
             raise TypeError("Matrix.matrix must be a str")
-        if self.metadata is not None and not isinstance(self.metadata, dict):
-            raise TypeError("Matrix.metadata must be a dict or None")
+        if self.matrix_id is not None:
+            if type(self.matrix_id) is not int:
+                raise TypeError("Matrix.matrix_id must be an int or None")
+            if not -(1 << 63) <= self.matrix_id < (1 << 63):
+                raise ValueError("Matrix.matrix_id must fit in a signed 64-bit integer")
 
 
 @dataclass(slots=True)

@@ -418,7 +418,7 @@ Retain all existing one-, two-, and three-dimensional, sign-scan, and early-term
 Correctness is the release gate:
 
 1. Build the current commit in a separate ignored Release directory and preserve it as the before-change checker.
-2. Run the before and after checkers over every row of `testdata/Copos_testdata.sqlite3`. All 1,069 permutation-inequivalent matrices
+2. Run the before and after checkers over every row of `testdata/copos_testdata.sqlite3`. All 1,069 permutation-inequivalent matrices
    must retain their stored strict-copositivity result: 41 positive and 1,028 negative.
 3. Compare complete safe candidate output before and after for source matrix IDs 4, 7, 19, 20, 29, 53, and 54. Exclude only timing;
    all candidate fields and order must match exactly.
@@ -440,14 +440,14 @@ Measure:
 
 1. the complete 1,069-row reduced-B corpus;
 2. the negative-determinant and singular dimension-four cases separately, repeated long enough to remove startup noise;
-3. the seven end-to-end source games listed above, to ensure the ordinary application path does not regress.
+3. the seven end-to-end source games listed above, to ensure the standard application path does not regress.
 
 The expected gain is specific:
 
 - negative determinant: one triangular solve with one column instead of solves for $\ell$ identity columns;
 - zero determinant: one nullspace elimination instead of about $\ell^2/2$ cofactor determinants of order $\ell-1$.
 
-Retain the change only if all exact results match, the affected branches improve repeatably, and the ordinary end-to-end path has no
+Retain the change only if all exact results match, the affected branches improve repeatably, and the standard end-to-end path has no
 material regression. Do not add factorization caching or reusable allocation merely because it looks faster; benchmark this minimal
 replacement first.
 
@@ -485,4 +485,4 @@ nullspace while preserving Hadeler's exact decision.
 - Nine alternating CPU-2 corpus repetitions reduced the uncontended wall-time median from 4.660 s to 0.995 s, a 4.68x speedup
   and 78.65% less time. Process CPU-time medians independently gave the same 4.68x result; scheduler delay stayed below 0.93%.
 - CPU-2 end-to-end medians for the larger IDs 29, 53, and 54 changed by -0.08%, -0.09%, and -0.19%, respectively; no material
-  ordinary-path regression was measured.
+  standard-path regression was measured.

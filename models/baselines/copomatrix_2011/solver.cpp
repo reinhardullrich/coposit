@@ -1,4 +1,5 @@
 #include <coposit/model.hpp>
+#include <coposit/progress.hpp>
 #include <coposit/timeout.hpp>
 
 #include "../source_trace.hpp"
@@ -19,7 +20,7 @@ struct sparse_ray {
 };
 
 /*
- * Exact ordinary implementation and strict adaptation of Xu and Yao's 2011 COPOMATRIX projection algorithm.
+ * Exact non-strict implementation and strict adaptation of Xu and Yao's 2011 COPOMATRIX projection algorithm.
  *
  * Each node checks the principal child first, then triangulates only the negative pivot half-simplex for the Schur form. Xu and
  * Yao's normalized midpoints are represented by positively scaled primitive integer rays. Their unspecified pending-polytope
@@ -27,17 +28,26 @@ struct sparse_ray {
  */
 class copomatrix_checker {
 public:
-    explicit copomatrix_checker(copositivity_mode mode) : mode_(mode) {}
+    copomatrix_checker(copositivity_mode mode, size_t dimension)
+        : mode_(mode), progress_(progress::metric::proof, dimension)
+    {
+    }
 
-    bool check(const matrix_integer& matrix)
+    ~copomatrix_checker() { progress_.finish(); }
+
+    bool check(const matrix_integer& matrix, long double weight = 1.0L, size_t depth = 0)
     {
         timeout_checkpoint();
         const size_t dimension = matrix.rows();
+        progress_.visit(dimension, depth, depth + 1);
         COPOSIT_SOURCE_TRACE("diagonal-scan", dimension);
         for (size_t i = 0; i < dimension; ++i) {
             if (diagonal_fails(matrix(i, i))) return false;
         }
-        if (dimension == 1) return true;
+        if (dimension == 1) {
+            progress_.resolved(weight);
+            return true;
+        }
 
         const size_t child_dimension = dimension - 1;
         const integer::const_reference pivot = matrix(0, 0);
@@ -60,20 +70,36 @@ public:
             }
         }
 
+        progress_.split();
+        long double child_weight = 0.0L;
+        if (progress_.active()) {
+            integer child_count;
+            if (pivot.is_zero() || negative.empty()) {
+                child_count.set_one();
+            } else if (positive.empty()) {
+                fmpz_set_ui(child_count.native_handle(), 2);
+            } else {
+                fmpz_bin_uiui(child_count.native_handle(), static_cast<ulong>(positive.size() + negative.size() - 1),
+                              static_cast<ulong>(positive.size()));
+                fmpz_add_ui(child_count.native_handle(), child_count.native_handle(), 1);
+            }
+            child_weight = weight / fmpz_get_d(child_count.native_handle());
+        }
+
         matrix_integer block = make_principal_block(matrix);
         COPOSIT_SOURCE_TRACE("principal", child_dimension);
-        if (!check_projection(block)) return false;
+        if (!check_projection(block, child_weight, depth + 1)) return false;
         if (pivot.is_zero()) return negative.empty();
         if (negative.empty()) return true;
 
         matrix_integer schur = make_schur_block(matrix, block, p, pivot);
         COPOSIT_SOURCE_TRACE("schur", child_dimension);
-        if (positive.empty()) return check_projection(schur);
+        if (positive.empty()) return check_projection(schur, child_weight, depth + 1);
 
         std::vector<sparse_ray> rays;
         rays.reserve(child_dimension);
         for (const size_t index : zero) rays.push_back(coordinate_ray(index));
-        return check_negative_staircase(schur, p, positive, negative, 0, 0, rays);
+        return check_negative_staircase(schur, p, positive, negative, 0, 0, rays, child_weight, depth + 1);
     }
 
 private:
@@ -82,7 +108,7 @@ private:
         return diagonal.sign() < (mode_ == copositivity_mode::copositive ? 0 : 1);
     }
 
-    bool check_projection(const matrix_integer& matrix)
+    bool check_projection(const matrix_integer& matrix, long double weight, size_t depth)
     {
         const size_t dimension = matrix.rows();
         for (size_t i = 0; i < dimension; ++i) {
@@ -91,22 +117,24 @@ private:
         }
         for (size_t i = 0; i < dimension; ++i) {
             for (size_t j = i + 1; j < dimension; ++j) {
-                if (matrix(i, j).sign() < 0) return check(matrix);
+                if (matrix(i, j).sign() < 0) return check(matrix, weight, depth);
             }
         }
+        progress_.resolved(weight);
         return true;
     }
 
     bool check_negative_staircase(const matrix_integer& schur, const std::vector<integer>& p,
                                   const std::vector<size_t>& positive, const std::vector<size_t>& negative,
-                                  size_t positive_begin, size_t negative_begin, std::vector<sparse_ray>& rays)
+                                  size_t positive_begin, size_t negative_begin, std::vector<sparse_ray>& rays,
+                                  long double weight, size_t depth)
     {
         timeout_checkpoint();
         const size_t saved_size = rays.size();
 
         if (positive_begin == positive.size()) {
             for (size_t j = negative_begin; j < negative.size(); ++j) rays.push_back(coordinate_ray(negative[j]));
-            const bool result = check_projection(transform(schur, rays));
+            const bool result = check_projection(transform(schur, rays), weight, depth);
             rays.resize(saved_size);
             return result;
         }
@@ -116,17 +144,18 @@ private:
             for (size_t i = positive_begin; i < positive.size(); ++i) {
                 rays.push_back(pair_ray(p, positive[i], negative[negative_begin]));
             }
-            const bool result = check_projection(transform(schur, rays));
+            const bool result = check_projection(transform(schur, rays), weight, depth);
             rays.resize(saved_size);
             return result;
         }
 
         rays.push_back(pair_ray(p, positive[positive_begin], negative[negative_begin]));
-        if (!check_negative_staircase(schur, p, positive, negative, positive_begin + 1, negative_begin, rays)) {
+        if (!check_negative_staircase(schur, p, positive, negative, positive_begin + 1, negative_begin, rays, weight, depth)) {
             rays.resize(saved_size);
             return false;
         }
-        const bool result = check_negative_staircase(schur, p, positive, negative, positive_begin, negative_begin + 1, rays);
+        const bool result = check_negative_staircase(
+            schur, p, positive, negative, positive_begin, negative_begin + 1, rays, weight, depth);
         rays.resize(saved_size);
         return result;
     }
@@ -207,6 +236,7 @@ private:
     }
 
     const copositivity_mode mode_;
+    progress::tracker progress_;
 };
 
 } // namespace
@@ -215,16 +245,7 @@ bool solve(const matrix_integer& matrix, copositivity_mode mode)
 {
     timeout_checkpoint();
     const size_t dimension = matrix.rows();
-    if (dimension == 0 || matrix.cols() != dimension) throw std::invalid_argument("matrix must be nonempty and square");
-
-    for (size_t i = 0; i < dimension; ++i) {
-        timeout_checkpoint();
-        for (size_t j = i + 1; j < dimension; ++j) {
-            if (matrix(i, j).compare(matrix(j, i)) != 0) throw std::invalid_argument("matrix must be symmetric");
-        }
-    }
-
-    copomatrix_checker checker(mode);
+    copomatrix_checker checker(mode, dimension);
     return checker.check(matrix);
 }
 

@@ -15,32 +15,33 @@ The sets overlap on 100 matrices, so their union contains 524 distinct matrices.
 per-matrix cutoff, CPU 3 for dispatch and serialized SQLite writes, and three persistent native workers on CPUs 4–6. After the
 Adaptive pivot correction, all eight of its mode/preprocessing batches were repeated once under the same conditions.
 
-`Strict` and `ordinary` name the requested decision mode. In result cells, `solved/unresolved` counts matrices; unresolved means
+`Strict` and `non-strict` name the requested decision mode. In result cells, `solved/unresolved` counts matrices; unresolved means
 timeout, node limit, or execution error, never a negative classification. `Work` substitutes five seconds for each unresolved result.
 Truth coverage is written `strict / boundary / not copositive`, with each entry shown as completed/available.
 
 ## Both Preprocessing Stages — Requested Detailed Results
 
-`Both` means negative-entry connected-component splitting first, followed by all enabled pre-checks on every resulting component.
-Principal-submatrix pre-checks use the restored cardinality-three default.
+`Both` uses the fused pipeline: globally valid checks run during the root scan, negative-entry components are then visited, and
+Frank–Wolfe plus exact definiteness are deferred to each component. Principal-submatrix pre-checks run at the root with the restored
+cardinality-three default.
 
 | Model | Mode | Core solved/unresolved | Core work | Core truth: strict / boundary / not | Stress solved/unresolved | Stress work | Stress truth: strict / boundary / not | Union solved/unresolved | Union wall |
 |---|---|---:|---:|---|---:|---:|---|---:|---:|
 | Dickinson 2019 | Strict | 319/65 | 333.184 s | 135/192 · 105/110 · 79/82 | 116/124 | 625.546 s | 34/131 · 74/96 · 8/13 | 380/144 | 246.954 s |
-| Dickinson 2019 | Ordinary | 296/88 | 450.854 s | 135/192 · 82/110 · 79/82 | 107/133 | 671.253 s | 34/131 · 65/96 · 8/13 | 353/171 | 292.611 s |
+| Dickinson 2019 | Non-strict | 296/88 | 450.854 s | 135/192 · 82/110 · 79/82 | 107/133 | 671.253 s | 34/131 · 65/96 · 8/13 | 353/171 | 292.611 s |
 | Adaptive Sponsel–COPOMATRIX | Strict | 367/17 | 111.698 s | 183/192 · 102/110 · 82/82 | 183/57 | 361.423 s | 107/131 · 65/96 · 11/13 | 465/59 | 126.448 s |
-| Adaptive Sponsel–COPOMATRIX | Ordinary | 345/39 | 226.698 s | 183/192 · 84/110 · 78/82 | 168/72 | 445.770 s | 107/131 · 53/96 · 8/13 | 438/86 | 175.481 s |
+| Adaptive Sponsel–COPOMATRIX | Non-strict | 345/39 | 226.698 s | 183/192 · 84/110 · 78/82 | 168/72 | 445.770 s | 107/131 · 53/96 · 8/13 | 438/86 | 175.481 s |
 
 All 2,096 rows are present. Every unresolved result is a timeout; there are no node limits, execution errors, corpus mismatches, or
-impossible `ordinary=false, strict=true` combinations among results completed in both modes.
+impossible `non-strict=false, strict=true` combinations among results completed in both modes.
 
 ## Preprocessing Comparison
 
 `None` is the normal linked model. `Components` enables only connected-component splitting; `pre-checks` runs the checks on the
-whole matrix; `both` splits first and checks the resulting components. Core and Stress columns are completed counts. Union columns
-are `solved/unresolved`; wall time is `strict/ordinary`.
+whole matrix; `both` uses the fused root-check/component pipeline described above. Core and Stress columns are completed counts.
+Union columns are `solved/unresolved`; wall time is `strict/non-strict`.
 
-| Model | Preprocessing | Core strict | Core ordinary | Stress strict | Stress ordinary | Union strict | Union ordinary | Wall strict/ordinary |
+| Model | Preprocessing | Core strict | Core non-strict | Stress strict | Stress non-strict | Union strict | Union non-strict | Wall strict/non-strict |
 |---|---|---:|---:|---:|---:|---:|---:|---:|
 | Dickinson 2019 | None | 317 | 290 | 114 | 102 | 376/148 | 343/181 | 254.148/310.433 s |
 | Dickinson 2019 | Components | 317 | 291 | 114 | 102 | 376/148 | 344/180 | 128.158/156.443 s |
@@ -63,9 +64,9 @@ wall times are not directly comparable across models.
 
 All 16 mode-specific baseline batches were rerun. Each Core and Stress cell is
 `normal → both (gain)` in completed matrices. Union cells show only the both-stage run as `solved/unresolved`; wall time is
-`strict/ordinary` for the both-stage runs.
+`strict/non-strict` for the both-stage runs.
 
-| Model | Core strict | Core ordinary | Stress strict | Stress ordinary | Both union strict | Both union ordinary | Both wall strict/ordinary |
+| Model | Core strict | Core non-strict | Stress strict | Stress non-strict | Both union strict | Both union non-strict | Both wall strict/non-strict |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | Dutour 2018 | 278 → 289 (+11) | 240 → 249 (+9) | 58 → 91 (+33) | 34 → 53 (+19) | 336/188 | 274/250 | 321.297/408.811 s |
 | Danninger 1990 | 254 → 268 (+14) | 219 → 235 (+16) | 65 → 72 (+7) | 55 → 63 (+8) | 316/208 | 278/246 | 352.245/417.486 s |
@@ -79,10 +80,10 @@ All 16 mode-specific baseline batches were rerun. Each Core and Stress cell is
 Both stages improve every one of the 32 model/set/mode comparisons. Across the eight baselines and two modes, completed union results
 increase from 4,991 to 5,363: 372 additional decisions. The largest individual gains are Bundfuss Stress strict (+42), Sponsel Stress
 strict (+40), and Dutour Stress strict (+33). Sponsel has the largest strict union completion count, one ahead of Dickinson; Dickinson
-has the largest ordinary count.
+has the largest non-strict count.
 
-The 8,384 both-stage result rows contain 5,363 completions, 3,009 timeouts, and 12 Dutour ordinary node limits. There are zero execution
-errors, zero corpus mismatches, and zero impossible `ordinary=false, strict=true` combinations among the 2,495 pairs completed in both
+The 8,384 both-stage result rows contain 5,363 completions, 3,009 timeouts, and 12 Dutour non-strict node limits. There are zero execution
+errors, zero corpus mismatches, and zero impossible `non-strict=false, strict=true` combinations among the 2,495 pairs completed in both
 modes. Every current batch completed without interruption.
 
 ## Normal Model Results
@@ -90,7 +91,7 @@ modes. Every current batch completed without interruption.
 These are runs without external preprocessing. Literature baselines remain separate in meaning from the Coposit-created adaptive
 model, even though one table keeps their benchmark data together. Each result cell is `solved/unresolved · substituted work`.
 
-| Model | Kind | Core strict | Core ordinary | Stress strict | Stress ordinary | Union wall strict/ordinary |
+| Model | Kind | Core strict | Core non-strict | Stress strict | Stress non-strict | Union wall strict/non-strict |
 |---|---|---|---|---|---|---:|
 | Dutour 2018 | Baseline | 278/106 · 547.954 s | 240/144 · 742.249 s | 58/182 · 919.706 s | 34/206 · 1,043.003 s | 366.291/449.763 s |
 | Danninger 1990 | Baseline | 254/130 · 668.297 s | 219/165 · 838.432 s | 65/175 · 875.186 s | 55/185 · 925.923 s | 389.611/455.902 s |
@@ -103,15 +104,15 @@ model, even though one table keeps their benchmark data together. Each result ce
 | Adaptive Sponsel–COPOMATRIX | Coposit-created | 364/20 · 129.692 s | 340/44 · 251.757 s | 178/62 · 386.996 s | 162/78 · 468.420 s | 140.637/191.319 s |
 
 Relative to the preceding first-narrow-pivot binary, the minimum-child rule changed no completed Boolean classification but moved
-four calls from completed to timeout and rescued none: strict matrix 10488 and ordinary matrices 9648, 10044, and 10489. Three old
+four calls from completed to timeout and rescued none: strict matrix 10488 and non-strict matrices 9648, 10044, and 10489. Three old
 calls were already within 0.47 seconds of the cutoff; matrix 9648 is the material algorithmic regression, changing from 0.022 seconds
-to timeout. Substituted union work increased by 7.492 seconds in strict mode and 9.857 seconds in ordinary mode.
+to timeout. Substituted union work increased by 7.492 seconds in strict mode and 9.857 seconds in non-strict mode.
 
 ### Completed Coverage By Stored Truth
 
 Each cell is `strict / boundary / not copositive`, with completed/available counts.
 
-| Model | Core strict mode | Core ordinary mode | Stress strict mode | Stress ordinary mode |
+| Model | Core strict mode | Core non-strict mode | Stress strict mode | Stress non-strict mode |
 |---|---|---|---|---|
 | Dutour 2018 | 100/192 · 96/110 · 82/82 | 100/192 · 60/110 · 80/82 | 10/131 · 37/96 · 11/13 | 10/131 · 14/96 · 10/13 |
 | Danninger 1990 | 98/192 · 93/110 · 63/82 | 98/192 · 64/110 · 57/82 | 10/131 · 55/96 · 0/13 | 10/131 · 45/96 · 0/13 |
@@ -128,17 +129,17 @@ Each cell is `strict / boundary / not copositive`, with completed/available coun
 | Set | Mode | All 8 solve | 4–7 solve | 1–3 solve | None solve |
 |---|---|---:|---:|---:|---:|
 | Representative Core | Strict | 216 | 101 | 33 | 34 |
-| Representative Core | Ordinary | 174 | 111 | 46 | 53 |
+| Representative Core | Non-strict | 174 | 111 | 46 | 53 |
 | Stress Test | Strict | 18 | 80 | 37 | 105 |
-| Stress Test | Ordinary | 6 | 75 | 42 | 117 |
+| Stress Test | Non-strict | 6 | 75 | 42 | 117 |
 
 Dickinson has the largest completion count among faithful baselines in both modes on both sets. Adaptive Sponsel–COPOMATRIX completes
-47 more Core and 64 more Stress matrices in strict mode, and 50 more Core and 60 more Stress matrices in ordinary mode. These are
+47 more Core and 64 more Stress matrices in strict mode, and 50 more Core and 60 more Stress matrices in non-strict mode. These are
 five-second-cutoff benchmark observations, not claims of mathematical dominance.
 
-The eight baseline strict runs took 2,622.493 seconds of dispatcher wall time; their ordinary runs took 3,187.706 seconds. All completed
+The eight baseline strict runs took 2,622.493 seconds of dispatcher wall time; their non-strict runs took 3,187.706 seconds. All completed
 classifications match the corpus. Dutour's unresolved counts include three Core and ten Stress node limits in each mode. Danninger's
-ordinary Stress result includes one unresolved node limit on matrix 10244; the bounded iterative traversal replaces the historical
+non-strict Stress result includes one unresolved node limit on matrix 10244; the bounded iterative traversal replaces the historical
 stack-exhaustion crash without turning the resource outcome into a classification.
 
 ## Recorded Native Modules
@@ -148,7 +149,7 @@ stack-exhaustion crash without turning the resource outcome into a classificatio
 | Dutour 2018 | `2c93638b3f15d8403d52bf16137d7022f317353bc4f81cb60b3fc0ada5087cb1` | `2c93638b3f15d8403d52bf16137d7022f317353bc4f81cb60b3fc0ada5087cb1` |
 | Danninger 1990 | `8ec1d80a8673cc98ef853a1593fa6b3f9155a094a903c52e61efd5907deb9bfe` | `8ec1d80a8673cc98ef853a1593fa6b3f9155a094a903c52e61efd5907deb9bfe` |
 | COPOMATRIX 2011 | `68543778fe8c82702a21ae01a7915216b181cc51728ead50a0981f08209af075` | `68543778fe8c82702a21ae01a7915216b181cc51728ead50a0981f08209af075` |
-| Hadeler 1983 | Empty; hash-independent | Empty; hash-independent |
+| Hadeler 1983 | `1ecd99e49df73f3955c8a2684f84c5db7e7f3420d785c452bbbf7ed5a16b2c24` | `1ecd99e49df73f3955c8a2684f84c5db7e7f3420d785c452bbbf7ed5a16b2c24` |
 | Dickinson 2019 | `e34d25851717f3ce018cfefb605aff189511e715992eb5642958cb68b916b726` | `e34d25851717f3ce018cfefb605aff189511e715992eb5642958cb68b916b726` |
 | Safi 2021 | `94b5e8b549113ce5d12ec73d03e52558297b1a42aacbd54bc060f53e659f04d1` | `94b5e8b549113ce5d12ec73d03e52558297b1a42aacbd54bc060f53e659f04d1` |
 | Bundfuss 2008 | `29091289c0be49889035976249f77a1ed32542ec34325eecd2ba94337fb4370d` | `29091289c0be49889035976249f77a1ed32542ec34325eecd2ba94337fb4370d` |

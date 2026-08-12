@@ -1,5 +1,6 @@
 #include <coposit/fraction_free_ldlt.hpp>
 #include <coposit/model.hpp>
+#include <coposit/progress.hpp>
 #include <coposit/small_copositivity.hpp>
 #include <coposit/timeout.hpp>
 
@@ -20,9 +21,15 @@ namespace {
  */
 class hadeler_checker {
 public:
-    hadeler_checker(size_t dimension, copositivity_mode mode) : factorization_(dimension), mode_(mode) {}
+    hadeler_checker(size_t dimension, copositivity_mode mode)
+        : factorization_(dimension), mode_(mode), progress_(progress::metric::support, dimension)
+    {
+    }
     hadeler_checker(size_t dimension, copositivity_classification& classification)
-        : factorization_(dimension), mode_(copositivity_mode::copositive), classification_(&classification)
+        : factorization_(dimension)
+        , mode_(copositivity_mode::copositive)
+        , classification_(&classification)
+        , progress_(progress::metric::support, dimension)
     {
     }
 
@@ -30,15 +37,22 @@ public:
     {
         const size_t matrix_dimension = matrix.rows();
         for (size_t subset_dimension = 1; subset_dimension <= matrix_dimension; ++subset_dimension) {
+            progress_.stage(subset_dimension);
             std::vector<size_t> indices(subset_dimension);
             for (size_t i = 0; i < subset_dimension; ++i) indices[i] = i;
 
             do {
                 timeout_checkpoint();
+                progress_.visit_support();
+                progress_.secondary();
                 if (subset_dimension == 2) COPOSIT_SOURCE_TRACE("pair", indices[0], indices[1]);
-                if (!check_subset(matrix, indices)) return false;
+                if (!check_subset(matrix, indices)) {
+                    progress_.finish();
+                    return false;
+                }
             } while (advance_numeric_mask_order(indices, matrix_dimension));
         }
+        progress_.finish();
         return true;
     }
 
@@ -122,27 +136,15 @@ private:
     matrix_integer solution_;
     const copositivity_mode mode_;
     copositivity_classification* classification_ = nullptr;
+    progress::tracker progress_;
 };
-
-size_t validate_input(const matrix_integer& matrix)
-{
-    const size_t dimension = matrix.rows();
-    if (dimension == 0 || matrix.cols() != dimension) throw std::invalid_argument("matrix must be nonempty and square");
-
-    for (size_t i = 0; i < dimension; ++i) {
-        for (size_t j = i + 1; j < dimension; ++j) {
-            if (matrix(i, j).compare(matrix(j, i)) != 0) throw std::invalid_argument("matrix must be symmetric");
-        }
-    }
-    return dimension;
-}
 
 } // namespace
 
 bool solve(const matrix_integer& matrix, copositivity_mode mode)
 {
     timeout_checkpoint();
-    const size_t dimension = validate_input(matrix);
+    const size_t dimension = matrix.rows();
 
     if (dimension <= 3) return small_copositivity::check(matrix, mode);
 
@@ -152,7 +154,7 @@ bool solve(const matrix_integer& matrix, copositivity_mode mode)
 copositivity_classification classify(const matrix_integer& matrix)
 {
     timeout_checkpoint();
-    const size_t dimension = validate_input(matrix);
+    const size_t dimension = matrix.rows();
     if (dimension <= 3) return small_copositivity::classify(matrix);
 
     copositivity_classification result{true, true};

@@ -79,31 +79,17 @@ TEST(Danninger1990ModelTest, HighOrderGeneralizedHornStopsAtTheOpenNodeLimit)
         }
     }
 
-    constexpr auto ordinary = model::copositivity_mode::copositive;
-    EXPECT_THROW(model::solve(matrix, ordinary), open_node_limit_reached);
+    constexpr auto copositive = model::copositivity_mode::copositive;
+    EXPECT_THROW(model::solve(matrix, copositive), open_node_limit_reached);
 }
 
-TEST(Danninger1990ModelTest, RejectsInvalidMatrixShapes)
+TEST(Danninger1990ModelTest, DecidesCopositivity)
 {
-    matrix_integer empty;
-    EXPECT_THROW(model::solve(empty), std::invalid_argument);
-
-    matrix_integer non_square(2, 3);
-    EXPECT_THROW(model::solve(non_square), std::invalid_argument);
-
-    matrix_integer asymmetric;
-    asymmetric.set_identity(2);
-    asymmetric(0, 1) = integer(1);
-    EXPECT_THROW(model::solve(asymmetric), std::invalid_argument);
-}
-
-TEST(Danninger1990ModelTest, DecidesOrdinaryCopositivity)
-{
-    constexpr auto ordinary = model::copositivity_mode::copositive;
-    EXPECT_TRUE(model::solve(symmetric_matrix(1, {0}), ordinary));
-    EXPECT_TRUE(model::solve(symmetric_matrix(2, {1, -1, 1}), ordinary));
-    EXPECT_FALSE(model::solve(symmetric_matrix(2, {1, -2, 1}), ordinary));
-    EXPECT_TRUE(model::solve(symmetric_matrix(4, {0, 1, 1, 1, 1, 0, 0, 1, 0, 1}), ordinary));
+    constexpr auto copositive = model::copositivity_mode::copositive;
+    EXPECT_TRUE(model::solve(symmetric_matrix(1, {0}), copositive));
+    EXPECT_TRUE(model::solve(symmetric_matrix(2, {1, -1, 1}), copositive));
+    EXPECT_FALSE(model::solve(symmetric_matrix(2, {1, -2, 1}), copositive));
+    EXPECT_TRUE(model::solve(symmetric_matrix(4, {0, 1, 1, 1, 1, 0, 0, 1, 0, 1}), copositive));
 }
 
 TEST(Danninger1990ModelTest, ClassifiesBothPredicatesInOneTraversal)

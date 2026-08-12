@@ -26,7 +26,7 @@ copositive and 21 are not strictly copositive.
 - Timeout: 30 seconds per matrix.
 - Dispatcher and database writer: CPU 3.
 - Six persistent single-threaded native workers: CPUs 4 through 9.
-- Stored parameters: `bad26_original_cone_30s_2026-08-09`.
+- Historical campaign label before the result schema adopted a structured preprocessing column: `bad26_original_cone_30s_2026-08-09`.
 - Stored rows: 156, covering all 26 matrices for all six models.
 - Database integrity after import: `ok`.
 

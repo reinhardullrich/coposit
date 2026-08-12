@@ -1,5 +1,6 @@
 #include <coposit/model.hpp>
 #include <coposit/open_node_limit.hpp>
+#include <coposit/progress.hpp>
 #include <coposit/timeout.hpp>
 
 #include "../source_trace.hpp"
@@ -14,6 +15,12 @@ namespace coposit::model {
 namespace {
 
 enum class inspection { reject, accept, split };
+
+struct node {
+    matrix_integer gram;
+    long double weight;
+    size_t depth;
+};
 
 inspection inspect(const matrix_integer& gram, size_t& split_i, size_t& split_j, copositivity_mode mode)
 {
@@ -89,41 +96,48 @@ void replace_generator_with_sum(matrix_integer& gram, size_t replaced, size_t ot
  */
 bool test_copositivity(const matrix_integer& matrix, copositivity_mode mode)
 {
-    std::vector<matrix_integer> pending;
+    progress::tracker progress(progress::metric::proof, matrix.rows());
+    std::vector<node> pending;
     pending.reserve(64); // Initial capacity only; this is not a dimension limit.
-    pending.emplace_back(matrix);
+    pending.push_back({matrix_integer(matrix), progress.active() ? 1.0L : 0.0L, 0});
 
     while (!pending.empty()) {
         timeout_checkpoint();
-        matrix_integer current(std::move(pending.back()));
+        node current(std::move(pending.back()));
         pending.pop_back();
+        progress.visit(matrix.rows(), current.depth, pending.size() + 1);
 
         size_t split_i;
         size_t split_j;
-        switch (inspect(current, split_i, split_j, mode)) {
+        switch (inspect(current.gram, split_i, split_j, mode)) {
             case inspection::reject:
                 COPOSIT_SOURCE_TRACE("reject");
+                progress.finish();
                 return false;
             case inspection::accept:
                 COPOSIT_SOURCE_TRACE("accept");
+                progress.resolved(current.weight);
                 continue;
             case inspection::split:
                 COPOSIT_SOURCE_TRACE("split", split_i, split_j);
+                progress.split();
                 break;
         }
 
         enforce_open_node_limit(pending.size() + 2);
-        matrix_integer second_child(current);
-        replace_generator_with_sum(current, split_i, split_j);
+        matrix_integer second_child(current.gram);
+        replace_generator_with_sum(current.gram, split_i, split_j);
         replace_generator_with_sum(second_child, split_j, split_i);
+        const long double child_weight = current.weight * 0.5L;
 
         // LIFO order visits Dutour Sikirić's first child before its sibling.
         COPOSIT_SOURCE_TRACE("push-second", split_j, split_i);
-        pending.emplace_back(std::move(second_child));
+        pending.push_back({std::move(second_child), child_weight, current.depth + 1});
         COPOSIT_SOURCE_TRACE("push-first", split_i, split_j);
-        pending.emplace_back(std::move(current));
+        pending.push_back({std::move(current.gram), child_weight, current.depth + 1});
     }
 
+    progress.finish();
     return true;
 }
 
@@ -133,14 +147,6 @@ bool solve(const matrix_integer& matrix, copositivity_mode mode)
 {
     timeout_checkpoint();
     const size_t dimension = matrix.rows();
-    if (dimension == 0 || matrix.cols() != dimension) throw std::invalid_argument("matrix must be nonempty and square");
-
-    for (size_t i = 0; i < dimension; ++i) {
-        for (size_t j = i + 1; j < dimension; ++j) {
-            if (matrix(i, j).compare(matrix(j, i)) != 0) throw std::invalid_argument("matrix must be symmetric");
-        }
-    }
-
     return test_copositivity(matrix, mode);
 }
 

@@ -5,22 +5,22 @@ pinned to the retained experiment rather than a recoverable original program.
 
 ## Decision Modes
 
-`solve(A, mode)` runs the same finite dimension-reducing recursion for ordinary or strict copositivity. Strict mode requires every
-selected diagonal pivot $a$ and every recursive child value to be positive. Ordinary mode permits equality. Its only additional
+`solve(A, mode)` runs the same finite dimension-reducing recursion for non-strict or strict copositivity. Strict mode requires every
+selected diagonal pivot $a$ and every recursive child value to be positive. Non-strict mode permits equality. Its only additional
 algebraic case is a zero pivot:
 
 \[
 A=\begin{pmatrix}0&p^T\\p&B\end{pmatrix}.
 \]
 
-If some $p_i<0$, then $te_1+e_{i+1}$ has negative quadratic value for sufficiently large $t$, so ordinary copositivity fails. If
+If some $p_i<0$, then $te_1+e_{i+1}$ has negative quadratic value for sufficiently large $t$, so non-strict copositivity fails. If
 $p\geq0$, the cross term is harmless and $A$ is copositive exactly when $B$ is copositive; no Schur matrix is formed. For $a>0$,
 both modes use the same $B$ and $aB-pp^T$ children, primitive rays, staircase triangulation, and depth-first order. The exact
 order-one through order-three base criteria use non-strict or strict comparisons according to the selected mode.
 
-The default remains `strictly_copositive`. `solve(A, mode)` answers one selected predicate. `classify(A)` follows the ordinary
+The default remains `strictly_copositive`. `solve(A, mode)` answers one selected predicate. `classify(A)` follows the non-strict
 recursion once and returns both `is_copositive` and `is_strictly_copositive`; it does not run two recursion trees. The only possible
-pairs are `{false, false}`, `{true, false}`, and `{true, true}` because strict copositivity implies ordinary copositivity.
+pairs are `{false, false}`, `{true, false}`, and `{true, true}` because strict copositivity implies non-strict copositivity.
 
 ## What The Algorithm Does
 
@@ -194,8 +194,8 @@ mathematical test or traversal decision.
 ## Complete Control Flow
 
 1. Orders zero through three use the direct exact criterion for the selected mode.
-2. For larger matrices, reject a negative diagonal in ordinary mode or a nonpositive diagonal in strict mode.
-3. Pivot on the current first coordinate. In ordinary mode, handle $a=0$ by rejecting $p\not\geq0$ or recurring only on $B$.
+2. For larger matrices, reject a negative diagonal in non-strict mode or a nonpositive diagonal in strict mode.
+3. Pivot on the current first coordinate. In non-strict mode, handle $a=0$ by rejecting $p\not\geq0$ or recurring only on $B$.
 4. For $a>0$, construct $p$ and $B$, then classify the signs in $p$.
 5. Use the one-child rule when $p$ has only one sign, constructing $S=aB-pp^T$ only for the nonpositive case.
 6. Otherwise compute each primitive pair ray once, generate the plus staircase lazily, and recursively test every transformed $B$
@@ -208,21 +208,21 @@ positive determinant. Order three uses Hadeler's exact closed criterion, impleme
 
 ## Combined Classification
 
-The combined operation must follow the ordinary tree. A zero found on one branch proves that the matrix is not strictly
+The combined operation must follow the non-strict tree. A zero found on one branch proves that the matrix is not strictly
 copositive, but it does not rule out a negative value on another branch. The traversal therefore remembers strict failure and keeps
-checking ordinary copositivity.
+checking non-strict copositivity.
 
 At order at most three, the direct helper evaluates both exact predicates. A negative face returns `{false, false}`; a zero face
-sets the remembered strict field to `false` and passes for ordinary recursion. At a larger node, a negative pivot direction also
-returns `{false, false}`. A zero diagonal records strict failure. If its coupling vector $p$ has a negative component, ordinary
-copositivity fails too; otherwise the algorithm recurses only on $B$, exactly as in ordinary mode. A positive pivot uses the same
-$B$, $aB-pp^T$, cached primitive rays, and staircase children as ordinary mode, with the Schur form still delayed until its branch
+sets the remembered strict field to `false` and passes for non-strict recursion. At a larger node, a negative pivot direction also
+returns `{false, false}`. A zero diagonal records strict failure. If its coupling vector $p$ has a negative component, non-strict
+copositivity fails too; otherwise the algorithm recurses only on $B$, exactly as in non-strict mode. A positive pivot uses the same
+$B$, $aB-pp^T$, cached primitive rays, and staircase children as non-strict mode, with the Schur form still delayed until its branch
 is reached. Every child receives the same remembered strict field, so any nonpositive child records the boundary while any negative
 child ends the entire traversal.
 
-If the complete ordinary recursion passes, `classify` returns `{true, remembered_strict_result}`. A selected strict solve retains
-its earlier termination and does not pay for siblings after the first nonpositive witness. Input validation is identical for both
-operations: the matrix must be nonempty, square, and symmetric.
+If the complete non-strict recursion passes, `classify` returns `{true, remembered_strict_result}`. A selected strict solve retains
+its earlier termination and does not pay for siblings after the first nonpositive witness. Both operations assume the parser supplied
+a nonempty square symmetric matrix and do not repeat that validation.
 
 ## Known Difficult Inputs
 
@@ -264,7 +264,7 @@ of 50,000. Exceeding it throws the standard resource exception, which the native
 never converted to `false`. Completed children no longer count, so the limit bounds simultaneous unfinished work rather than the
 total number of children processed during a run.
 
-The maintained code was checked against the retained experiment for strict mode. Ordinary mode uses Danninger's published zero-pivot
+The maintained code was checked against the retained experiment for strict mode. Non-strict mode uses Danninger's published zero-pivot
 and non-strict boundary rules; fixed first-coordinate pivot, direct small-order tests, division-free Schur matrix, sign partition,
 primitive pair rays, lazy staircase triangulation, plus-before-minus traversal, and recursive child order otherwise agree. FLINT
 integer storage, per-node reuse of primitive pair rays, delayed Schur construction, and the explicit bounded LIFO representation

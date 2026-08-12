@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fill unknown ordinary-copositivity truth from unanimous completed baselines."""
+"""Fill unknown non-strict-copositivity truth from unanimous completed baselines."""
 
 from __future__ import annotations
 
@@ -52,7 +52,7 @@ def main() -> int:
     parser.add_argument(
         "--database",
         type=Path,
-        default=Path(__file__).resolve().parents[1] / "testdata" / "Copos_testdata.sqlite3",
+        default=Path(__file__).resolve().parents[1] / "testdata" / "copos_testdata.sqlite3",
     )
     parser.add_argument("--timeout-seconds", type=float, default=5.0)
     parser.add_argument("--limit", type=int)
@@ -87,12 +87,10 @@ def main() -> int:
         classifications: Counter[bool] = Counter()
         model_elapsed_ns: Counter[str] = Counter()
         abstentions: Counter[str] = Counter()
+        database_directory = args.database.resolve().parent
         for index, (matrix_id, dimension, values) in enumerate(rows, 1):
-            matrix = Matrix(
-                matrix_id,
-                values,
-                {"dimension": dimension, "base_directory": str(args.database.resolve().parent)},
-            )
+            matrix_source = str(database_directory / values[5:]) if values.startswith("file:") else f"{dimension}#{values}"
+            matrix = Matrix(matrix_source, matrix_id=matrix_id)
             results = {model: compute_with_timeout(model, matrix, args.timeout_seconds) for model in MODELS}
             errors = {
                 model: result

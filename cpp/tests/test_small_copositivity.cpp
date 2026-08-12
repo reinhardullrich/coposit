@@ -40,23 +40,23 @@ TEST(SmallCopositivityTest, ChecksAnIndexedPrincipalMatrixWithoutCopying)
     EXPECT_FALSE(small_copositivity::check_principal(matrix, indices, 3));
 }
 
-TEST(SmallCopositivityTest, OrdinaryModeKeepsZerosAndRejectsNegativeDirections)
+TEST(SmallCopositivityTest, CopositiveModeKeepsZerosAndRejectsNegativeDirections)
 {
-    constexpr auto ordinary = model::copositivity_mode::copositive;
-    EXPECT_TRUE(small_copositivity::check(symmetric_matrix(1, {0}), ordinary));
-    EXPECT_TRUE(small_copositivity::check(symmetric_matrix(2, {1, -1, 1}), ordinary));
-    EXPECT_FALSE(small_copositivity::check(symmetric_matrix(2, {1, -2, 1}), ordinary));
-    EXPECT_TRUE(small_copositivity::check(symmetric_matrix(3, {2, -1, -1, 2, -1, 2}), ordinary));
-    EXPECT_FALSE(small_copositivity::check(symmetric_matrix(3, {1, -2, 0, 1, 0, 1}), ordinary));
+    constexpr auto copositive = model::copositivity_mode::copositive;
+    EXPECT_TRUE(small_copositivity::check(symmetric_matrix(1, {0}), copositive));
+    EXPECT_TRUE(small_copositivity::check(symmetric_matrix(2, {1, -1, 1}), copositive));
+    EXPECT_FALSE(small_copositivity::check(symmetric_matrix(2, {1, -2, 1}), copositive));
+    EXPECT_TRUE(small_copositivity::check(symmetric_matrix(3, {2, -1, -1, 2, -1, 2}), copositive));
+    EXPECT_FALSE(small_copositivity::check(symmetric_matrix(3, {1, -2, 0, 1, 0, 1}), copositive));
 }
 
 TEST(SmallCopositivityTest, RuntimeModeDispatchMatchesCompileTimeSpecializations)
 {
-    constexpr auto ordinary = model::copositivity_mode::copositive;
+    constexpr auto copositive = model::copositivity_mode::copositive;
     constexpr auto strict = model::copositivity_mode::strictly_copositive;
     const matrix_integer boundary = symmetric_matrix(3, {2, -1, -1, 2, -1, 2});
 
-    EXPECT_EQ(small_copositivity::check<ordinary>(boundary), small_copositivity::check(boundary, ordinary));
+    EXPECT_EQ(small_copositivity::check<copositive>(boundary), small_copositivity::check(boundary, copositive));
     EXPECT_EQ(small_copositivity::check<strict>(boundary), small_copositivity::check(boundary, strict));
 }
 

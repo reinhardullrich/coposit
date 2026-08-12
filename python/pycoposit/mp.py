@@ -33,13 +33,12 @@ def _safe_compute(algorithm: Algorithm, matrix: Matrix, mode: CopositivityMode, 
             "algorithm": algorithm,
             "mode": mode,
             "preprocessing": preprocessing,
-            "matrix_id": matrix.matrix_id if type(matrix.matrix_id) is int else -1,
+            "matrix_id": matrix.matrix_id if matrix.matrix_id is None or type(matrix.matrix_id) is int else None,
             "status": int(StatusCode.INTERNAL_ERROR),
             "is_copositive": None,
             "is_strictly_copositive": None,
             "elapsed_ns": 0,
             "error_message": f"Worker exception: {error}",
-            "metadata": matrix.metadata,
         }
 
 

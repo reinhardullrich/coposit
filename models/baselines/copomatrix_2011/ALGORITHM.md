@@ -1,6 +1,6 @@
 # COPOMATRIX 2011
 
-Classification: exact ordinary implementation and strict adaptation of Xu and Yao's COPOMATRIX mathematics, with a non-literal
+Classification: exact non-strict implementation and strict adaptation of Xu and Yao's COPOMATRIX mathematics, with a non-literal
 depth-first scheduler. The projection, negative-half-simplex geometry, and Vmatrix decomposition are source-derived. Strict
 equality handling, early all-diagonal checks, deterministic traversal, and fraction-free integer representation are explicit
 Coposit choices described below.
@@ -8,7 +8,7 @@ Coposit choices described below.
 ## Decision Modes
 
 `copositive` mode preserves Algorithm 2's non-strict boundary rules: reject $k_{ii}<0$, accept an entrywise-nonnegative projection
-matrix with nonnegative diagonal, and require ordinary copositivity of every principal and Schur child. When the fixed pivot is
+matrix with nonnegative diagonal, and require non-strict copositivity of every principal and Schur child. When the fixed pivot is
 zero, a negative entry in its remaining row gives an immediate negative two-coordinate direction; otherwise that row contributes
 only nonnegative cross terms and the decision reduces exactly to the complete principal block.
 
@@ -25,7 +25,7 @@ a Schur matrix on the part of the remaining simplex where that minimum is attain
 
 That part is generally not a simplex. Xu and Yao positively rescale the variables so every pivot coefficient is only $-1$, $0$, or
 $1$. The separating hyperplane then meets every positive-negative simplex edge at its midpoint. Their Vmatrix decomposition
-recursively subdivides the resulting negative half-simplex into ordinary simplices.
+recursively subdivides the resulting negative half-simplex into standard simplices.
 
 Every final child has order one less than its parent. The search can branch combinatorially, but every branch has finite depth.
 
@@ -58,14 +58,14 @@ The preprint was first submitted in 2010 and revised in 2011. The maintained ide
 
 The paper contains:
 
-- Lemma 1.1, giving the ordinary and strict one-coordinate projection equivalences;
+- Lemma 1.1, giving the non-strict and strict one-coordinate projection equivalences;
 - Theorem 2.1, giving the two-part decomposition of the normalized negative half-simplex;
 - Algorithm 1, named `Vmatrix`, which repeats that decomposition until every part is simplicial;
-- Algorithm 2, named `COPOMATRIX`, which gives the complete ordinary-copositivity work-set algorithm.
+- Algorithm 2, named `COPOMATRIX`, which gives the complete non-strict-copositivity work-set algorithm.
 
-The authors state that a similar strict algorithm can be formulated, but Algorithm 2 itself is written with ordinary inequalities.
+The authors state that a similar strict algorithm can be formulated, but Algorithm 2 itself is written with non-strict inequalities.
 No original Maple implementation was recovered. This model is therefore an independent implementation of the published mathematics,
-including the paper's ordinary rules and its stated strict analogue, not a transcription of author source code.
+including the paper's non-strict rules and its stated strict analogue, not a transcription of author source code.
 
 ## Public Decision Problem
 
@@ -78,8 +78,7 @@ x^TAx>0
 \qquad\text{for every }x\in\mathbb R_+^n\setminus\{0\}.
 \]
 
-The public boundary rejects empty, nonsquare, and asymmetric matrices with `std::invalid_argument`. Symmetry is checked exactly; the
-input is never silently replaced by its symmetric part.
+The input parser supplies a nonempty square exactly symmetric matrix. The model assumes that contract without rescanning the matrix.
 
 The result is Boolean only when the recursive decision completes. A cooperative timeout is an unresolved resource outcome and is
 not converted to `false`.
@@ -221,7 +220,7 @@ the pivot vector becomes
 \beta_i=\operatorname{sign}(p_i)\in\{-1,0,1\}.
 \]
 
-Positive diagonal congruence is a bijection of the nonnegative orthant, so it preserves ordinary and strict copositivity.
+Positive diagonal congruence is a bijection of the nonnegative orthant, so it preserves non-strict and strict copositivity.
 
 The normalized principal and Schur matrices are
 
@@ -465,7 +464,7 @@ r_{uv}=\frac{|p_v|}{g}e_u+\frac{p_u}{g}e_v.
 It lies on the original boundary because $p^Tr_{uv}=0$. This is the same primitive weighted pair ray used by the maintained
 Danninger reconstruction, but here its occurrence and triangulation come from Xu and Yao's normalized midpoint decomposition.
 
-Negative and zero coordinate vertices are represented by ordinary coordinate rays. Their omitted positive scale factors do not
+Negative and zero coordinate vertices are represented by standard coordinate rays. Their omitted positive scale factors do not
 change the child decision.
 
 ### Sparse congruence evaluation
@@ -485,13 +484,13 @@ No floating-point number, tolerance, rational matrix, fixed-width sign mask, or 
 
 For a current exact symmetric integer matrix $K$:
 
-1. Check every diagonal entry. Reject a negative value in ordinary mode or a nonpositive value in strict mode.
+1. Check every diagonal entry. Reject a negative value in non-strict mode or a nonpositive value in strict mode.
 2. If $K$ has order one, accept after that mode-dependent diagonal test.
 3. Fix the first coordinate as the pivot.
 4. Partition the remaining pivot entries into positive, zero, and negative lists in index order.
 5. Build the principal block $C$.
 6. Apply the projection certificate for the selected mode to $C$:
-   - reject a negative diagonal in ordinary mode or a nonpositive one in strict mode;
+   - reject a negative diagonal in non-strict mode or a nonpositive one in strict mode;
    - accept this child immediately if every off-diagonal entry is nonnegative;
    - otherwise recursively run COPOMATRIX on $C$.
 7. If the pivot is zero, reject when $p$ has a negative entry; otherwise return the principal child's result.
@@ -540,13 +539,13 @@ check_projection(M):
 There are no special order-two or order-three formulas. Apart from the necessary order-one stop, the published projection mechanism
 continues uniformly to the bottom.
 
-## Ordinary Source Rules And Strict Adaptation
+## Non-strict Source Rules And Strict Adaptation
 
-Published Algorithm 2 decides ordinary copositivity. The strict model makes the following exact changes.
+Published Algorithm 2 decides non-strict copositivity. The strict model makes the following exact changes.
 
 ### Nonpositive diagonal rejection
 
-Ordinary COPOMATRIX rejects a negative pivot entry. Strict copositivity must also reject equality:
+Non-strict COPOMATRIX rejects a negative pivot entry. Strict copositivity must also reject equality:
 
 \[
 k_{ii}\leq0
@@ -559,7 +558,7 @@ witness earlier than the source work-set order, but it changes no classification
 
 ### Entrywise-nonnegative certificate
 
-For ordinary copositivity, any entrywise-nonnegative matrix can be removed from the work set. For strict copositivity, its diagonal
+For non-strict copositivity, any entrywise-nonnegative matrix can be removed from the work set. For strict copositivity, its diagonal
 must also be positive. Then every nonzero $x\geq0$ satisfies
 
 \[
@@ -572,7 +571,7 @@ rejected rather than removed as safe.
 
 ### Strict recursive conjunction
 
-Lemma 1.1(b) in the source already states the strict projection equivalence. Consequently no tolerance, perturbation, or ordinary
+Lemma 1.1(b) in the source already states the strict projection equivalence. Consequently no tolerance, perturbation, or non-strict
 certificate conversion is needed: every principal and Schur child is simply required to be strictly copositive.
 
 ## Traversal And Source Boundary

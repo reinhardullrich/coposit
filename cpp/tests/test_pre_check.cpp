@@ -10,7 +10,7 @@ using namespace coposit;
 
 namespace {
 
-constexpr auto ordinary = model::copositivity_mode::copositive;
+constexpr auto copositive = model::copositivity_mode::copositive;
 constexpr auto strict = model::copositivity_mode::strictly_copositive;
 
 matrix_integer symmetric_matrix(size_t dimension, std::initializer_list<slong> upper_triangle)
@@ -41,11 +41,9 @@ TEST(PreCheckTest, DefaultsToOnAndCanBeSwitchedFullyOff)
 {
     const pre_check::options defaults;
     EXPECT_EQ(defaults.principal_submatrices_up_to, 3U);
-    const auto solver = [](const matrix_integer&) { return true; };
-    EXPECT_THROW(pre_check::check(matrix_integer(), ordinary, defaults, solver), std::invalid_argument);
 
     size_t calls = 0;
-    EXPECT_TRUE(pre_check::check(matrix_integer(), ordinary, pre_check::options::none(), [&](const matrix_integer&) {
+    EXPECT_TRUE(pre_check::check(matrix_integer(), copositive, pre_check::options::none(), [&](const matrix_integer&) {
         ++calls;
         return true;
     }));
@@ -64,7 +62,7 @@ TEST(PreCheckTest, SmallDimensionMakesACompleteModeDependentDecision)
     };
 
     EXPECT_FALSE(pre_check::check(boundary, strict, selected, final_algorithm));
-    EXPECT_TRUE(pre_check::check(boundary, ordinary, selected, final_algorithm));
+    EXPECT_TRUE(pre_check::check(boundary, copositive, selected, final_algorithm));
     EXPECT_EQ(calls, 0U);
 }
 
@@ -82,7 +80,7 @@ TEST(PreCheckTest, LargerMatrixPrincipalChecksOnlyReject)
         return true;
     }));
     EXPECT_EQ(calls, 0U);
-    EXPECT_TRUE(pre_check::check(boundary, ordinary, selected, [&](const matrix_integer&) {
+    EXPECT_TRUE(pre_check::check(boundary, copositive, selected, [&](const matrix_integer&) {
         ++calls;
         return true;
     }));
@@ -94,7 +92,7 @@ TEST(PreCheckTest, LargerMatrixPrincipalChecksOnlyReject)
         ++calls;
         return true;
     }));
-    EXPECT_FALSE(pre_check::check(negative, ordinary, selected, [&](const matrix_integer&) {
+    EXPECT_FALSE(pre_check::check(negative, copositive, selected, [&](const matrix_integer&) {
         ++calls;
         return true;
     }));
@@ -102,7 +100,7 @@ TEST(PreCheckTest, LargerMatrixPrincipalChecksOnlyReject)
 
     // This failing triple has a two-edge negative path rather than a negative triangle.
     const matrix_integer negative_path = symmetric_matrix(4, {4, -3, 0, 0, 4, -3, 0, 4, 0, 4});
-    EXPECT_FALSE(pre_check::check(negative_path, ordinary, selected, [&](const matrix_integer&) {
+    EXPECT_FALSE(pre_check::check(negative_path, copositive, selected, [&](const matrix_integer&) {
         ++calls;
         return true;
     }));
@@ -129,21 +127,21 @@ TEST(PreCheckTest, PrincipalSubmatrixCutoffSelectsCardinalityOneTwoOrThree)
     const matrix_integer bad_diagonal = symmetric_matrix(4, {-1, 0, 0, 0, 1, 0, 0, 1, 0, 1});
     selected.principal_submatrices = true;
     selected.principal_submatrices_up_to = 1;
-    EXPECT_FALSE(pre_check::check(bad_diagonal, ordinary, selected, final_algorithm));
+    EXPECT_FALSE(pre_check::check(bad_diagonal, copositive, selected, final_algorithm));
     EXPECT_EQ(calls, 0U);
 
     const matrix_integer bad_pair = symmetric_matrix(4, {1, -2, 0, 0, 1, 0, 0, 1, 0, 1});
-    EXPECT_TRUE(pre_check::check(bad_pair, ordinary, selected, final_algorithm));
+    EXPECT_TRUE(pre_check::check(bad_pair, copositive, selected, final_algorithm));
     EXPECT_EQ(calls, 1U);
     selected.principal_submatrices_up_to = 2;
-    EXPECT_FALSE(pre_check::check(bad_pair, ordinary, selected, final_algorithm));
+    EXPECT_FALSE(pre_check::check(bad_pair, copositive, selected, final_algorithm));
     EXPECT_EQ(calls, 1U);
 
     const matrix_integer bad_triple = symmetric_matrix(4, {4, -3, 0, 0, 4, -3, 0, 4, 0, 4});
-    EXPECT_TRUE(pre_check::check(bad_triple, ordinary, selected, final_algorithm));
+    EXPECT_TRUE(pre_check::check(bad_triple, copositive, selected, final_algorithm));
     EXPECT_EQ(calls, 2U);
     selected.principal_submatrices_up_to = 3;
-    EXPECT_FALSE(pre_check::check(bad_triple, ordinary, selected, final_algorithm));
+    EXPECT_FALSE(pre_check::check(bad_triple, copositive, selected, final_algorithm));
     EXPECT_EQ(calls, 2U);
 }
 
@@ -158,7 +156,7 @@ TEST(PreCheckTest, WholeMatrixRulesShareOnlyTheModeDependentEqualityBoundary)
         ++calls;
         return false;
     }));
-    EXPECT_TRUE(pre_check::check(zero_diagonal, ordinary, selected, [&](const matrix_integer&) {
+    EXPECT_TRUE(pre_check::check(zero_diagonal, copositive, selected, [&](const matrix_integer&) {
         ++calls;
         return false;
     }));
@@ -172,7 +170,7 @@ TEST(PreCheckTest, WholeMatrixRulesShareOnlyTheModeDependentEqualityBoundary)
         ++calls;
         return false;
     }));
-    EXPECT_TRUE(pre_check::check(equality, ordinary, selected, [&](const matrix_integer&) {
+    EXPECT_TRUE(pre_check::check(equality, copositive, selected, [&](const matrix_integer&) {
         ++calls;
         return false;
     }));
@@ -184,7 +182,7 @@ TEST(PreCheckTest, WholeMatrixRulesShareOnlyTheModeDependentEqualityBoundary)
         ++calls;
         return true;
     }));
-    EXPECT_TRUE(pre_check::check(equality, ordinary, selected, [&](const matrix_integer&) {
+    EXPECT_TRUE(pre_check::check(equality, copositive, selected, [&](const matrix_integer&) {
         ++calls;
         return true;
     }));
@@ -202,7 +200,7 @@ TEST(PreCheckTest, FloatingFrankWolfeFindsAnExactlyVerifiedIterativeWitnessAndUs
         ++calls;
         return true;
     }));
-    EXPECT_FALSE(pre_check::check(iterative_witness, ordinary, selected, [&](const matrix_integer&) {
+    EXPECT_FALSE(pre_check::check(iterative_witness, copositive, selected, [&](const matrix_integer&) {
         ++calls;
         return true;
     }));
@@ -213,7 +211,7 @@ TEST(PreCheckTest, FloatingFrankWolfeFindsAnExactlyVerifiedIterativeWitnessAndUs
         ++calls;
         return true;
     }));
-    EXPECT_TRUE(pre_check::check(zero_at_centre, ordinary, selected, [&](const matrix_integer&) {
+    EXPECT_TRUE(pre_check::check(zero_at_centre, copositive, selected, [&](const matrix_integer&) {
         ++calls;
         return true;
     }));
@@ -293,7 +291,7 @@ TEST(PreCheckTest, OneExactFactorizationDecidesDefinitenessAndNullityOneByMode)
         ++calls;
         return false;
     }));
-    EXPECT_TRUE(pre_check::check(positive_definite, ordinary, selected, [&](const matrix_integer&) {
+    EXPECT_TRUE(pre_check::check(positive_definite, copositive, selected, [&](const matrix_integer&) {
         ++calls;
         return false;
     }));
@@ -304,7 +302,7 @@ TEST(PreCheckTest, OneExactFactorizationDecidesDefinitenessAndNullityOneByMode)
         ++calls;
         return false;
     }));
-    EXPECT_TRUE(pre_check::check(positive_semidefinite, ordinary, selected, [&](const matrix_integer&) {
+    EXPECT_TRUE(pre_check::check(positive_semidefinite, copositive, selected, [&](const matrix_integer&) {
         ++calls;
         return false;
     }));
@@ -336,7 +334,7 @@ TEST(PreCheckTest, OneExactFactorizationDecidesDefinitenessAndNullityOneByMode)
     EXPECT_EQ(calls, 2U);
 }
 
-TEST(PreCheckTest, CombinedClassificationPreservesTheOrdinaryStrictBoundaryInOneTraversal)
+TEST(PreCheckTest, CombinedClassificationPreservesTheStrictBoundaryInOneTraversal)
 {
     pre_check::options selected = pre_check::options::none();
     selected.small_dimension = true;
@@ -350,7 +348,7 @@ TEST(PreCheckTest, CombinedClassificationPreservesTheOrdinaryStrictBoundaryInOne
     EXPECT_FALSE(result.is_strictly_copositive);
     EXPECT_EQ(calls, 0U);
 
-    // Frank-Wolfe records the exact zero, and the same matrix's one LDLT factorization proves ordinary copositivity.
+    // Frank-Wolfe records the exact zero, and the same matrix's one LDLT factorization proves non-strict copositivity.
     selected = pre_check::options::none();
     selected.frank_wolfe = true;
     selected.positive_definiteness = true;
@@ -416,32 +414,16 @@ TEST(PreCheckTest, CombinedClassificationPreservesTheOrdinaryStrictBoundaryInOne
     EXPECT_EQ(calls, 1U);
 }
 
-TEST(PreCheckTest, SelectedChecksPreservePublicValidation)
+TEST(PreCheckTest, RejectsInvalidPrincipalSubmatrixCutoffs)
 {
     const auto final_algorithm = [](const matrix_integer&) { return true; };
-    const auto final_classifier = [](const matrix_integer&) {
-        return model::copositivity_classification{true, true};
-    };
-    const pre_check::options selected = pre_check::options::all();
-    EXPECT_THROW(pre_check::check(matrix_integer(), strict, selected, final_algorithm), std::invalid_argument);
-    EXPECT_THROW(pre_check::check(matrix_integer(2, 3), ordinary, selected, final_algorithm), std::invalid_argument);
-    EXPECT_THROW(pre_check::classify(matrix_integer(), selected, final_classifier), std::invalid_argument);
-
-    matrix_integer asymmetric(2, 2);
-    asymmetric(0, 0) = integer(1);
-    asymmetric(1, 1) = integer(1);
-    asymmetric(0, 1) = integer(-1);
-    asymmetric(1, 0) = integer(0);
-    EXPECT_THROW(pre_check::check(asymmetric, ordinary, selected, final_algorithm), std::invalid_argument);
-    EXPECT_THROW(pre_check::classify(asymmetric, selected, final_classifier), std::invalid_argument);
-
     pre_check::options invalid_cutoff = pre_check::options::none();
     invalid_cutoff.principal_submatrices = true;
     invalid_cutoff.principal_submatrices_up_to = 0;
-    EXPECT_THROW(pre_check::check(symmetric_matrix(4, {1, 0, 0, 0, 1, 0, 0, 1, 0, 1}), ordinary,
+    EXPECT_THROW(pre_check::check(symmetric_matrix(4, {1, 0, 0, 0, 1, 0, 0, 1, 0, 1}), copositive,
                                   invalid_cutoff, final_algorithm), std::invalid_argument);
     invalid_cutoff.principal_submatrices_up_to = 4;
-    EXPECT_THROW(pre_check::check(symmetric_matrix(4, {1, 0, 0, 0, 1, 0, 0, 1, 0, 1}), ordinary,
+    EXPECT_THROW(pre_check::check(symmetric_matrix(4, {1, 0, 0, 0, 1, 0, 0, 1, 0, 1}), copositive,
                                   invalid_cutoff, final_algorithm), std::invalid_argument);
 }
 

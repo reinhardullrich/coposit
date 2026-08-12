@@ -47,7 +47,7 @@ struct options {
 
 namespace detail {
 
-enum class query { ordinary, strict, combined };
+enum class query { copositive, strict, combined };
 
 inline void validate_options(const options& selected)
 {
@@ -65,17 +65,17 @@ matrix_scan_requirements requirements_for(const options& selected, bool force_ne
     requirements.all_ones = selected.all_ones || selected.frank_wolfe;
     requirements.negative_graph = force_negative_graph
         || (selected.principal_submatrices && selected.principal_submatrices_up_to >= 3);
-    requirements.ordinary_principal_pairs = check_principal_pairs && requested != query::strict;
-    requirements.strict_principal_pairs = check_principal_pairs && requested != query::ordinary;
+    requirements.copositive_principal_pairs = check_principal_pairs && requested != query::strict;
+    requirements.strict_principal_pairs = check_principal_pairs && requested != query::copositive;
     requirements.frank_wolfe = selected.frank_wolfe;
     return requirements;
 }
 
 struct classification_state {
-    void reject_ordinary() noexcept
+    void reject_copositive() noexcept
     {
         value = {false, false};
-        ordinary_known = true;
+        copositive_known = true;
         strict_known = true;
     }
 
@@ -85,24 +85,24 @@ struct classification_state {
         strict_known = true;
     }
 
-    void accept_ordinary() noexcept
+    void accept_copositive() noexcept
     {
         value.is_copositive = true;
-        ordinary_known = true;
+        copositive_known = true;
     }
 
     void accept_strict() noexcept
     {
         value = {true, true};
-        ordinary_known = true;
+        copositive_known = true;
         strict_known = true;
     }
 
     void merge(model::copositivity_classification result) noexcept
     {
-        if (!ordinary_known) {
+        if (!copositive_known) {
             value.is_copositive = result.is_copositive;
-            ordinary_known = true;
+            copositive_known = true;
         }
         if (!strict_known) {
             value.is_strictly_copositive = result.is_strictly_copositive;
@@ -110,7 +110,7 @@ struct classification_state {
         }
         if (value.is_strictly_copositive) {
             value.is_copositive = true;
-            ordinary_known = true;
+            copositive_known = true;
         }
         if (!value.is_copositive) {
             value.is_strictly_copositive = false;
@@ -121,34 +121,34 @@ struct classification_state {
     template<query requested>
     bool done() const noexcept
     {
-        if constexpr (requested == query::ordinary) return ordinary_known;
+        if constexpr (requested == query::copositive) return copositive_known;
         if constexpr (requested == query::strict) return strict_known;
-        return ordinary_known && strict_known;
+        return copositive_known && strict_known;
     }
 
     model::copositivity_classification value{false, false};
-    bool ordinary_known = false;
+    bool copositive_known = false;
     bool strict_known = false;
 };
 
 inline void observe_nonpositive_value(classification_state& state, int sign) noexcept
 {
-    if (sign < 0) state.reject_ordinary();
+    if (sign < 0) state.reject_copositive();
     else if (sign == 0) state.reject_strict();
 }
 
-inline void observe_positive_certificate(classification_state& state, bool ordinary_passes, bool strict_passes) noexcept
+inline void observe_positive_certificate(classification_state& state, bool copositive_passes, bool strict_passes) noexcept
 {
     if (strict_passes) state.accept_strict();
-    else if (ordinary_passes) state.accept_ordinary();
+    else if (copositive_passes) state.accept_copositive();
 }
 
 template<query requested>
 void observe_small_face(classification_state& state, const matrix_integer& matrix, const size_t* indices, size_t dimension)
 {
-    if constexpr (requested == query::ordinary) {
+    if constexpr (requested == query::copositive) {
         if (!small_copositivity::check_principal<model::copositivity_mode::copositive>(matrix, indices, dimension)) {
-            state.reject_ordinary();
+            state.reject_copositive();
         }
     } else if constexpr (requested == query::strict) {
         if (!small_copositivity::check_principal<model::copositivity_mode::strictly_copositive>(matrix, indices, dimension)) {
@@ -156,7 +156,7 @@ void observe_small_face(classification_state& state, const matrix_integer& matri
         }
     } else {
         const model::copositivity_classification result = small_copositivity::classify_principal(matrix, indices, dimension);
-        if (!result.is_copositive) state.reject_ordinary();
+        if (!result.is_copositive) state.reject_copositive();
         else if (!result.is_strictly_copositive) state.reject_strict();
     }
 }
@@ -164,7 +164,7 @@ void observe_small_face(classification_state& state, const matrix_integer& matri
 template<query requested>
 model::copositivity_classification classify_small_matrix(const matrix_integer& matrix)
 {
-    if constexpr (requested == query::ordinary) {
+    if constexpr (requested == query::copositive) {
         const bool result = small_copositivity::check<model::copositivity_mode::copositive>(matrix);
         return {result, false};
     } else if constexpr (requested == query::strict) {
@@ -184,6 +184,7 @@ void observe_small_principal_triples(classification_state& state, const matrix_i
 
     for (size_t center = 0; center < matrix.rows(); ++center) {
         timeout_checkpoint();
+        progress::advance_preprocessing(center + 1, matrix.rows());
         negative_neighbors[center].copy_indices_to(neighbors);
         for (size_t first = 0; first < neighbors.size(); ++first) {
             for (size_t second = first + 1; second < neighbors.size(); ++second) {
@@ -215,6 +216,7 @@ public:
 
         for (size_t iteration = 0; iteration < matrix.rows(); ++iteration) {
             timeout_checkpoint();
+            progress::advance_preprocessing(iteration + 1, matrix.rows());
             if (!std::isfinite(value)) break;
 
             const size_t toward = static_cast<size_t>(std::min_element(product_.begin(), product_.end()) - product_.begin());
@@ -340,22 +342,23 @@ model::copositivity_classification run_scanned(const matrix_integer& matrix, con
     const bool check_principal_pairs = check_small_principals && selected.principal_submatrices_up_to >= 2;
     const bool check_principal_triples = check_small_principals && selected.principal_submatrices_up_to >= 3;
 
+    progress::preprocessing_stage(progress::preprocessing_phase::cheap_certificates, dimension);
     if (selected.small_dimension && dimension <= 3) {
         return classify_small_matrix<requested>(matrix);
     }
 
     classification_state state;
     if (check_small_principals) {
-        if (!scan.all_diagonals_nonnegative) state.reject_ordinary();
+        if (!scan.all_diagonals_nonnegative) state.reject_copositive();
         else if (!scan.all_diagonals_positive) state.reject_strict();
 
         if (check_principal_pairs && !state.done<requested>()) {
-            if constexpr (requested == query::ordinary) {
-                if (!scan.all_principal_pairs_copositive) state.reject_ordinary();
+            if constexpr (requested == query::copositive) {
+                if (!scan.all_principal_pairs_copositive) state.reject_copositive();
             } else if constexpr (requested == query::strict) {
                 if (!scan.all_principal_pairs_strictly_copositive) state.reject_strict();
             } else {
-                if (!scan.all_principal_pairs_copositive) state.reject_ordinary();
+                if (!scan.all_principal_pairs_copositive) state.reject_copositive();
                 else if (!scan.all_principal_pairs_strictly_copositive) state.reject_strict();
             }
         }
@@ -366,7 +369,7 @@ model::copositivity_classification run_scanned(const matrix_integer& matrix, con
         if (scan.all_diagonals_positive) {
             state.accept_strict();
         } else if (scan.all_diagonals_nonnegative) {
-            state.accept_ordinary();
+            state.accept_copositive();
             state.reject_strict();
         }
         if (state.done<requested>()) return state.value;
@@ -389,11 +392,13 @@ model::copositivity_classification run_scanned(const matrix_integer& matrix, con
     }
 
     if (check_principal_triples) {
+        progress::preprocessing_stage(progress::preprocessing_phase::principal_submatrices, dimension, 0, dimension);
         observe_small_principal_triples<requested>(state, matrix, scan.negative_neighbors);
         if (state.done<requested>()) return state.value;
     }
 
     if (selected.frank_wolfe) {
+        progress::preprocessing_stage(progress::preprocessing_phase::frank_wolfe, dimension, 0, dimension);
         frank_wolfe_witness_search search;
         auto observer = [&](int sign) {
             observe_nonpositive_value(state, sign);
@@ -404,15 +409,16 @@ model::copositivity_classification run_scanned(const matrix_integer& matrix, con
     }
 
     if (selected.positive_definiteness) {
+        progress::preprocessing_stage(progress::preprocessing_phase::exact_factorization, dimension, 0, dimension);
         matrix_integer factored(matrix);
         fraction_free_ldlt_factorization factorization(dimension);
-        factorization.factorize_inplace(factored);
+        factorization.factorize_inplace(factored, progress::enabled());
         const bool positive_semidefinite = factorization.is_positive_semidefinite();
         const bool positive_definite = factorization.is_positive_definite();
         observe_positive_certificate(state, positive_semidefinite, positive_definite);
         if (state.done<requested>()) return state.value;
 
-        if constexpr (requested != query::ordinary) {
+        if constexpr (requested != query::copositive) {
             if (positive_semidefinite && !positive_definite && dimension - factorization.rank() == 1) {
                 matrix_integer kernel_vector(dimension, 1);
                 factorization.one_nullspace_vector(kernel_vector, factored);
@@ -442,6 +448,7 @@ model::copositivity_classification run(const matrix_integer& matrix, const optio
                                        FinalClassifier& final_classifier)
 {
     validate_options(selected);
+    progress::preprocessing_stage(progress::preprocessing_phase::matrix_scan, matrix.rows(), 0, matrix.rows());
     const matrix_scan_result scan = scan_matrix(matrix, requirements_for<requested>(selected));
     return run_scanned<requested>(matrix, selected, scan, final_classifier);
 }
@@ -449,15 +456,19 @@ model::copositivity_classification run(const matrix_integer& matrix, const optio
 } // namespace detail
 
 /*
- * Individually selectable exact decisions before a final ordinary- or strict-copositivity algorithm. All options default to true.
+ * Individually selectable exact decisions before a final non-strict- or strict-copositivity algorithm. All options default to true.
  * With options::none(), the callback is invoked directly and retains responsibility for validating the input.
  */
 template<typename FinalAlgorithm>
 bool check(const matrix_integer& matrix, model::copositivity_mode mode, const options& selected, FinalAlgorithm&& final_algorithm)
 {
-    if (!selected.any()) return final_algorithm(matrix);
+    if (!selected.any()) {
+        progress::preprocessing_stage(progress::preprocessing_phase::model_delegation, matrix.rows());
+        return final_algorithm(matrix);
+    }
     if (mode == model::copositivity_mode::strictly_copositive) {
         auto classifier = [&](const matrix_integer& part) {
+            progress::preprocessing_stage(progress::preprocessing_phase::model_delegation, part.rows());
             const bool result = final_algorithm(part);
             return model::copositivity_classification{result, result};
         };
@@ -465,19 +476,24 @@ bool check(const matrix_integer& matrix, model::copositivity_mode mode, const op
     }
 
     auto classifier = [&](const matrix_integer& part) {
+        progress::preprocessing_stage(progress::preprocessing_phase::model_delegation, part.rows());
         const bool result = final_algorithm(part);
         return model::copositivity_classification{result, false};
     };
-    return detail::run<detail::query::ordinary>(matrix, selected, classifier).is_copositive;
+    return detail::run<detail::query::copositive>(matrix, selected, classifier).is_copositive;
 }
 
-/* Run selected pre-checks once and preserve the ordinary/strict equality distinction supplied by a combined final classifier. */
+/* Run selected pre-checks once and preserve the non-strict/strict equality distinction supplied by a combined final classifier. */
 template<typename FinalClassifier>
 model::copositivity_classification classify(const matrix_integer& matrix, const options& selected,
                                             FinalClassifier&& final_classifier)
 {
-    if (!selected.any()) return final_classifier(matrix);
-    return detail::run<detail::query::combined>(matrix, selected, final_classifier);
+    auto classifier = [&](const matrix_integer& part) {
+        progress::preprocessing_stage(progress::preprocessing_phase::model_delegation, part.rows());
+        return final_classifier(part);
+    };
+    if (!selected.any()) return classifier(matrix);
+    return detail::run<detail::query::combined>(matrix, selected, classifier);
 }
 
 } // namespace coposit::pre_check

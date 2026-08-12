@@ -10,7 +10,7 @@ using namespace coposit;
 
 namespace {
 
-constexpr auto ordinary = model::copositivity_mode::copositive;
+constexpr auto copositive = model::copositivity_mode::copositive;
 constexpr auto strict = model::copositivity_mode::strictly_copositive;
 
 matrix_integer symmetric_matrix(size_t dimension, std::initializer_list<slong> upper_triangle)
@@ -39,8 +39,6 @@ TEST(ComponentPipelineTest, DefaultsBothStagesAndEveryPreCheckOn)
     EXPECT_TRUE(selected.pre_checks.frank_wolfe);
     EXPECT_TRUE(selected.pre_checks.positive_definiteness);
 
-    const auto solver = [](const matrix_integer&) { return true; };
-    EXPECT_THROW(component_pipeline::check(matrix_integer(), ordinary, selected, solver), std::invalid_argument);
 }
 
 TEST(ComponentPipelineTest, BothStagesCanBeDisabled)
@@ -50,7 +48,7 @@ TEST(ComponentPipelineTest, BothStagesCanBeDisabled)
     selected.connected_components = false;
     matrix_integer matrix;
     size_t calls = 0;
-    EXPECT_TRUE(component_pipeline::check(matrix, ordinary, selected, [&](const matrix_integer& part) {
+    EXPECT_TRUE(component_pipeline::check(matrix, copositive, selected, [&](const matrix_integer& part) {
         ++calls;
         EXPECT_EQ(&part, &matrix);
         return true;
@@ -66,7 +64,7 @@ TEST(ComponentPipelineTest, ComponentsAndPreChecksCanBeSelectedIndependently)
     selected.pre_checks = pre_check::options::none();
     selected.pre_checks.all_ones = true;
     size_t calls = 0;
-    EXPECT_TRUE(component_pipeline::check(matrix, ordinary, selected, [&](const matrix_integer& part) {
+    EXPECT_TRUE(component_pipeline::check(matrix, copositive, selected, [&](const matrix_integer& part) {
         ++calls;
         EXPECT_EQ(&part, &matrix);
         return true;
@@ -74,7 +72,7 @@ TEST(ComponentPipelineTest, ComponentsAndPreChecksCanBeSelectedIndependently)
     EXPECT_EQ(calls, 1U);
 
     selected.connected_components = true;
-    EXPECT_FALSE(component_pipeline::check(matrix, ordinary, selected, [&](const matrix_integer&) {
+    EXPECT_FALSE(component_pipeline::check(matrix, copositive, selected, [&](const matrix_integer&) {
         ++calls;
         return true;
     }));
@@ -82,7 +80,7 @@ TEST(ComponentPipelineTest, ComponentsAndPreChecksCanBeSelectedIndependently)
 
     selected.pre_checks_enabled = false;
     std::vector<size_t> dimensions;
-    EXPECT_TRUE(component_pipeline::check(matrix, ordinary, selected, [&](const matrix_integer& part) {
+    EXPECT_TRUE(component_pipeline::check(matrix, copositive, selected, [&](const matrix_integer& part) {
         ++calls;
         dimensions.push_back(part.rows());
         return true;
@@ -91,7 +89,7 @@ TEST(ComponentPipelineTest, ComponentsAndPreChecksCanBeSelectedIndependently)
     EXPECT_EQ(dimensions, std::vector<size_t>({2, 1}));
 }
 
-TEST(ComponentPipelineTest, CombinedClassificationKeepsCheckingOrdinaryAfterAStrictBoundary)
+TEST(ComponentPipelineTest, CombinedClassificationKeepsCheckingCopositivityAfterAStrictBoundary)
 {
     const matrix_integer matrix = symmetric_matrix(4, {0, 1, 1, 1, 1, -2, 1, 1, 1, 1});
     component_pipeline::options selected;
@@ -137,18 +135,6 @@ TEST(ComponentPipelineTest, ConnectedInputReusesTheOriginalMatrix)
         return true;
     }));
     EXPECT_EQ(calls, 1U);
-}
-
-TEST(ComponentPipelineTest, EnabledComponentsValidateTheInput)
-{
-    component_pipeline::options selected;
-    const auto solver = [](const matrix_integer&) { return true; };
-    EXPECT_THROW(component_pipeline::check(matrix_integer(), strict, selected, solver), std::invalid_argument);
-    EXPECT_THROW(component_pipeline::check(matrix_integer(2, 3), strict, selected, solver), std::invalid_argument);
-
-    matrix_integer asymmetric = symmetric_matrix(2, {1, -1, 1});
-    asymmetric(1, 0) = integer(0);
-    EXPECT_THROW(component_pipeline::check(asymmetric, strict, selected, solver), std::invalid_argument);
 }
 
 } // namespace

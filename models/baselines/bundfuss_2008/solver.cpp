@@ -1,9 +1,11 @@
 #include <coposit/model.hpp>
 #include <coposit/open_node_limit.hpp>
+#include <coposit/progress.hpp>
 #include <coposit/timeout.hpp>
 
 #include "../source_trace.hpp"
 
+#include <cmath>
 #include <cstddef>
 #include <stdexcept>
 #include <utility>
@@ -30,12 +32,15 @@ struct split_data {
     integer denominator_squared;
     std::vector<integer> new_row;
     integer new_diagonal;
+    long double lambda = 0.0L;
 };
 
 struct node {
     matrix_integer gram;
     size_t split_i;
     size_t split_j;
+    long double weight;
+    size_t depth;
 };
 
 int compare(const positive_ratio& left, const positive_ratio& right)
@@ -138,7 +143,7 @@ void divide_by_content(matrix_integer& gram)
     fmpz_mat_scalar_divexact_fmpz(gram.native_handle(), gram.native_handle(), content.native_handle());
 }
 
-split_data prepare_split(const matrix_integer& gram, size_t first, size_t second)
+split_data prepare_split(const matrix_integer& gram, size_t first, size_t second, bool track_progress)
 {
     const positive_ratio lambda = calculate_lambda(gram(first, first), gram(second, second), gram(first, second));
     COPOSIT_SOURCE_TRACE("lambda", fmpz_get_ui(lambda.numerator.native_handle()), fmpz_get_ui(lambda.denominator.native_handle()));
@@ -146,6 +151,13 @@ split_data prepare_split(const matrix_integer& gram, size_t first, size_t second
     complement.set_difference(lambda.denominator, lambda.numerator);
 
     split_data result;
+    if (track_progress) {
+        slong numerator_exponent;
+        slong denominator_exponent;
+        const long double numerator = lambda.numerator.to_dbl_2exp(numerator_exponent);
+        const long double denominator = lambda.denominator.to_dbl_2exp(denominator_exponent);
+        result.lambda = std::ldexp(numerator / denominator, static_cast<int>(numerator_exponent - denominator_exponent));
+    }
     result.denominator_squared.set_product(lambda.denominator, lambda.denominator);
 
     const size_t dimension = gram.rows();
@@ -186,43 +198,68 @@ matrix_integer make_child(const matrix_integer& gram, const split_data& split, s
 }
 
 /*
- * Exact ordinary implementation and strict adaptation of Bundfuss and Dür's 2008 simplicial partition as realized by the preserved 2018
+ * Exact non-strict implementation and strict adaptation of Bundfuss and Dür's 2008 simplicial partition as realized by the preserved 2018
  * implementation. It retains the minimum edge, three lambda formulas, two child simplices, child evaluation order, and LIFO
  * depth-first traversal. Each node stores a positive integer multiple of its rational Gram matrix; clearing a common denominator
  * changes no sign, comparison, split parameter, or mathematical decision.
  */
 bool test_copositivity(const matrix_integer& matrix, copositivity_mode mode)
 {
+    progress::tracker progress(progress::metric::simplex, matrix.rows());
     const evaluation initial = inspect(matrix, mode);
-    if (initial.result == state::reject) return false;
-    if (initial.result == state::accept) return true;
+    progress.visit(matrix.rows(), 0, 1);
+    if (initial.result == state::reject) {
+        progress.finish();
+        return false;
+    }
+    if (initial.result == state::accept) {
+        progress.resolved(progress.active() ? 1.0L : 0.0L);
+        progress.finish();
+        return true;
+    }
+    progress.split();
 
     std::vector<node> pending;
     pending.reserve(64); // Initial capacity only; this is not a dimension limit.
-    pending.push_back({matrix_integer(matrix), initial.split_i, initial.split_j});
+    pending.push_back({matrix_integer(matrix), initial.split_i, initial.split_j, progress.active() ? 1.0L : 0.0L, 0});
 
     while (!pending.empty()) {
         timeout_checkpoint();
         node current = std::move(pending.back());
         pending.pop_back();
         enforce_open_node_limit(pending.size() + 2);
-        const split_data split = prepare_split(current.gram, current.split_i, current.split_j);
+        const split_data split = prepare_split(current.gram, current.split_i, current.split_j, progress.active());
 
         matrix_integer child_gram = make_child(current.gram, split, current.split_i);
         evaluation child = inspect(child_gram, mode);
-        if (child.result == state::reject) return false;
+        const long double first_weight = current.weight * split.lambda;
+        progress.visit(matrix.rows(), current.depth + 1, pending.size() + 2);
+        if (child.result == state::reject) {
+            progress.finish();
+            return false;
+        }
+        if (child.result == state::accept) progress.resolved(first_weight);
         if (child.result == state::split) {
-            pending.push_back({std::move(child_gram), child.split_i, child.split_j});
+            progress.split();
+            pending.push_back({std::move(child_gram), child.split_i, child.split_j, first_weight, current.depth + 1});
         }
 
         child_gram = make_child(current.gram, split, current.split_j);
         child = inspect(child_gram, mode);
-        if (child.result == state::reject) return false;
+        const long double second_weight = progress.active() ? current.weight - first_weight : 0.0L;
+        progress.visit(matrix.rows(), current.depth + 1, pending.size() + 1);
+        if (child.result == state::reject) {
+            progress.finish();
+            return false;
+        }
+        if (child.result == state::accept) progress.resolved(second_weight);
         if (child.result == state::split) {
-            pending.push_back({std::move(child_gram), child.split_i, child.split_j});
+            progress.split();
+            pending.push_back({std::move(child_gram), child.split_i, child.split_j, second_weight, current.depth + 1});
         }
     }
 
+    progress.finish();
     return true;
 }
 
@@ -232,14 +269,6 @@ bool solve(const matrix_integer& matrix, copositivity_mode mode)
 {
     timeout_checkpoint();
     const size_t dimension = matrix.rows();
-    if (dimension == 0 || matrix.cols() != dimension) throw std::invalid_argument("matrix must be nonempty and square");
-
-    for (size_t i = 0; i < dimension; ++i) {
-        for (size_t j = i + 1; j < dimension; ++j) {
-            if (matrix(i, j).compare(matrix(j, i)) != 0) throw std::invalid_argument("matrix must be symmetric");
-        }
-    }
-
     return test_copositivity(matrix, mode);
 }
 

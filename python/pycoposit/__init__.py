@@ -1,4 +1,4 @@
-"""Public pycoposit interface for exact copositivity checks."""
+"""Python analysis interface for exact copositivity models and preprocessing experiments."""
 
 from .core import compute_matrix
 from .mp import run_multiprocessing
