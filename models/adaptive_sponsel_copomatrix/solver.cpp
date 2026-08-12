@@ -1,10 +1,14 @@
 #include <coposit/fraction_free_ldlt.hpp>
 #include <coposit/model.hpp>
+#include <coposit/progress.hpp>
 #include <coposit/small_copositivity.hpp>
 #include <coposit/timeout.hpp>
 
 #include <array>
+#include <cmath>
 #include <cstddef>
+#include <cstdint>
+#include <limits>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -84,9 +88,9 @@ void divide_by_content(matrix_integer& gram)
     fmpz_mat_scalar_divexact_fmpz(gram.native_handle(), gram.native_handle(), content.native_handle());
 }
 
-std::pair<matrix_integer, matrix_integer> sponsel_split(const matrix_integer& gram, size_t first, size_t second)
+std::pair<matrix_integer, matrix_integer> sponsel_split(const matrix_integer& gram, size_t first, size_t second,
+                                                        const positive_ratio& lambda)
 {
-    const positive_ratio lambda = calculate_lambda(gram(first, first), gram(second, second), gram(first, second));
     integer complement;
     complement.set_difference(lambda.denominator, lambda.numerator);
 
@@ -147,25 +151,39 @@ public:
     adaptive_sponsel_copomatrix_checker(size_t maximum_dimension, copositivity_mode mode)
         : h_factorization_(maximum_dimension)
         , mode_(mode)
+        , progress_(progress::metric::adaptive, maximum_dimension)
     {
     }
 
-    bool check(const matrix_integer& matrix, size_t sponsel_streak = 0)
+    ~adaptive_sponsel_copomatrix_checker() { progress_.finish(); }
+
+    bool check(const matrix_integer& matrix, size_t sponsel_streak = 0, long double weight = 1.0L, size_t depth = 0)
     {
         timeout_checkpoint();
+        progress_.visit(matrix.rows(), depth);
         bool result;
-        if (decide_small(matrix, result)) return result;
+        if (decide_small(matrix, result)) {
+            if (result) progress_.resolved(weight);
+            return result;
+        }
 
         const size_t dimension = matrix.rows();
         for (size_t i = 0; i < dimension; ++i) {
             if (diagonal_fails(matrix(i, i))) return false;
         }
 
+        progress_.adaptive_routing(sponsel_streak);
         const copomatrix_pivot pivot = minimum_child_copomatrix_pivot(matrix);
+        const uint64_t pivot_children = capped_child_count(pivot.children);
         if (fmpz_cmp_ui(pivot.children.native_handle(), 2) <= 0 || sponsel_streak >= sponsel_streak_limit) {
-            return check_copomatrix(matrix, pivot.index);
+            progress_.split();
+            const bool forced = fmpz_cmp_ui(pivot.children.native_handle(), 2) > 0;
+            progress_.adaptive_copomatrix(sponsel_streak, pivot.index, pivot_children, forced);
+            return check_copomatrix(matrix, pivot, weight, depth);
         }
-        return check_sponsel(matrix, sponsel_streak);
+        progress_.split();
+        progress_.adaptive_sponsel(sponsel_streak, pivot.index, pivot_children);
+        return check_sponsel(matrix, sponsel_streak, weight, depth);
     }
 
 #ifdef COPOSIT_ADAPTIVE_SPONSEL_COPOMATRIX_TESTING
@@ -192,6 +210,14 @@ private:
         size_t index;
         integer children;
     };
+
+    static uint64_t capped_child_count(const integer& children) noexcept
+    {
+        if (fmpz_bits(children.native_handle()) > std::numeric_limits<uint64_t>::digits) {
+            return std::numeric_limits<uint64_t>::max();
+        }
+        return static_cast<uint64_t>(fmpz_get_ui(children.native_handle()));
+    }
 
     static copomatrix_pivot minimum_child_copomatrix_pivot(const matrix_integer& matrix)
     {
@@ -226,9 +252,12 @@ private:
         return best;
     }
 
-    bool check_copomatrix(const matrix_integer& matrix, size_t pivot_index)
+    bool check_copomatrix(const matrix_integer& matrix, const copomatrix_pivot& pivot, long double weight, size_t depth)
     {
         const size_t dimension = matrix.rows();
+        const size_t pivot_index = pivot.index;
+        const double child_count = progress_.active() ? fmpz_get_d(pivot.children.native_handle()) : 0.0;
+        const long double child_weight = child_count > 0.0 ? weight / child_count : 0.0L;
         const size_t child_dimension = dimension - 1;
         std::vector<size_t> remaining;
         std::vector<integer> p(child_dimension);
@@ -239,6 +268,9 @@ private:
         positive.reserve(child_dimension);
         zero.reserve(child_dimension);
         negative.reserve(child_dimension);
+
+        progress_.adaptive_stage(progress::adaptive_engine::copomatrix,
+                                 progress::adaptive_phase::copomatrix_partition, 0, dimension);
 
         for (size_t index = 0; index < dimension; ++index) {
             if (index != pivot_index) remaining.push_back(index);
@@ -254,22 +286,27 @@ private:
             }
         }
 
+        progress_.adaptive_stage(progress::adaptive_engine::copomatrix,
+                                 progress::adaptive_phase::principal_block, 0, child_dimension);
         matrix_integer block = make_principal_block(matrix, remaining);
-        if (!check_projection(block)) return false;
+        if (!check_projection(block, child_weight, depth + 1)) return false;
         if (matrix(pivot_index, pivot_index).is_zero()) return negative.empty();
         if (negative.empty()) return true;
 
+        progress_.adaptive_stage(progress::adaptive_engine::copomatrix,
+                                 progress::adaptive_phase::schur_block, 0, child_dimension);
         matrix_integer schur = make_schur_block(matrix, pivot_index, remaining, p);
-        if (positive.empty()) return check_projection(schur);
+        if (positive.empty()) return check_projection(schur, child_weight, depth + 1);
 
         std::vector<sparse_ray> rays;
         rays.reserve(child_dimension);
         for (const size_t index : zero) rays.push_back(coordinate_ray(index));
-        return check_negative_staircase(schur, p, positive, negative, 0, 0, rays);
+        return check_negative_staircase(schur, p, positive, negative, 0, 0, rays, child_weight, depth + 1);
     }
 
-    bool check_projection(const matrix_integer& matrix)
+    bool check_projection(const matrix_integer& matrix, long double weight, size_t depth)
     {
+        progress_.adaptive_copomatrix_child();
         const size_t dimension = matrix.rows();
         for (size_t i = 0; i < dimension; ++i) {
             timeout_checkpoint();
@@ -277,22 +314,27 @@ private:
         }
         for (size_t i = 0; i < dimension; ++i) {
             for (size_t j = i + 1; j < dimension; ++j) {
-                if (matrix(i, j).sign() < 0) return check(matrix, 0);
+                if (matrix(i, j).sign() < 0) return check(matrix, 0, weight, depth);
             }
         }
+        progress_.resolved(weight);
         return true;
     }
 
     bool check_negative_staircase(const matrix_integer& schur, const std::vector<integer>& p,
                                   const std::vector<size_t>& positive, const std::vector<size_t>& negative,
-                                  size_t positive_begin, size_t negative_begin, std::vector<sparse_ray>& rays)
+                                  size_t positive_begin, size_t negative_begin, std::vector<sparse_ray>& rays,
+                                  long double weight, size_t depth)
     {
         timeout_checkpoint();
+        progress_.adaptive_copomatrix_staircase();
         const size_t saved_size = rays.size();
 
         if (positive_begin == positive.size()) {
             for (size_t j = negative_begin; j < negative.size(); ++j) rays.push_back(coordinate_ray(negative[j]));
-            const bool result = check_projection(transform(schur, rays));
+            progress_.adaptive_stage(progress::adaptive_engine::copomatrix,
+                                     progress::adaptive_phase::transform, 0, rays.size());
+            const bool result = check_projection(transform(schur, rays), weight, depth);
             rays.resize(saved_size);
             return result;
         }
@@ -302,24 +344,28 @@ private:
             for (size_t i = positive_begin; i < positive.size(); ++i) {
                 rays.push_back(pair_ray(p, positive[i], negative[negative_begin]));
             }
-            const bool result = check_projection(transform(schur, rays));
+            progress_.adaptive_stage(progress::adaptive_engine::copomatrix,
+                                     progress::adaptive_phase::transform, 0, rays.size());
+            const bool result = check_projection(transform(schur, rays), weight, depth);
             rays.resize(saved_size);
             return result;
         }
 
         rays.push_back(pair_ray(p, positive[positive_begin], negative[negative_begin]));
-        if (!check_negative_staircase(schur, p, positive, negative, positive_begin + 1, negative_begin, rays)) {
+        if (!check_negative_staircase(schur, p, positive, negative, positive_begin + 1, negative_begin, rays, weight, depth)) {
             rays.resize(saved_size);
             return false;
         }
-        const bool result = check_negative_staircase(schur, p, positive, negative, positive_begin, negative_begin + 1, rays);
+        const bool result = check_negative_staircase(
+            schur, p, positive, negative, positive_begin, negative_begin + 1, rays, weight, depth);
         rays.resize(saved_size);
         return result;
     }
 
-    bool check_sponsel(const matrix_integer& matrix, size_t sponsel_streak)
+    bool check_sponsel(const matrix_integer& matrix, size_t sponsel_streak, long double weight, size_t depth)
     {
         const size_t dimension = matrix.rows();
+        progress_.adaptive_stage(progress::adaptive_engine::sponsel, progress::adaptive_phase::edge_scan, 0, dimension);
         size_t split_i = dimension;
         size_t split_j = dimension;
         for (size_t i = 0; i < dimension; ++i) {
@@ -333,7 +379,10 @@ private:
             }
         }
 
-        if (split_i == dimension) return true;
+        if (split_i == dimension) {
+            progress_.resolved(weight);
+            return true;
+        }
 
         integer diagonal_product;
         integer edge_squared;
@@ -342,17 +391,33 @@ private:
         const int edge_comparison = edge_squared.compare(diagonal_product);
         if (edge_comparison > 0 || (edge_comparison == 0 && mode_ == copositivity_mode::strictly_copositive)) return false;
 
-        if (passes_h_certificate(matrix)) return true;
+        if (passes_h_certificate(matrix)) {
+            progress_.resolved(weight);
+            return true;
+        }
 
-        auto children = sponsel_split(matrix, split_i, split_j);
+        progress_.adaptive_stage(progress::adaptive_engine::sponsel, progress::adaptive_phase::split_build);
+        const positive_ratio lambda = calculate_lambda(matrix(split_i, split_i), matrix(split_j, split_j), matrix(split_i, split_j));
+        auto children = sponsel_split(matrix, split_i, split_j, lambda);
+        progress_.adaptive_sponsel_split();
+        long double first_weight = 0.0L;
+        if (progress_.active()) {
+            slong numerator_exponent;
+            slong denominator_exponent;
+            const long double numerator = lambda.numerator.to_dbl_2exp(numerator_exponent);
+            const long double denominator = lambda.denominator.to_dbl_2exp(denominator_exponent);
+            first_weight = weight * std::ldexp(numerator / denominator,
+                                               static_cast<int>(numerator_exponent - denominator_exponent));
+        }
         const size_t child_streak = sponsel_streak + 1;
-        if (!check(children.first, child_streak)) return false;
-        return check(children.second, child_streak);
+        if (!check(children.first, child_streak, first_weight, depth + 1)) return false;
+        return check(children.second, child_streak, progress_.active() ? weight - first_weight : 0.0L, depth + 1);
     }
 
     bool passes_h_certificate(const matrix_integer& gram)
     {
         const size_t dimension = gram.rows();
+        progress_.adaptive_stage(progress::adaptive_engine::sponsel, progress::adaptive_phase::h_build, 0, dimension);
         matrix_integer stripped(dimension, dimension);
         for (size_t i = 0; i < dimension; ++i) {
             timeout_checkpoint();
@@ -365,7 +430,9 @@ private:
             }
         }
 
-        h_factorization_.factorize_inplace(stripped);
+        progress_.adaptive_stage(progress::adaptive_engine::sponsel,
+                                 progress::adaptive_phase::h_factorization, 0, dimension);
+        h_factorization_.factorize_inplace(stripped, false, &progress_);
         return mode_ == copositivity_mode::copositive
             ? h_factorization_.is_positive_semidefinite()
             : h_factorization_.is_positive_definite();
@@ -449,6 +516,7 @@ private:
 
     fraction_free_ldlt_factorization h_factorization_;
     const copositivity_mode mode_;
+    progress::tracker progress_;
 };
 
 } // namespace
@@ -457,15 +525,6 @@ bool solve(const matrix_integer& matrix, copositivity_mode mode)
 {
     timeout_checkpoint();
     const size_t dimension = matrix.rows();
-    if (dimension == 0 || matrix.cols() != dimension) throw std::invalid_argument("matrix must be nonempty and square");
-
-    for (size_t i = 0; i < dimension; ++i) {
-        timeout_checkpoint();
-        for (size_t j = i + 1; j < dimension; ++j) {
-            if (matrix(i, j).compare(matrix(j, i)) != 0) throw std::invalid_argument("matrix must be symmetric");
-        }
-    }
-
     adaptive_sponsel_copomatrix_checker checker(dimension, mode);
     return checker.check(matrix);
 }

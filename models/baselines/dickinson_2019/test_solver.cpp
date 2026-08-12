@@ -101,28 +101,14 @@ TEST(Dickinson2019ModelTest, UsesPackedCoverageBeyondOneWord)
     EXPECT_FALSE(model::solve(not_strictly_copositive));
 }
 
-TEST(Dickinson2019ModelTest, RejectsInvalidMatrixShapes)
+TEST(Dickinson2019ModelTest, DecidesCopositivity)
 {
-    matrix_integer empty;
-    EXPECT_THROW(model::solve(empty), std::invalid_argument);
-
-    matrix_integer non_square(2, 3);
-    EXPECT_THROW(model::solve(non_square), std::invalid_argument);
-
-    matrix_integer asymmetric;
-    asymmetric.set_identity(2);
-    asymmetric(0, 1) = integer(1);
-    EXPECT_THROW(model::solve(asymmetric), std::invalid_argument);
-}
-
-TEST(Dickinson2019ModelTest, DecidesOrdinaryCopositivity)
-{
-    constexpr auto ordinary = model::copositivity_mode::copositive;
-    EXPECT_TRUE(model::solve(symmetric_matrix(1, {0}), ordinary));
-    EXPECT_TRUE(model::solve(symmetric_matrix(2, {1, -1, 1}), ordinary));
-    EXPECT_FALSE(model::solve(symmetric_matrix(2, {1, -2, 1}), ordinary));
-    EXPECT_TRUE(model::solve(constant_off_diagonal(4, 3, -1), ordinary));
-    EXPECT_FALSE(model::solve(constant_off_diagonal(4, 2, -1), ordinary));
+    constexpr auto copositive = model::copositivity_mode::copositive;
+    EXPECT_TRUE(model::solve(symmetric_matrix(1, {0}), copositive));
+    EXPECT_TRUE(model::solve(symmetric_matrix(2, {1, -1, 1}), copositive));
+    EXPECT_FALSE(model::solve(symmetric_matrix(2, {1, -2, 1}), copositive));
+    EXPECT_TRUE(model::solve(constant_off_diagonal(4, 3, -1), copositive));
+    EXPECT_FALSE(model::solve(constant_off_diagonal(4, 2, -1), copositive));
 }
 
 TEST(Dickinson2019ModelTest, ClassifiesBothPredicatesInOneTraversal)

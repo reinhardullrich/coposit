@@ -123,4 +123,22 @@ TEST(FractionFreeLdltTest, DistinguishesPositiveSemidefiniteFromIndefiniteSingul
     EXPECT_FALSE(factorization.is_positive_semidefinite());
 }
 
+TEST(FractionFreeLdltTest, PublishesExactPreprocessingPivotProgressWhenRequested)
+{
+    progress::detail::reset();
+    progress::detail::state.enabled.store(true, std::memory_order_relaxed);
+    progress::preprocessing_stage(progress::preprocessing_phase::exact_factorization, 3, 0, 3);
+
+    matrix_integer matrix = symmetric_matrix(3, {2, 1, 0, 2, 1, 2});
+    fraction_free_ldlt_factorization factorization(3);
+    EXPECT_EQ(factorization.factorize_inplace(matrix, true), 1);
+    const progress::snapshot value = progress::detail::load();
+
+    progress::detail::state.enabled.store(false, std::memory_order_relaxed);
+    progress::detail::reset();
+    EXPECT_EQ(value.phase, progress::preprocessing_phase::exact_factorization);
+    EXPECT_EQ(value.current, 3U);
+    EXPECT_EQ(value.maximum, 3U);
+}
+
 } // namespace

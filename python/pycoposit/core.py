@@ -49,100 +49,20 @@ def load_native_module(algorithm: Algorithm):
         return module
 
 
-def _matrix_cli_string(matrix: Matrix) -> str:
-    text = matrix.matrix.strip()
-    if text.startswith("file:"):
-        if not matrix.metadata or "dimension" not in matrix.metadata or "base_directory" not in matrix.metadata:
-            raise ValueError("file references require Matrix.metadata['dimension'] and ['base_directory']")
-        dimension = matrix.metadata["dimension"]
-        if type(dimension) is not int or dimension < 1:
-            raise TypeError("Matrix.metadata['dimension'] must be a positive int")
-        reference = Path(text.removeprefix("file:").strip())
-        if not reference.parts or reference.is_absolute() or ".." in reference.parts:
-            raise ValueError("matrix file reference must be a safe relative path")
-        base_directory = Path(matrix.metadata["base_directory"]).resolve()
-        path = (base_directory / reference).resolve()
-        if not path.is_relative_to(base_directory):
-            raise ValueError("matrix file reference escapes its base directory")
-        return _read_matrix_market(path, dimension)
-    if "#" in text:
-        return text
-    if not matrix.metadata or "dimension" not in matrix.metadata:
-        raise ValueError("Matrix.metadata['dimension'] is required when Matrix.matrix has no 'dimension#' prefix")
-    dimension = matrix.metadata["dimension"]
-    if type(dimension) is not int:
-        raise TypeError("Matrix.metadata['dimension'] must be an int")
-    return f"{dimension}#{text}"
+def _is_compact_matrix_text(text: str) -> bool:
+    index = 0
+    while index < len(text) and "0" <= text[index] <= "9":
+        index += 1
+    return index > 0 and index < len(text) and text[index] == "#"
 
 
-def _read_matrix_market(path: Path, expected_dimension: int) -> str:
-    """Read an exact symmetric integer Matrix Market array or coordinate file."""
+def matrix_parser_source(matrix: Matrix) -> tuple[str, bool]:
+    """Return one Matrix as parser text or a direct filename."""
 
-    with path.open("r", encoding="ascii") as source:
-        try:
-            header = next(source).strip().lower().split()
-        except StopIteration as error:
-            raise ValueError(f"empty Matrix Market file: {path}") from error
-        if (len(header) != 5 or header[:2] != ["%%matrixmarket", "matrix"] or header[2] not in ("array", "coordinate")
-                or header[3:] != ["integer", "symmetric"]):
-            raise ValueError(f"unsupported Matrix Market header in {path}")
-
-        data = (
-            (line_number, stripped.split())
-            for line_number, line in enumerate(source, 2)
-            if (stripped := line.strip()) and not stripped.startswith("%")
-        )
-        try:
-            size_line, size = next(data)
-        except StopIteration as error:
-            raise ValueError(f"Matrix Market file has no size line: {path}") from error
-
-        expected_size_fields = 2 if header[2] == "array" else 3
-        if len(size) != expected_size_fields or any(not field.isascii() or not field.isdigit() for field in size):
-            raise ValueError(f"invalid Matrix Market size at {path}:{size_line}")
-        rows, columns = map(int, size[:2])
-        if rows != expected_dimension or columns != expected_dimension:
-            raise ValueError(
-                f"Matrix Market size {rows}x{columns} does not match database dimension {expected_dimension} in {path}"
-            )
-
-        expected_values = expected_dimension * (expected_dimension + 1) // 2
-        if header[2] == "array":
-            values = []
-            for line_number, fields in data:
-                if len(fields) != 1 or not _is_exact_integer(fields[0]):
-                    raise ValueError(f"invalid Matrix Market integer at {path}:{line_number}")
-                values.append(fields[0])
-            if len(values) != expected_values:
-                raise ValueError(f"Matrix Market file {path} has {len(values)} values; expected {expected_values}")
-        else:
-            declared_entries = int(size[2])
-            values = ["0"] * expected_values
-            seen = bytearray(expected_values)
-            actual_entries = 0
-            for line_number, fields in data:
-                if (len(fields) != 3 or any(not field.isascii() or not field.isdigit() for field in fields[:2])
-                        or not _is_exact_integer(fields[2])):
-                    raise ValueError(f"invalid Matrix Market coordinate at {path}:{line_number}")
-                row, column = map(int, fields[:2])
-                if not 1 <= column <= row <= expected_dimension:
-                    raise ValueError(f"Matrix Market coordinate must lie in the lower triangle at {path}:{line_number}")
-                zero_based_column = column - 1
-                index = zero_based_column * expected_dimension - zero_based_column * (zero_based_column - 1) // 2 + row - column
-                if seen[index]:
-                    raise ValueError(f"duplicate Matrix Market coordinate at {path}:{line_number}")
-                seen[index] = 1
-                values[index] = fields[2]
-                actual_entries += 1
-            if actual_entries != declared_entries:
-                raise ValueError(f"Matrix Market file {path} has {actual_entries} entries; expected {declared_entries}")
-
-        return f"{expected_dimension}#{','.join(values)}"
-
-
-def _is_exact_integer(token: str) -> bool:
-    digits = token[1:] if token[:1] in ("+", "-") else token
-    return bool(digits) and digits.isascii() and digits.isdigit()
+    text = matrix.matrix
+    if _is_compact_matrix_text(text) or text.startswith("%%MatrixMarket"):
+        return text, False
+    return text, True
 
 
 def compute_matrix(
@@ -156,7 +76,13 @@ def compute_matrix(
     _validate_algorithm(algorithm)
     _validate_mode(mode)
     _validate_preprocessing(preprocessing)
-    native_result = load_native_module(algorithm).compute_matrix(_matrix_cli_string(matrix), mode, preprocessing)
+    matrix_source, is_file = matrix_parser_source(matrix)
+    native_module = load_native_module(algorithm)
+    native_result = (
+        native_module.compute_matrix_file(matrix_source, mode, preprocessing)
+        if is_file
+        else native_module.compute_matrix(matrix_source, mode, preprocessing)
+    )
     return {
         "algorithm": algorithm,
         "mode": mode,
@@ -167,5 +93,4 @@ def compute_matrix(
         "is_strictly_copositive": native_result["is_strictly_copositive"],
         "elapsed_ns": native_result["elapsed_ns"],
         "error_message": native_result["error_message"],
-        "metadata": matrix.metadata,
     }

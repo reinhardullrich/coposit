@@ -66,7 +66,7 @@ TEST(ConnectedComponentsTest, ReturnsOneFullIndexSetForAConnectedGraph)
     EXPECT_EQ(indices, std::vector<size_t>({0, 1, 2}));
 }
 
-TEST(ConnectedComponentsTest, HasNoFixedDimensionLimitAndValidatesItsInput)
+TEST(ConnectedComponentsTest, HasNoFixedDimensionLimit)
 {
     matrix_integer wide(129, 129);
     for (size_t index = 0; index < 129; ++index) wide(index, index) = integer(3);
@@ -84,13 +84,6 @@ TEST(ConnectedComponentsTest, HasNoFixedDimensionLimitAndValidatesItsInput)
         return true;
     }), 127U);
     EXPECT_EQ(size_three, 1U);
-
-    EXPECT_THROW(scan_matrix(matrix_integer(), requirements), std::invalid_argument);
-    EXPECT_THROW(scan_matrix(matrix_integer(2, 3), requirements), std::invalid_argument);
-
-    matrix_integer asymmetric = symmetric_matrix(2, {1, -1, 1});
-    asymmetric(1, 0) = integer(0);
-    EXPECT_THROW(scan_matrix(asymmetric, requirements), std::invalid_argument);
 }
 
 } // namespace

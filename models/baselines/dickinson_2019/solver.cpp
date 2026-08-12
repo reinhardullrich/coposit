@@ -1,6 +1,6 @@
 #include <coposit/fraction_free_ldlt.hpp>
 #include <coposit/model.hpp>
-#include <coposit/small_copositivity.hpp>
+#include <coposit/progress.hpp>
 #include <coposit/support.hpp>
 #include <coposit/timeout.hpp>
 
@@ -34,6 +34,7 @@ public:
         , product_(dimension)
         , certificates_by_lowest_(dimension)
         , mode_(mode)
+        , progress_(progress::metric::support, dimension)
     {
     }
 
@@ -43,6 +44,7 @@ public:
         , certificates_by_lowest_(dimension)
         , mode_(copositivity_mode::copositive)
         , classification_(&classification)
+        , progress_(progress::metric::support, dimension)
     {
     }
 
@@ -50,6 +52,7 @@ public:
     {
         const size_t matrix_dimension = matrix.rows();
         for (size_t subset_dimension = 1; subset_dimension <= matrix_dimension; ++subset_dimension) {
+            progress_.stage(subset_dimension);
             std::vector<size_t> indices(subset_dimension);
             support current_support(matrix_dimension);
             for (size_t i = 0; i < subset_dimension; ++i) {
@@ -59,22 +62,22 @@ public:
 
             do {
                 timeout_checkpoint();
-                if (subset_dimension <= 3) {
-                    if (classification_ != nullptr) {
-                        const copositivity_classification subset =
-                            small_copositivity::classify_principal(matrix, indices.data(), subset_dimension);
-                        classification_->is_strictly_copositive &= subset.is_strictly_copositive;
-                        if (!subset.is_copositive) return false;
-                    } else if (!small_copositivity::check_principal(matrix, indices.data(), subset_dimension, mode_)) {
+                progress_.visit_support();
+                const bool covered = is_covered(current_support, indices);
+                COPOSIT_SOURCE_TRACE(covered ? "covered" : "process", subset_dimension);
+                if (covered) {
+                    progress_.covered_support();
+                } else {
+                    progress_.secondary();
+                    if (!process_subset(matrix, indices)) {
+                        progress_.finish();
                         return false;
                     }
                 }
-                const bool covered = is_covered(current_support, indices);
-                COPOSIT_SOURCE_TRACE(covered ? "covered" : "process", subset_dimension);
-                if (!covered && !process_subset(matrix, indices)) return false;
             } while (advance_numeric_mask_order(indices, current_support, matrix_dimension));
         }
 
+        progress_.finish();
         return true;
     }
 
@@ -187,39 +190,22 @@ private:
     std::vector<std::vector<certificate_signature>> certificates_by_lowest_;
     const copositivity_mode mode_;
     copositivity_classification* classification_ = nullptr;
+    progress::tracker progress_;
 };
-
-size_t validate_input(const matrix_integer& matrix)
-{
-    const size_t dimension = matrix.rows();
-    if (dimension == 0 || matrix.cols() != dimension) throw std::invalid_argument("matrix must be nonempty and square");
-
-    for (size_t i = 0; i < dimension; ++i) {
-        for (size_t j = i + 1; j < dimension; ++j) {
-            if (matrix(i, j).compare(matrix(j, i)) != 0) throw std::invalid_argument("matrix must be symmetric");
-        }
-    }
-    return dimension;
-}
 
 } // namespace
 
 bool solve(const matrix_integer& matrix, copositivity_mode mode)
 {
     timeout_checkpoint();
-    const size_t dimension = validate_input(matrix);
-
-    if (dimension <= 3) return small_copositivity::check(matrix, mode);
-
+    const size_t dimension = matrix.rows();
     return dickinson_checker(dimension, mode).check(matrix);
 }
 
 copositivity_classification classify(const matrix_integer& matrix)
 {
     timeout_checkpoint();
-    const size_t dimension = validate_input(matrix);
-    if (dimension <= 3) return small_copositivity::classify(matrix);
-
+    const size_t dimension = matrix.rows();
     copositivity_classification result{true, true};
     if (!dickinson_checker(dimension, result).check(matrix)) result = {false, false};
     return result;

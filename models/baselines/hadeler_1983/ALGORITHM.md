@@ -4,8 +4,8 @@ Classification: exact optimized FracESSA baseline for Hadeler's principal-submat
 
 ## Decision Modes
 
-Hadeler proves parallel inductive criteria for ordinary and strict copositivity, so the subset traversal and factorization are shared.
-For ordinary mode, once all proper principal faces have passed, a principal matrix $C$ fails exactly when
+Hadeler proves parallel inductive criteria for non-strict and strict copositivity, so the subset traversal and factorization are shared.
+For non-strict mode, once all proper principal faces have passed, a principal matrix $C$ fails exactly when
 
 \[
 \det C<0,\qquad \operatorname{adj}C\geq0.
@@ -13,12 +13,12 @@ For ordinary mode, once all proper principal faces have passed, a principal matr
 
 The implementation first passes every $\det C\geq0$ case. For $\det C<0$ it solves $Cy=-\mathbf1$ once; the displayed adjugate
 condition is equivalent here to $y>0$, which supplies the negative witness. A singular principal matrix therefore needs no
-nullspace work in ordinary mode. Strict mode instead uses $\det C\leq0$ and $\operatorname{adj}C>0$: negative determinants use the
+nullspace work in non-strict mode. Strict mode instead uses $\det C\leq0$ and $\operatorname{adj}C>0$: negative determinants use the
 same solve, while determinant zero requires nullity one and a full-support same-sign kernel vector. The direct order-one through
 order-three rules make the same mode-dependent distinction.
 
 `solve(A, mode)` defaults to `strictly_copositive` and returns only the requested Boolean. `classify(A)` answers both predicates in
-one ordinary-complete traversal. Its result contains `is_copositive` and `is_strictly_copositive`; the only possible pairs are
+one non-strict-complete traversal. Its result contains `is_copositive` and `is_strictly_copositive`; the only possible pairs are
 
 | `is_copositive` | `is_strictly_copositive` | Meaning |
 |---|---|---|
@@ -27,7 +27,7 @@ one ordinary-complete traversal. Its result contains `is_copositive` and `is_str
 | `true` | `true` | the matrix is strictly copositive |
 
 The pair `false, true` is mathematically impossible. The combined traversal does not call `solve` twice: it continues for the
-ordinary proof after remembering the first strict-only failure. A selected strict solve is therefore still cheaper on boundary
+non-strict proof after remembering the first strict-only failure. A selected strict solve is therefore still cheaper on boundary
 matrices because it can stop at that first zero.
 
 ## What The Algorithm Does
@@ -139,9 +139,9 @@ adjugate condition.
 
 ## Small Orders
 
-- Order one requires a nonnegative diagonal in ordinary mode and a positive diagonal in strict mode.
+- Order one requires a nonnegative diagonal in non-strict mode and a positive diagonal in strict mode.
 - Order two requires the corresponding diagonal signs and either a nonnegative off-diagonal entry or a nonnegative/positive
-  determinant for ordinary/strict mode.
+  determinant for non-strict/strict mode.
 - Order three uses the exact closed criterion derived in Hadeler's paper. The implementation evaluates only integer products and
   determinant/minor signs; it does not introduce square roots or floating-point tolerances.
 
@@ -175,21 +175,21 @@ nonempty principal subsets, so the method is finite but exponential.
 
 ## Combined Classification
 
-`classify(A)` follows the ordinary-copositivity traversal because an early nonnegative zero answers only the strict question: a
+`classify(A)` follows the non-strict-copositivity traversal because an early nonnegative zero answers only the strict question: a
 different support could still contain a negative value. It carries one additional Boolean, initially `true`, for strict
 copositivity.
 
-For an order-at-most-three principal subset, the direct helper evaluates both exact predicates. An ordinary failure immediately
+For an order-at-most-three principal subset, the direct helper evaluates both exact predicates. A non-strict failure immediately
 returns `{false, false}`. A strict-only failure changes the remembered strict result to `false`, but the traversal continues. For a
-larger subset with negative determinant, the same solve $Cy=-\mathbf1$ decides the ordinary failure condition and therefore both
-results at once. For determinant zero, ordinary Hadeler always passes. While the strict result is still possible, the traversal
+larger subset with negative determinant, the same solve $Cy=-\mathbf1$ decides the non-strict failure condition and therefore both
+results at once. For determinant zero, non-strict Hadeler always passes. While the strict result is still possible, the traversal
 also performs the existing nullity-one same-sign kernel test; finding such a kernel vector records a strict-only failure. Once
 strict failure has been established, later singular subsets skip this strict-only nullspace work.
 
-If every principal subset passes the ordinary criterion, the final pair is `{true, remembered_strict_result}`. Thus the combined
+If every principal subset passes the non-strict criterion, the final pair is `{true, remembered_strict_result}`. Thus the combined
 operation shares all subset enumeration, matrix extraction, determinant factorization, and negative-determinant solves; it adds
-only the strict singular checks that are still necessary. Input validation is identical to `solve`: the matrix must be nonempty,
-square, and symmetric.
+only the strict singular checks that are still necessary. Like `solve`, it assumes the parser supplied a nonempty square symmetric
+matrix and does not repeat that validation.
 
 ## Known Difficult Inputs
 

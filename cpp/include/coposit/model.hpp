@@ -20,7 +20,7 @@ inline void require_strict_mode(copositivity_mode mode)
     }
 }
 
-/* Each executable links exactly one self-contained model implementation of this function. */
+/* Each executable links exactly one model. The caller supplies a nonempty square symmetric matrix. */
 bool solve(const matrix_integer& matrix, copositivity_mode mode = copositivity_mode::strictly_copositive);
 
 /* Implemented only by models that can determine both predicates in one traversal. */

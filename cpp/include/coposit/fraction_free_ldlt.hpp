@@ -19,6 +19,7 @@
 #include <vector>
 
 #include <coposit/matrix_integer.hpp>
+#include <coposit/progress.hpp>
 #include <coposit/timeout.hpp>
 
 namespace coposit {
@@ -55,7 +56,8 @@ public:
      * exact signed determinant and rank are available after either result; a singular factorization must not be passed to
      * solve_inplace().
      */
-    int factorize_inplace(matrix_integer& system)
+    int factorize_inplace(matrix_integer& system, bool report_preprocessing_progress = false,
+                          progress::tracker* model_progress = nullptr)
     {
         assert(system.rows() == system.cols());
 
@@ -87,13 +89,15 @@ public:
 
         for (size_t pivot_position = 0; pivot_position < dimension; ++pivot_position) {
             timeout_checkpoint();
+            if (report_preprocessing_progress) progress::advance_preprocessing(pivot_position + 1, dimension);
+            if (model_progress != nullptr) model_progress->adaptive_work(pivot_position + 1, dimension);
             // Failure means that every diagonal and off-diagonal entry in the active symmetric block is zero. The completed
             // pivots therefore give the exact rank, not merely a lower bound.
             if (!select_nonzero_diagonal(raw_system, pivot_position, dimension, immediate)) return 0;
             rank_ = pivot_position + 1;
             fmpz* const pivot = entry(raw_system, pivot_position, pivot_position);
 
-            // p_k/p_(k-1) is the corresponding ordinary LDL^T diagonal entry, so its sign contributes one inertia
+            // p_k/p_(k-1) is the corresponding standard LDL^T diagonal entry, so its sign contributes one inertia
             // count.
             const int diagonal_sign = fmpz_sgn(pivot) * previous_pivot_sign;
             if (diagonal_sign > 0) ++positive_inertia_;

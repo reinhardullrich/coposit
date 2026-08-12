@@ -1,16 +1,16 @@
 # Bundfuss 2008
 
-Classification: exact ordinary implementation and strict adaptation of a published simplicial-partition method, with branching pinned to
+Classification: exact non-strict implementation and strict adaptation of a published simplicial-partition method, with branching pinned to
 Salmerón's 2018 source.
 
 ## Decision Modes
 
 Both modes keep the same minimum negative edge, three exact $\lambda$ candidates, rational edge point, two children, evaluation
-order, and LIFO work list. Ordinary mode rejects $g_{ii}<0$ and $g_{ij}^2>g_{ii}g_{jj}$; strict mode rejects
-$g_{ii}\leq0$ and $g_{ij}^2\geq g_{ii}g_{jj}$. Thus equality is a valid boundary in ordinary mode and a counterexample in strict
+order, and LIFO work list. Non-strict mode rejects $g_{ii}<0$ and $g_{ij}^2>g_{ii}g_{jj}$; strict mode rejects
+$g_{ii}\leq0$ and $g_{ij}^2\geq g_{ii}g_{jj}$. Thus equality is a valid boundary in non-strict mode and a counterexample in strict
 mode. Entrywise-nonnegative Gram matrices are accepted after the corresponding diagonal check.
 
-`solve(A, mode)` defaults to `strictly_copositive` and returns one Boolean predicate. The ordinary mode restores the paper's
+`solve(A, mode)` defaults to `strictly_copositive` and returns one Boolean predicate. The non-strict mode restores the paper's
 non-strict decision rules, but the concrete same-dimensional refinement can still approach an interior boundary zero indefinitely;
 timeout and node-limit outcomes remain unresolved rather than `false`.
 
@@ -44,7 +44,7 @@ independently written exact experiment is retained under
 
 ## Problem And Node Representation
 
-Because $x^TAx$ is homogeneous, ordinary or strict copositivity on the nonnegative orthant is equivalent to nonnegativity or
+Because $x^TAx$ is homogeneous, non-strict or strict copositivity on the nonnegative orthant is equivalent to nonnegativity or
 positivity on the standard simplex. A node is a simplex with vertices $v_1,\ldots,v_n$ and Gram matrix
 
 \[
@@ -65,7 +65,7 @@ g_{ii}\leq0,
 \]
 
 then $v_i$ is a nonzero nonnegative vector with nonpositive quadratic value. The matrix is not strictly copositive.
-Ordinary mode rejects only $g_{ii}<0$.
+Non-strict mode rejects only $g_{ii}<0$.
 
 ### 2. Accept a nonnegative Gram matrix
 
@@ -93,7 +93,7 @@ Strict mode rejects when
 \]
 
 the restriction to the edge between $v_i$ and $v_j$ has a nonpositive value, so strict copositivity fails.
-Ordinary mode rejects only the strict inequality $\gamma^2>\alpha\beta$.
+Non-strict mode rejects only the strict inequality $\gamma^2>\alpha\beta$.
 
 ### 4. Calculate the new edge point
 
@@ -185,14 +185,14 @@ another part of the simplex controls the actual difficulty.
 
 ## Fidelity Boundary
 
-The 2008 paper establishes the ordinary-copositivity simplicial-partition family and its convergence properties. Salmerón's later
+The 2008 paper establishes the non-strict-copositivity simplicial-partition family and its convergence properties. Salmerón's later
 program fixes the exact minimum-edge choice, the three λ candidates, their combined rule, the two children, and their traversal.
 The maintained code was compared with that concrete `bundfuss` route and implements those choices exactly using integers.
 
 Preparing the shared split coefficients once and constructing the second sibling only after the first inspection are
 representation and scheduling optimizations. They do not change a selected edge, λ value, child, inspection, or traversal decision.
 
-Ordinary mode follows the paper's boundary inequalities. Strict mode is Coposit's adaptation: diagonal equality and two-generator
+Non-strict mode follows the paper's boundary inequalities. Strict mode is Coposit's adaptation: diagonal equality and two-generator
 equality reject because either one supplies a nonnegative zero. The model must therefore not be described as a line-for-line
 implementation of a strict algorithm from the 2008 paper. It does not implement Salmerón's separate monotonicity-enhanced `zbund`
 route and adds no low-dimensional shortcut, SNC slice, Dutour ratio split, graph reduction, or other solver.

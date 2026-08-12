@@ -2,6 +2,275 @@
 
 This append-only file records meaningful decisions, results, and evidence that are not clear from Git. Do not log routine edits here.
 
+## 2026-08-12 — Maintained database reclaims replaced result pages
+
+- Enabled SQLite `auto_vacuum=FULL` in the maintained corpus and canonical schema, then ran one full `VACUUM`. Repeated benchmark
+  replacement had left 12,171 reusable pages (49,852,416 bytes) inside the 132,186,112-byte file even though live data occupied only
+  about 82 MB. Automatic vacuuming now truncates freed tail pages after commits instead of allowing that space to accumulate.
+
+## 2026-08-12 — Thirty-second strict timeout progress experiment
+
+- Ran all 129 `timeout_5s_strict_set` matrices in strict mode through the public prechecked Dickinson Final and Adaptive
+  Sponsel–COPOMATRIX paths, with 30 seconds per call and workers pinned to CPUs 3–9. All 258 calls completed or timed out in 17
+  minutes 22 seconds; 30 completed Booleans matched truth, 228 timed out, and no call produced an execution or runner error.
+- Preserved 6,966 one-second snapshots, exact matrix/input and binary identities, per-call outcomes, flattened snapshot data, and
+  final-state data under `experiments/timeout_progress_2026-08-12/`. Dickinson completed 10 calls and Adaptive completed 20; both
+  timed out on 103 matrices.
+- Made progress lines explicitly identify `stage=preprocessing` or `stage=model` after an initial 90-call draft proved easy to
+  misread. Preprocessing lines name the exact phase and work counter; model lines name the algorithm-specific metric. The first
+  model node is published immediately, while later hot-loop publication remains batched every 4,096 visits.
+
+## 2026-08-12 — Adaptive progress separates Sponsel from COPOMATRIX
+
+- Replaced Adaptive Sponsel–COPOMATRIX's ambiguous generic proof line with separate routing, engine, internal-phase, Sponsel-node,
+  actual Sponsel-split, COPOMATRIX-node, projection-child, staircase-state, forced-switch, streak, pivot, and immediate-child counters.
+  Exact Sponsel `H` factorization reports once per pivot; no matrix-entry loop publishes progress, and all additions immediately
+  return when `--progress` is disabled.
+- Short diagnostics corrected the earlier interpretation of stale 4,096-node batching. Hildebrand 10289 reached 30 Adaptive nodes
+  and 29 Sponsel splits in its first second, entered COPOMATRIX by five seconds, and reduced from order 16 to 15. Hildebrand 10294
+  reached 33 Sponsel nodes and 32 splits in five seconds but had not yet used COPOMATRIX. Order-25 Hildebrand 10304 reached three
+  Sponsel nodes and two splits by five seconds. The dominant sampled phase was exact `H` factorization, not an idle first node.
+
+## 2026-08-12 — One detailed C++ analysis command replaces model-named commands
+
+- Added `coposit-analyze --model MODEL --mode strict|non-strict|both` as the only user-facing C++ model-selection interface. It covers
+  every literature baseline except superseded Dickinson 2019, plus Dickinson Final and Adaptive Sponsel–COPOMATRIX. It controls
+  connected components, the pre-check stage, every individual pre-check, the principal-submatrix cutoff, and progress reporting;
+  all preprocessing defaults to on.
+- Replaced the model-named CMake executables with internal `coposit-analyze-MODEL` companions. Each companion still links exactly one
+  solver, so runtime model selection does not introduce a multi-model binary, registry, factory, or solver-symbol collision.
+- Kept unsupported predicates explicit: all nine selectable models support strict and non-strict mode; Danninger, Hadeler, and
+  Dickinson Final support one-pass combined classification. Experimental variants remain available through Python/reference tooling.
+
+## 2026-08-12 — Common strict-timeout benchmark set
+
+- Added the `timeout_5s_strict_set` matrix flag and runner selection. Its 129 rows are the intersection of the two pre-checked strict
+  five-second timeout sets for Dickinson and Adaptive Sponsel–COPOMATRIX; a completion by either algorithm excludes the matrix.
+- Reused the 524-matrix research-report campaign and ran only its 1,918-row complement with the current final models. Froze all four
+  exact result hashes and the guarded assignment in `testdata/archive/assign_timeout_5s_strict_set_2026_08_12.sql`.
+
+## 2026-08-12 — Public safe mode can classify both predicates
+
+- Added `coposit safe both MATRIX`, which runs Dickinson Final's existing combined classifier once and prints named copositive and
+  strictly-copositive Boolean results. `fast both` is rejected because Adaptive Sponsel–COPOMATRIX has no one-pass combined classifier.
+
+## 2026-08-12 — Public progress now covers preprocessing
+
+- Extended the existing `--progress` snapshot with the active preprocessing phase: matrix scan, cheap certificates, principal
+  submatrices, connected components, component scan, Frank–Wolfe, exact factorization, or model delegation.
+- Published truthful phase-local work units where available: scanned rows, graph vertices, principal-face centers, Frank–Wolfe
+  iterations, and exact factorization pivots. These counters are activity indicators, not percentages or ETAs.
+- Kept telemetry out of mathematical decisions. With progress disabled, phase and work updates return immediately; model progress
+  replaces preprocessing progress as soon as the selected solver begins.
+
+## 2026-08-12 — Opt-in progress reporting uses algorithm-specific honest metrics
+
+- Added `--progress` to the public and model-specific command-line interfaces. It leaves the Boolean on standard output and emits one
+  status line to standard error every second.
+- Kept timekeeping out of solver loops: one sleeping reporter reads relaxed-atomic snapshots that active models publish every 4,096
+  visited units. Disabled progress starts no thread and performs no telemetry arithmetic.
+- Defined exact support-enumeration coverage for Hadeler and Dickinson, certified simplex-volume coverage for Bundfuss and Sponsel,
+  and monotone proof-obligation coverage for Du Tour, Danninger, COPOMATRIX, and Adaptive Sponsel–COPOMATRIX. Safi reports traversal
+  counters because exact sliced-volume accounting would add material determinant work. None of the measures is presented as an ETA.
+
+## 2026-08-12 — Adaptive Sponsel memory risk acknowledged
+
+- A direct no-preprocessing strict run on scale matrix 10593 ($n=2,997$) was killed by the kernel at 39.38 GiB resident memory. The
+  same direct model on matrix 10515 ($n=331$) used only 274.7 MiB through 20 minutes before manual interruption.
+- Documented the structural cause: every live Sponsel level retains full dense exact children, giving base live storage
+  $O(dn^2)$ at same-order depth $d$. Order 1,000 and above is a practical warning range rather than a hard threshold; an unusually
+  deep branch can become memory-bound earlier.
+- No comparable memory-bound Dickinson run has been observed. This closes the review action as an acknowledged operating constraint;
+  it does not claim that the Adaptive traversal now has a memory limit.
+
+## 2026-08-11 — File parsing uses one result contract
+
+- Verified that the shared native parser already returns `PARSE_ERROR` for malformed compact text, malformed Matrix Market content,
+  missing files, and unreadable files without raising through the Python API.
+- Added the distinct `parse_error` reference-result status instead of collapsing native status 1 into generic `error`. Parse failures
+  retain no Boolean or elapsed solver time and do not replace the persistent worker.
+- Migrated all 164,192 result rows without changing their contents. SQLite integrity and foreign-key checks passed, and all 26 Python
+  tests passed, including sequential, multiprocessing, and reference-run file-error coverage.
+
+## 2026-08-11 — Result preprocessing identity made explicit
+
+- Replaced the unused free-text `results.parameters` field and `--parameters` runner option with the constrained
+  `results.preprocessing` column: `none`, `connected_components`, `pre_checks`, or `both`.
+- Migrated 164,681 stored rows into 164,192 distinct structured identities. The 489 merged pairs had no conflicting completed
+  classifications; a completed result was retained over a timeout, otherwise the longer-timeout and then latest row was retained.
+- Kept model implementation changes distinct through the native-module SHA-256. SQLite integrity and foreign-key checks passed, and
+  the focused reference-runner tests passed.
+
+## 2026-08-11 — Low-order Dickinson shortcut consolidated in the shared precheck
+
+- Removed Coposit's direct order-at-most-three test from both `dickinson_2019` and `dickinson_final`, including the complete-input
+  shortcut through order three. The baseline now follows Dickinson's coverage and certificate path on every support; the final model
+  remains algorithmically identical.
+- Kept the exact low-order criterion solely in the shared precheck. Public `safe` therefore applies it once before `dickinson_final`,
+  while analysis calls with preprocessing `none` now run Dickinson without hidden prechecks.
+
+## 2026-08-11 — Dickinson Final selected independently from the baseline
+
+- Copied `models/baselines/dickinson_2019/` into the independent selected model `models/dickinson_final/`. Solver logic, tests, and
+  the copied trace helper are unchanged; only the helper include path is local to the new self-contained directory.
+- Kept `dickinson_2019` as the untouched literature baseline. Rewired the public `safe` companion to `dickinson_final` and registered
+  `dickinson_final` as a standalone executable, Python model, CP/SCP model, and one-pass combined classifier.
+- Updated the model-structure instructions and current user, Python, project, research, and algorithm documentation. The complete
+  Release build and all 50 CTest checks passed.
+
+## 2026-08-11 — Python Matrix metadata removed
+
+- Reduced the constructor to `Matrix(matrix, matrix_id=None)`. Matrix input is compact or inline Matrix Market text, or a direct
+  relative/absolute path; relative paths use the process working directory. Results no longer contain metadata.
+- Removed base-directory resolution, values-only dimension metadata, `file:` handling, and expected-dimension checking from the public
+  Python/native boundary. Corpus runners now convert inline database values to `dimension#values` and database-relative `file:` rows
+  to direct paths before constructing `Matrix`.
+
+## 2026-08-11 — Unselected models consolidated under experiments
+
+- Kept only `adaptive_sponsel_copomatrix`, `baselines/`, and `experiments/` directly under `models/`. Moved every other
+  Coposit-created model and the former Zischg comparison into `models/experiments/`; removed the obsolete `models/legacy/` category.
+- Removed the empty `generalized_dickinson/` directory left after that model's earlier purge. Updated CMake source and test paths,
+  Python native-module registration, current documentation, and model-local cross-references without changing model identifiers or
+  algorithms.
+- The complete Release build and all 49 CTest checks passed after the move.
+
+## 2026-08-11 — Python Matrix puts input first and makes IDs optional
+
+- Changed the analysis constructor from `Matrix(matrix_id, matrix, metadata)` to `Matrix(matrix, matrix_id=None, metadata=None)`.
+  Ordinary one-matrix calls no longer require an artificial identifier; results contain `matrix_id=None` when none was supplied.
+- Migrated maintained runners, corpus classification, tests, and examples to the new order. Corpus and batch paths continue to attach
+  their stable database IDs explicitly.
+- Documented metadata as optional pass-through data with only two recognized input keys: positive integer `dimension` and the
+  `base_directory` required by confined `file:<relative-path>` corpus references.
+
+## 2026-08-11 — Python accepts ordinary matrix-file paths
+
+- Extended `Matrix.matrix` source dispatch so compact `dimension#values` and inline Matrix Market remain text, an existing
+  `file:<relative-path>` remains a confined corpus reference, numeric values-only text still uses its dimension metadata, and every
+  other string is passed directly to the native C++ file parser.
+- Stopped stripping Python compact input before parsing, so the C++ no-whitespace compact-format rule now applies equally through the
+  Python interface. Added coverage for a direct path containing spaces and for compact whitespace rejection.
+
+## 2026-08-11 — Public CLI accepts compact matrices directly
+
+- Extended the shared one-model command adapter to treat an argument beginning with decimal digits immediately followed by `#` as
+  compact FracESSA matrix text; every other non-`-` argument remains a file path. The public launcher therefore accepts quoted or
+  unquoted compact text, matrix files, and standard input without adding an input-mode option.
+- Made the compact parser reject whitespace. The format-dispatch boundary removes only one terminal LF or CRLF supplied by a normal
+  text file or standard-input line before parsing; internal and other surrounding whitespace remains invalid.
+
+## 2026-08-11 — End-user and analysis preprocessing surfaces separated
+
+- Kept the normal `coposit fast|safe strict|non-strict` interface deliberately small: it always applies connected-component splitting
+  and all pre-checks and offers no preprocessing selector.
+- Defined model-specific binaries, Python, reference runners, and benchmark tools as analysis interfaces. They retain explicit model
+  selection and, where applicable, preprocessing controls for faithful baselines and experiments.
+- Removed resolved code-review point 7; the launcher and both companion paths already enforced this end-user policy, so no solver code
+  or new interface was needed.
+
+## 2026-08-11 — File-loading timeout accounting accepted
+
+- Closed review point 6 without changing the deadline boundary. A worker's wall-clock timeout includes native file loading and parsing,
+  while stored native `elapsed_ns` starts after parsing and measures preprocessing plus the model.
+- This difference is accepted for the maintained corpus: loading is negligible on small inputs, while model work dominates or reaches
+  the timeout on the large inputs where loading is measurable. Do not reopen it without contrary benchmark evidence.
+
+## 2026-08-11 — Native C++ owns file-backed matrix loading
+
+- Added one shared `matrix_parser::parse_file()` boundary and routed the C++ CLI, every model-specific Python extension, and the
+  maintained preprocessing benchmark through it.
+- Python now validates a corpus reference and passes its resolved filename to `compute_matrix_file()`; it no longer reads or copies
+  complete Matrix Market contents across the Python-to-C++ boundary.
+
+## 2026-08-11 — Matrix-file hashes removed from normal runs
+
+- Kept each external row's `file_sha256` as audit evidence, but removed automatic hashing from the shared Python loader and reference
+  runner. Experiments and benchmarks now read each selected Matrix Market file once for parsing instead of hashing it first.
+- Existing result reuse no longer opens or hashes an external matrix file. Detecting changed corpus payloads is an explicit integrity
+  audit rather than a cost paid by every solver run.
+
+## 2026-08-11 — Test-data surface reduced to maintained assets
+
+- Renamed the maintained database to lowercase `testdata/copos_testdata.sqlite3` and the immutable source archive to
+  `testdata/archive/copos_testdata.original.sqlite3.xz`; all code and documentation now use the lowercase names.
+- Left only the maintained database, exported schema, README, and required `matrices/` payload directory at the `testdata/` top level.
+  Moved dated corpus generators, migrations, and their historical documentation into `testdata/archive/`.
+- Deleted the generated `testdata/__pycache__/` directory. All 201 external Matrix Market files remain referenced exactly once by the
+  maintained database.
+
+## 2026-08-11 — External matrix files are bound to their matrix IDs
+
+- Added nullable `matrices.file_sha256`: all 201 `file:` rows store the lowercase SHA-256 of their exact Matrix Market bytes, while
+  all 2,241 inline rows store `NULL`. No matrix contents, IDs, classifications, benchmark flags, or result rows changed.
+- The shared Python file resolver verifies `file_sha256` when supplied. The reference runner verifies every selected external file
+  before applying its existing-result skip, so changed input cannot silently reuse old solver evidence.
+- Updated the externalizer to record the final optimized file hash and the legacy consensus reader to pass it through. A focused test
+  changes one coefficient after creating a result and confirms that the next runner invocation fails before reusing that result.
+
+## 2026-08-11 — FracESSA extraction reference consolidated
+
+- Moved the byte-exact original corpus archive and its historical README from `reference/fracessa/testdata/` to
+  `testdata/archive/`; the compressed archive SHA-256 remains `d69aa29ec946caaf3bab74d747bf0ae9572edf9a216eeb0be5f66e28d6a0a23c`.
+- Removed the unused copied FracESSA C++ extraction snapshot and the now-empty `reference/` tree. Maintained implementations and
+  algorithm provenance remain in their model directories and documentation.
+
+## 2026-08-11 — Hadeler results now record their producing binary
+
+- Removed the Hadeler-only hash exception from the reference runner. New Hadeler rows use the same exact native-module SHA-256 identity
+  as every other model; the schema permits an empty hash only for unreconstructable legacy Hadeler evidence.
+- The uniform 36-batch campaign used one clean frozen Release build. It began after the build between 04:19 and 04:22 EEST; Hadeler's
+  four 524-matrix batches ran from 06:46:49 through 07:07:30 EEST. The unchanged Hadeler module observed before the next shared-wrapper
+  rebuild had SHA-256 `1ecd99e49df73f3955c8a2684f84c5db7e7f3420d785c452bbbf7ed5a16b2c24`.
+- Backfilled that hash on exactly 2,096 proven rows: 524 Representative-Core/Stress-union matrices, two modes, with preprocessing
+  disabled and with both preprocessing stages. Left 3,184 older rows empty because their producing binary is not provable.
+
+## 2026-08-11 — One exact C++ number boundary serves FracESSA and Matrix Market input
+
+- Added a standards-aware C++ Matrix Market parser for array and coordinate storage and real, complex, integer, and pattern fields.
+  Coposit accepts only Matrix Market matrices explicitly declared `symmetric`; it rejects every other structure immediately and
+  mirrors the stored lower triangle without a post-parse symmetry scan. Nonzero complex imaginary parts remain incompatible with
+  Coposit's real-matrix boundary.
+- Extended the compact format and named it the FracESSA format. It accepts full upper-triangle and short circular-symmetric input,
+  exact decimals and scientific notation, plus integer fractions written `[+|-]numerator/denominator`. The denominator must be
+  unsigned and nonzero; ambiguous signs such as `1/-2` and `-1/-2` are rejected.
+- Both formats share one exact numeric parser. Slash fractions remain FracESSA-only, and one least common positive denominator is
+  cleared before the integer-only solver core. A neutral C++ matrix-parser entry point selects the independent FracESSA or Matrix
+  Market parser from the content; the C++ CLI and Python native boundary both use that entry point instead of converting Matrix
+  Market through Python.
+- Grouped the four behavior-preserving headers under `cpp/include/coposit/parsers/` as `exact_number_parser.hpp`,
+  `fracessa_matrix_parser.hpp`, `matrix_market_parser.hpp`, and `matrix_parser.hpp`, with matching focused test names.
+- Made the parser boundary solely responsible for producing a nonempty square symmetric matrix. Removed the duplicate shape and
+  symmetry scans from all 24 model entry points and the shared pre-check scan; direct model calls now require a valid matrix by
+  contract.
+
+## 2026-08-11 — Copositivity terminology standardized on CP and SCP
+
+- Standardized project language on copositivity (`CP`, the non-strict predicate) and strict copositivity (`SCP`). Removed the former
+  term from owned Markdown, source comments, identifiers, test names, scripts, SQL, command examples, and reports.
+- Renamed internal capability and query identifiers to `copositive`; the public mode values `copositive`, `strictly_copositive`, and
+  `both`, result fields, and stored database values are unchanged.
+
+## 2026-08-11 — Public CLI now requires fast or safe
+
+- Replaced the Dutour-linked public executable with a thin `coposit fast|safe` launcher. `fast` executes an isolated Adaptive
+  Sponsel–COPOMATRIX companion; `safe` executes an isolated Dickinson 2019 companion. No binary links both models.
+- Both public methods run negative-entry connected-component splitting followed by all exact pre-checks. The public interface then
+  requires `strict` or `non-strict`, with no hidden default. Every returned Boolean is exact; incomplete and resource-limited
+  searches remain non-Boolean failures.
+- Added method-identity, non-strict, strict-boundary, smoke, missing/unknown-method, and missing/unknown-predicate CLI checks. All 44
+  Release CTest checks pass.
+- Left direct-string versus matrix-file selection explicitly open until the NIST parser is complete. The current compact-text
+  standard-input/file path remains transitional; no placeholder file parser or format guessing was added.
+
+## 2026-08-11 — Strict-only models reject non-strict mode before preprocessing
+
+- Added a fail-closed compile-time non-strict-mode capability to each one-model Python native module. Strict-only modules now reject
+  `copositive` mode before connected-component splitting or pre-checks can settle the matrix.
+- Added coverage for all 15 strict-only models under all four preprocessing selections and for all nine non-strict-capable models with
+  preprocessing disabled and with both stages enabled.
+- The focused regressions and all 35 Release CTest checks pass.
+
 ## 2026-08-11 — Large corpus matrices moved to Matrix Market files
 
 - Added exact `file:<relative-path>` matrix references at the Python corpus boundary. References are confined to the database
@@ -12,8 +281,8 @@ This append-only file records meaningful decisions, results, and evidence that a
 - Compared the actual encoded byte counts and retained the smaller exact representation per file: 132 arrays and 69 coordinates. All
   69 coordinate files have below one-percent stored-triangle density; every retained array is at least 75% dense. External matrix
   storage fell from 729,009,854 to 458,287,571 bytes (37%). Streaming canonical hashes matched for all 201 matrices.
-- Compacted `Copos_testdata.sqlite3` from 1.54 GB to 76 MB. Compared all 201 reconstructed value strings byte-for-byte with the
-  pre-migration database, retained all 164,681 result rows, passed SQLite integrity and foreign-key checks, all 20 Python tests, and
+- Compacted `copos_testdata.sqlite3` from 1.54 GB to 76 MB. Compared all 201 reconstructed value strings byte-for-byte with the
+  pre-migration database, retained all 164,681 result rows, passed SQLite integrity and foreign-key checks, all 19 Python tests, and
   all 35 Release CTest checks.
 
 ## 2026-08-11 — Adaptive Sponsel–COPOMATRIX selects the least-branched pivot
@@ -24,18 +293,18 @@ This append-only file records meaningful decisions, results, and evidence that a
   zero. Exact FLINT binomial counts avoid constructing any alternative pivot's children.
 - Added a focused regression in which pivot zero would create two children but a later pivot creates only one. The Release model test
   and all 35 repository tests pass.
-- Repeated all eight strict/ordinary and preprocessing configurations on the 524-matrix Core/Stress union with hash
+- Repeated all eight strict/non-strict and preprocessing configurations on the 524-matrix Core/Stress union with hash
   `249d413159ae27519472c474d68eb697a57af1ceb06b2129ab69d7f796856977`, a five-second cutoff, parent CPU 3, and workers 4–6. All
   4,192 rows are present; 3,576 completed and 616 timed out, with no wrong result, node limit, or execution error.
-- The minimum-child rule did not improve this benchmark. No-precheck completed 457 strict and 428 ordinary calls, one and three fewer
-  than the preceding binary. Both-stage preprocessing completed 465 strict and 438 ordinary calls, unchanged and two fewer. Matrix
-  9648 is the material regression: its ordinary no-precheck call changed from 0.022 seconds to timeout. The research and technical
+- The minimum-child rule did not improve this benchmark. No-precheck completed 457 strict and 428 non-strict calls, one and three fewer
+  than the preceding binary. Both-stage preprocessing completed 465 strict and 438 non-strict calls, unchanged and two fewer. Matrix
+  9648 is the material regression: its non-strict no-precheck call changed from 0.022 seconds to timeout. The research and technical
   reference reports now use the new hash.
 
 ## 2026-08-11 — Uniform three-worker empirical benchmark rerun
 
 - Rebuilt the current Release modules, passed all 35 tests, and reran the complete 524-matrix Representative Core/Stress union once
-  for all eight literature baselines and Adaptive Sponsel–COPOMATRIX: strict and ordinary modes, with preprocessing disabled and with
+  for all eight literature baselines and Adaptive Sponsel–COPOMATRIX: strict and non-strict modes, with preprocessing disabled and with
   both stages enabled. CPU 3 handled dispatch and serialized SQLite writes; three persistent workers used CPUs 4–6; every matrix had
   a five-second cutoff.
 - All 36 batches and 18,864 rows completed without interruption. Every completed Boolean matched corpus truth. The rerun contains no
@@ -43,16 +312,14 @@ This append-only file records meaningful decisions, results, and evidence that a
   crash.
 - Nine prior timeout rows completed and no prior completion became unresolved. Five transitions used unchanged binaries and expose
   cutoff/load variability; four used newer implementation-optimized no-precheck binaries. No mathematical classification changed.
-- Updated the canonical reference and research report from the uniform measurements. The separate
-  `EMPIRICAL_BENCHMARK_RERUN_DISCREPANCIES_2026-08-11.md` records every changed status and every substituted batch-time difference
-  larger than one second.
+- Updated the canonical reference and research report from the uniform measurements.
 
 ## 2026-08-11 — COPOMATRIX normal benchmark corrected to five seconds
 
 - Found that the recorded no-pre-check strict COPOMATRIX union mixed a one-second cutoff for 384 Core matrices with a five-second
-  cutoff for the remaining Stress matrices. Re-ran all 524 Core/Stress matrices in both strict and ordinary modes with the current
+  cutoff for the remaining Stress matrices. Re-ran all 524 Core/Stress matrices in both strict and non-strict modes with the current
   native module and a uniform five-second cutoff.
-- Strict completed 356 and timed out on 168; ordinary completed 327 and timed out on 197. This recovers four strict and one ordinary
+- Strict completed 356 and timed out on 168; non-strict completed 327 and timed out on 197. This recovers four strict and one non-strict
   union completions relative to the previous rows. Dispatcher wall time was 217.947/256.273 seconds and substituted one-CPU time was
   855.417/1,007.445 seconds. Every completion matched corpus truth, with no errors or resource-limit statuses.
 - Updated the canonical Core/Stress reference report and research report. Added a pre-checked reach table comparing median matrix order
@@ -61,14 +328,14 @@ This append-only file records meaningful decisions, results, and evidence that a
 ## 2026-08-11 — Both-stage preprocessing benchmarked on every literature baseline
 
 - Ran connected-component splitting followed by all enabled pre-checks on the 524-matrix Representative Core/Stress union for every
-  faithful literature baseline in strict and ordinary mode. Reused the two current Dickinson batches and completed 14 new batches on
+  faithful literature baseline in strict and non-strict mode. Reused the two current Dickinson batches and completed 14 new batches on
   parent CPU 3 and solver CPUs 4–9 with a five-second per-matrix cutoff.
 - Both-stage preprocessing improved every one of the 32 model/set/mode completion comparisons against the recorded normal runs.
   Aggregate union completions rose from 4,982 to 5,360; the largest individual gains were Bundfuss Stress strict (+42), Sponsel Stress
   strict (+40), and Dutour Stress strict (+33).
-- The 8,384 selected both-stage rows contain 5,360 completed classifications, 3,012 timeouts, and 12 Dutour ordinary node limits, with
-  zero execution errors, corpus mismatches, or impossible ordinary/strict result pairs. Database integrity and foreign keys passed.
-- Safi ordinary was externally terminated after flushing 485 rows and resumed only its 39 missing rows. The report preserves this fact
+- The 8,384 selected both-stage rows contain 5,360 completed classifications, 3,012 timeouts, and 12 Dutour non-strict node limits, with
+  zero execution errors, corpus mismatches, or impossible non-strict/strict result pairs. Database integrity and foreign keys passed.
+- Safi non-strict was externally terminated after flushing 485 rows and resumed only its 39 missing rows. The report preserves this fact
   and shows the rounded combined wall time instead of inventing an exact uninterrupted measurement.
 
 ## 2026-08-11 — Core/Stress reference report condensed
@@ -86,8 +353,8 @@ This append-only file records meaningful decisions, results, and evidence that a
 - Cardinality one and two remain explicitly selectable. The stopped full-corpus experiments continue to document why cardinality
   three is unsuitable for uncensored order-3,000 preprocessing.
 - Repeated all 12 requested Dickinson 2019 and Adaptive Sponsel–COPOMATRIX Core/Stress runs with connected components only,
-  pre-checks only, and both stages in ordinary and strict mode. The 6,288 stored rows contain 4,872 completed classifications and
-  1,416 five-second timeouts, with zero errors, node limits, corpus mismatches, or ordinary/strict contradictions.
+  pre-checks only, and both stages in non-strict and strict mode. The 6,288 stored rows contain 4,872 completed classifications and
+  1,416 five-second timeouts, with zero errors, node limits, corpus mismatches, or non-strict/strict contradictions.
 - With the new bounded floating proposal and exact witness verification, pre-checks improved completion in every per-set comparison
   against the normal model. Both stages together led the enabled choices with 733/1,048 Dickinson and 903/1,048 adaptive union
   results completed across the two modes. `REFERENCE_RESULTS_REPRESENTATIVE_CORE_AND_STRESS.md` was updated after every run and with
@@ -119,7 +386,7 @@ This append-only file records meaningful decisions, results, and evidence that a
   floating objective, or an exactly verified witness that completes the requested mode. Repeated toward vertices remain permitted;
   the iteration bound is a work budget, not one visit per coordinate.
 - Floating arithmetic only proposes candidates. A candidate is converted to bounded nonnegative integer weights and evaluated as
-  an exact integer quadratic form; strict mode rejects only an exact value at most zero and ordinary mode only an exact negative
+  an exact integer quadratic form; strict mode rejects only an exact value at most zero and non-strict mode only an exact negative
   value. The positive normalization denominator is irrelevant by homogeneity and is never constructed.
 - Extended the shared upper-triangle scan to retain the full row sums and maximum absolute entry needed by the proposal without
   another sign-and-sum pass. Focused coverage includes the former order-22 growth case and a `2^2000 vv^T + I` matrix whose positive
@@ -129,9 +396,9 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 - Added the optional Python preprocessing selector `none`, `connected_components`, `pre_checks`, or `both`; the default remains
   `none`, so existing model calls and stored parameter strings are unchanged.
-- Ran Dickinson 2019 and Adaptive Sponsel–COPOMATRIX in ordinary and strict mode with each of the three enabled preprocessing
+- Ran Dickinson 2019 and Adaptive Sponsel–COPOMATRIX in non-strict and strict mode with each of the three enabled preprocessing
   choices on the 524-matrix union of Representative Core and Stress Test. The current report selects 6,288 complete stored rows;
-  every batch contains all 524 matrices, with zero execution errors, node limits, classification mismatches, or ordinary/strict
+  every batch contains all 524 matrices, with zero execution errors, node limits, classification mismatches, or non-strict/strict
   contradictions.
 - Connected components alone was the only choice that did not reduce five-second-cutoff completion. The full pre-check bundle cost
   more time than it saved on these sets. A concurrent semidefinite-pre-check update was detected during the first runs, so all six
@@ -146,7 +413,7 @@ This append-only file records meaningful decisions, results, and evidence that a
   zero and rejects strict copositivity.
 - Deliberately left nullity greater than one unresolved because checking basis columns cannot decide whether their span intersects
   the nonnegative orthant. Those matrices continue to the selected final algorithm without constructing a nullspace basis.
-- Ordinary-only calls still stop at positive semidefiniteness without recovering a kernel vector. Focused checks cover both
+- Non-strict-only calls still stop at positive semidefiniteness without recovering a kernel vector. Focused checks cover both
   nullity-one outcomes and higher-nullity delegation. The complete Release build and all 37 tests passed; SQLite
   `PRAGMA integrity_check` returned `ok`.
 
@@ -172,13 +439,13 @@ This append-only file records meaningful decisions, results, and evidence that a
 ## 2026-08-10 — Shared scan and independently selectable component pipeline
 
 - Added one reusable exact matrix scan for symmetry, diagonal signs, negative edges, negative-part row sums, the all-ones value, and
-  selected ordinary or strict principal-pair facts. The pre-check now consumes this record instead of owning another matrix scan.
+  selected non-strict or strict principal-pair facts. The pre-check now consumes this record instead of owning another matrix scan.
 - Changed connected-component discovery to consume the stored negative-entry graph without inspecting or copying the matrix. Added
   an opt-in component pipeline that reuses the original matrix when connected and computes block-specific scan facts while copying
   each disconnected principal block once.
 - Kept the controls independent and default-off. Connected components may be enabled with any subset of the pre-checks, while
   disabling components runs the selected pre-checks on the whole matrix. No maintained model enables either facility.
-- Preserved combined ordinary/strict aggregation across blocks, including continued ordinary checking after a strict-only boundary
+- Preserved combined non-strict/strict aggregation across blocks, including continued non-strict checking after a strict-only boundary
   result. The complete Release build and all 37 tests passed; SQLite `PRAGMA integrity_check` returned `ok`.
 
 ## 2026-08-10 — Explicit principal-face enable switch
@@ -201,27 +468,27 @@ This append-only file records meaningful decisions, results, and evidence that a
 ## 2026-08-10 — Exact definiteness and combined pre-check classification
 
 - Added the default-off `positive_definiteness` option. It makes one matrix copy and one exact fraction-free LDLT factorization;
-  positive definiteness accepts strict copositivity, positive semidefiniteness accepts ordinary copositivity, and a failed
+  positive definiteness accepts strict copositivity, positive semidefiniteness accepts non-strict copositivity, and a failed
   certificate falls through without rejection.
 - Added `pre_check::classify(matrix, options, final_classifier)` for Hadeler-, Dickinson-, and other combined classifiers. One shared
-  pre-check traversal records ordinary and strict facts separately, including equality witnesses, weak acceptances, and component
+  pre-check traversal records non-strict and strict facts separately, including equality witnesses, weak acceptances, and component
   results; it does not run the pre-check twice.
-- Single-mode calls reuse the same classification-aware engine through compile-time ordinary and strict queries. An invalid
+- Single-mode calls reuse the same classification-aware engine through compile-time non-strict and strict queries. An invalid
   singleton is still delegated when its separate diagonal check is off, preserving independent option behavior.
 - The complete Release build and all 35 tests passed, including the Hadeler and Dickinson combined-classifier suites and focused
   equality-boundary pre-check tests. SQLite `PRAGMA integrity_check` returned `ok`.
 
-## 2026-08-10 — Shared ordinary/strict pre-check and exact witness additions
+## 2026-08-10 — Shared non-strict/strict pre-check and exact witness additions
 
 - Replaced the strict-only pre-check entry point with `pre_check::check(matrix, mode, options, final_algorithm)`. One implementation
   is templated on `copositivity_mode`; the matrix scans, graph traversal, component construction, and exact Frank–Wolfe arithmetic
-  occur in one source body, while the shared mode predicate alone changes strict $>0$ from ordinary $\geq0$.
+  occur in one source body, while the shared mode predicate alone changes strict $>0$ from non-strict $\geq0$.
 - Kept `small_dimension` as the complete order-at-most-three decision. Added the separate
   `principal_submatrices_up_to_3` option, which only rejects larger matrices. Its diagonal and pair work is fused into the existing
   scan, and it tests only connected negative-entry triples because passed components with nonnegative cross entries already prove
   every disconnected triple.
 - Added a default-off centre-start exact Frank–Wolfe witness option with at most $n$ exact line-minimizing steps. A zero iterate
-  rejects strict mode but remains admissible in ordinary mode, where the search continues when a descent direction exists.
+  rejects strict mode but remains admissible in non-strict mode, where the search continues when a descent direction exists.
 - Renamed the sign-specific option fields to mode-neutral `diagonal` and `all_ones`. Positive-definiteness remains deliberately
   excluded after the preceding FracESSA ablation and the user discussion.
 - Focused tests cover full small-matrix equality, negative-only pair/triangle/path faces, every whole-matrix equality boundary,
@@ -251,23 +518,23 @@ This append-only file records meaningful decisions, results, and evidence that a
 - Reused Coposit's existing exact small criteria and dynamic packed support. The component path therefore crosses 64-bit word
   boundaries without FracESSA's former dimension limit. Input validation and cooperative timeout checkpoints remain explicit.
 - Deliberately omitted FracESSA-specific candidate/Hessian decisions, its experimental KKT route, and the positive-definiteness and
-  Z-matrix checks already removed from FracESSA. An ordinary-copositivity adaptation remains deferred until its inequalities are
+  Z-matrix checks already removed from FracESSA. A non-strict-copositivity adaptation remains deferred until its inequalities are
   considered separately rather than inferred from the strict path.
 - Added focused coverage for every copied decision, connected and disconnected callback dispatch, rejection propagation, invalid
   inputs, and a 129-dimensional three-word component. All 35 Release tests pass and SQLite integrity returns `ok`.
 
-## 2026-08-10 — Adaptive Sponsel–COPOMATRIX ordinary mode
+## 2026-08-10 — Adaptive Sponsel–COPOMATRIX non-strict mode
 
-- Extended the selected `adaptive_sponsel_copomatrix` model from strict-only operation to individually selectable ordinary and strict
+- Extended the selected `adaptive_sponsel_copomatrix` model from strict-only operation to individually selectable non-strict and strict
   copositivity. The model does not advertise combined classification because the two predicates still require separate traversals.
-- Reused the shared exact order-one-through-three classifier. Ordinary traversal permits zero diagonals, rejects an edge only when
+- Reused the shared exact order-one-through-three classifier. Non-strict traversal permits zero diagonals, rejects an edge only when
   $\gamma^2>\alpha\beta$, uses positive semidefiniteness for Sponsel's stripped `H` certificate, and applies Xu–Yao's zero-pivot
   rule before forming a Schur child. Strict inequalities and positive definiteness remain unchanged in strict mode.
-- Added focused C++ boundary, zero-pivot, wide-edge, and semidefinite-`H` checks plus a Python native-wrapper ordinary-mode check. All
+- Added focused C++ boundary, zero-pivot, wide-edge, and semidefinite-`H` checks plus a Python native-wrapper non-strict-mode check. All
   34 maintained tests passed.
 - Ran both modes of binary `ac768b4f80f80dd63541ab7b8455cd4ab56beceb83db0af976f0efb326ee929f` over the 524-row
   Representative Core and Stress union with a five-second cutoff and CPUs 3/4–7. Strict completed 458 with 66 timeouts in 105.102
-  seconds; ordinary completed 431 with 93 timeouts in 141.778 seconds. Every completed result matched truth, with no errors or node
+  seconds; non-strict completed 431 with 93 timeouts in 141.778 seconds. Every completed result matched truth, with no errors or node
   limits and no contradiction among the 431 matrices completed in both modes.
 
 ## 2026-08-10 — Selected adaptive model on Representative Core and Stress
@@ -312,17 +579,17 @@ This append-only file records meaningful decisions, results, and evidence that a
   plus-before-minus, and first-child depth-first order.
 - Applied Coposit's existing 50,000-open-node limit to active matrix checks and staircase frames. The native wrapper reports an
   exhausted limit as unresolved `node_limit`, never as a negative classification.
-- Added the order-999 Johnson-Reams generalized Horn construction behind corpus matrix 10244 as a focused regression. Ordinary mode
+- Added the order-999 Johnson-Reams generalized Horn construction behind corpus matrix 10244 as a focused regression. Non-strict mode
   now reaches the node limit instead of terminating its worker with `SIGSEGV`; all baseline source-order checks remain intact.
 
 ## 2026-08-10 — Representative Core and Stress baseline reference
 
 - Added benchmark-flag selection to `python/run_results.py`; multiple `--matrix-set` arguments select their union and still compose
   with dimension and matrix-ID bounds. A focused wrapper test covers the Representative Core and Stress Test union.
-- Completed five-second ordinary and strict runs for all eight literature baselines over the 524 distinct matrices selected by the
+- Completed five-second non-strict and strict runs for all eight literature baselines over the 524 distinct matrices selected by the
   384-row Representative Core and 240-row Stress Test. Each of the 16 exact model/mode identities contains 524 rows, every completed
   Boolean matches corpus truth, and SQLite integrity returns `ok`.
-- Danninger's ordinary traversal reproducibly exhausts the process stack on matrix 10244 (`n=999`), exits its isolated worker with
+- Danninger's non-strict traversal reproducibly exhausts the process stack on matrix 10244 (`n=999`), exits its isolated worker with
   code -11, and is stored as one explicit error. The runner replaces the worker and completes the batch; the error is never treated
   as a negative classification. Dutour node limits and all model timeouts likewise remain unresolved.
 - Recorded per-model status, truth-category coverage, substituted work, union wall time, consolidated completion counts, and
@@ -374,8 +641,8 @@ This append-only file records meaningful decisions, results, and evidence that a
 - Changed Bundfuss 2008 and Sponsel 2012 to prepare their common exact split data once, construct and inspect the first child, and
   construct the second sibling only if the first did not reject. Their λ rule, child matrices, inspection order, content reduction,
   LIFO traversal, and resource-limit check are unchanged.
-- The three focused suites and all 33 Release tests pass; all 17 Python wrapper tests pass. Across 98 ordinary/strict Smoke calls per
-  model, every completed result matched the corpus. A 250 ms cooperative check left one known hard ordinary case unresolved for
+- The three focused suites and all 33 Release tests pass; all 17 Python wrapper tests pass. Across 98 non-strict/strict Smoke calls per
+  model, every completed result matched the corpus. A 250 ms cooperative check left one known hard non-strict case unresolved for
   each model; those same three calls remained timeouts at five seconds. SQLite integrity returned `ok`.
 
 ## 2026-08-10 — Reduced simplex-refinement open-node limit
@@ -386,21 +653,21 @@ This append-only file records meaningful decisions, results, and evidence that a
   concurrent memory pressure; it does not constrain Danninger, whose traversal does not use the shared unfinished-node queue.
 - Timed reference workers now receive one second to return after the cooperative timeout signal. The parent records a timeout and
   replaces a worker that remains inside one long native operation, preventing that operation from growing without a resource bound.
-- Completed and stored the five-second N=1–100 reference pass for all eight literature baselines in both ordinary and strict mode:
+- Completed and stored the five-second N=1–100 reference pass for all eight literature baselines in both non-strict and strict mode:
   16 complete model/mode identities of 2,084 rows each. Every completed Boolean matches the corresponding corpus truth; there are no
   execution errors. Timeouts and the Dutour/Bundfuss node-limit rows remain explicitly unresolved. Database integrity returned `ok`.
 
-## 2026-08-10 — Completed legacy ordinary-copositivity truth by baseline unanimity
+## 2026-08-10 — Completed legacy non-strict-copositivity truth by baseline unanimity
 
-- Ran ordinary mode for all eight literature baselines on each of the 889 previously unknown legacy strict-false matrices. A five-second
+- Ran non-strict mode for all eight literature baselines on each of the 889 previously unknown legacy strict-false matrices. A five-second
   timeout or fixed node limit counted as an abstention; every completed Boolean had to agree, at least four models had to complete, and
   any disagreement, other error, or smaller completed set stopped before writing that matrix.
 - Every matrix passed. The run added 415 copositive-boundary and 474 non-copositive classifications in 382.241 seconds. No completed
   models disagreed. Matrix 8159 was the sole four-result case; all other matrices had at least six completed results. Across all
   matrix/model calls, the abstention counts were Danninger 1, COPOMATRIX 1, Hadeler 42, Dickinson 15, Safi 3, Bundfuss 3, Dutour 0,
   and Sponsel 0.
-- The final 2,442-row corpus contains 674 strict, 1,179 boundary, and 589 non-copositive matrices, with no unknown ordinary result.
-  `PRAGMA integrity_check` returned `ok`, and no strict row violates ordinary copositivity.
+- The final 2,442-row corpus contains 674 strict, 1,179 boundary, and 589 non-copositive matrices, with no unknown non-strict result.
+  `PRAGMA integrity_check` returned `ok`, and no strict row violates non-strict copositivity.
 - Native module SHA-256 values were Dutour `a9587187851d3088dfff17ced600f25956fd8c91929d51ce8c55916ec8a98971`, Danninger
   `117ef63b6e45e1b81c72a904c5847aad0da5839176af951a72de741288d56831`, COPOMATRIX
   `92b78a9fdf1db14e804ec4cc84e8f61a20cebfb301b20f7b15553044c24a2cc8`, Hadeler
@@ -413,7 +680,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 ## 2026-08-10 — One-pass combined classification
 
 - Added `coposit::model::classify(matrix)` to Hadeler 1983, Dickinson 2019, and Danninger 1990. Each implementation follows its
-  ordinary-complete traversal once, remembers a strict-only zero, and stops both predicates only on an ordinary failure; it does not
+  non-strict-complete traversal once, remembers a strict-only zero, and stops both predicates only on a non-strict failure; it does not
   call the two selected modes separately.
 - Added Python `mode="both"` for those three models. Successful results populate both Boolean fields as `(false, false)`,
   `(true, false)`, or `(true, true)`; unsupported models return `EXEC_ERROR`. Existing `solve(matrix, mode)` and its strict early
@@ -422,31 +689,31 @@ This append-only file records meaningful decisions, results, and evidence that a
   Independent corpus checks matched both stored truth fields without mismatches on all 746 known matrices through order 10 for
   Hadeler and Dickinson and all 326 known matrices through order 6 for Danninger.
 
-## 2026-08-10 — Ordinary and strict decision modes for all baselines
+## 2026-08-10 — Non-strict and strict decision modes for all baselines
 
 - Replaced the strict-only model contract with `solve(matrix, copositivity_mode)`, defaulting to `strictly_copositive`. The eight
-  literature baselines now also implement exact ordinary copositivity; Coposit-created variants reject ordinary mode explicitly.
-- Added the ordinary boundary rules from each source family: Danninger's zero-pivot reduction, Hadeler's negative-determinant
+  literature baselines now also implement exact non-strict copositivity; Coposit-created variants reject non-strict mode explicitly.
+- Added the non-strict boundary rules from each source family: Danninger's zero-pivot reduction, Hadeler's negative-determinant
   criterion, Dickinson's continued certificate traversal after a nonnegative zero, COPOMATRIX's non-strict projection rules,
   non-strict Dutour/Bundfuss/Safi comparisons, and Sponsel's exact positive-semidefinite `H` certificate.
 - Exposed the mode through the shared CLI and Python paths. Results keep `is_copositive` and `is_strictly_copositive` separate and
   populate only the requested predicate, so one run is never presented as an unproved three-state classification.
 
-## 2026-08-10 — Restored nullable ordinary-copositivity truth
+## 2026-08-10 — Restored nullable non-strict-copositivity truth
 
 - Restored `matrices.is_copositive` alongside `is_strictly_copositive`. The field is nullable by design: the corpus now records 674
   strictly copositive matrices, 764 copositive boundary matrices, 115 proved non-copositive matrices, and 889 legacy strict-false
-  matrices whose ordinary copositivity has not been established. A table constraint requires every strict matrix to be copositive.
+  matrices whose non-strict copositivity has not been established. A table constraint requires every strict matrix to be copositive.
 - Reconstructed all retained original values from the immutable FracESSA snapshot: 413 retained strict rows, 56 boundary rows, 55
   non-copositive rows, and 891 then-unknown rows. Later literature provenance upgrades Horn 9162 and Hoffman–Pereira 9163 to
   boundary-copositive. Every post-extraction literature family is proved boundary or strict; the two generated negative-witness
   families contribute 60 non-copositive rows. This leaves exactly 889 unnamed legacy rows unknown rather than guessing their truth.
-- Updated all six corpus importers to persist ordinary truth and changed benchmark sampling to use `is_copositive` directly rather
+- Updated all six corpus importers to persist non-strict truth and changed benchmark sampling to use `is_copositive` directly rather
   than provenance-text heuristics. Smoke now contains 49 rows, including all four fast known non-copositive rows at orders 13–20.
   Representative Core remains 384 rows and now contains 192 strict, 84 boundary, all 33 known non-copositive rows through order 100,
-  and 75 ordinary-unknown rows. Stress and Scale retain their 240 and 364 exact memberships.
-- `testdata/add_copositivity_classification_2026_08_10.sql` performs the guarded table rebuild and
-  `testdata/assign_benchmark_sets_2026_08_10.sql` freezes the revised memberships. These revised values supersede the provisional
+  and 75 non-strict-unknown rows. Stress and Scale retain their 240 and 364 exact memberships.
+- `testdata/archive/add_copositivity_classification_2026_08_10.sql` performs the guarded table rebuild and
+  `testdata/archive/assign_benchmark_sets_2026_08_10.sql` freezes the revised memberships. These revised values supersede the provisional
   strict-only benchmark-set composition recorded immediately below.
 
 ## 2026-08-10 — Four overlapping benchmark sets
@@ -459,7 +726,7 @@ This append-only file records meaningful decisions, results, and evidence that a
   maximum-order anchors. Scale contains all 358 matrices above order 100 plus the six order-51 members needed to keep both complete
   generated 90-matrix panels.
 - No matrix was added: the literature corpus and the existing sparse and dense controlled high-order panels already cover every
-  requested stratum. `testdata/assign_benchmark_sets_2026_08_10.sql` reproduces the assignment and refuses corpus/result drift by
+  requested stratum. `testdata/archive/assign_benchmark_sets_2026_08_10.sql` reproduces the assignment and refuses corpus/result drift by
   checking corpus size, canonical coverage, set counts, and two exact ID moments for every set.
 
 ## 2026-08-09 — Sixty-second high-order Zischg hybrid run through order 300
@@ -515,7 +782,7 @@ This append-only file records meaningful decisions, results, and evidence that a
   products. At least 94.194% of every matrix's upper triangle is nonzero. The construction is deterministic pseudo-random rather
   than cryptographically random: its hidden PSD or positive-definite structure supplies exact proofs, while the failing cases have
   explicit two-coordinate negative witnesses. All entries satisfy the requested absolute bound of 100; the observed maximum is 60.
-- Added `testdata/import_high_order_dense_randomized_stress_2026_08_09.py`. Its verification mode regenerated all 369,334,597 matrix
+- Added `testdata/archive/import_high_order_dense_randomized_stress_2026_08_09.py`. Its verification mode regenerated all 369,334,597 matrix
   text bytes exactly. The corpus now contains 2,442 matrices: 674 strict and 1,768 not strict. SQLite integrity returned `ok`, and no
   result rows were invented for the new inputs.
 - The order-100 reference snapshot still ends at ID 10504 and now excludes six later order-51 rows, three from each generated batch.
@@ -548,7 +815,7 @@ This append-only file records meaningful decisions, results, and evidence that a
   two-coordinate nonnegative zero; the strict cases are positive definite; the failures retain positive diagonals and have an exact
   two-coordinate negative witness. Every entry has absolute value at most 10. Repeated small values are necessary at these orders,
   but every generated matrix is distinct.
-- Added `testdata/import_high_order_small_integer_stress_2026_08_09.py`; its verification mode regenerated all 278,382,884 matrix
+- Added `testdata/archive/import_high_order_small_integer_stress_2026_08_09.py`; its verification mode regenerated all 278,382,884 matrix
   text bytes exactly. The corpus now has 2,352 matrices: 644 strict and 1,708 not strict. SQLite integrity returned `ok`, and no
   result rows were fabricated for the new inputs.
 - Marked the order-100 reference report as a snapshot through ID 10504 because the new batch contains three unbenchmarked order-51
@@ -581,7 +848,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 - Added `adaptive_zischg_sponsel_copomatrix` as an isolated copy of the finalized 10,000-streak Adaptive Sponsel–COPOMATRIX model.
 - The new model applies exact Zischg–Bomze negative-entry connected-component decomposition only after COPOMATRIX constructs a
   principal, Schur, or transformed Schur child. Connected children restart the unchanged adaptive traversal; disconnected children
-  are the conjunction of their proper principal component blocks. The public root and ordinary Sponsel children are not split.
+  are the conjunction of their proper principal component blocks. The public root and non-strict Sponsel children are not split.
 - Registered the CLI, Python native module and public identifier, detailed algorithm document, and focused acceptance/rejection
   checks that confirm the production projection path invokes the decomposition. All 31 maintained tests passed and SQLite integrity
   returned `ok`. No corpus benchmark was run in this change.
@@ -719,7 +986,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 ## 2026-08-09 — Nullity-aware Support-Pruned Dickinson
 
 - Added `nullity_support_pruned_dickinson` as an isolated copy of `support_pruned_dickinson`. The nonsingular branch, certificate
-  theorem, strict-zero termination, recursive generator, ordinary interval lookup, and globally covered-support prune are unchanged.
+  theorem, strict-zero termination, recursive generator, non-strict interval lookup, and globally covered-support prune are unchanged.
 - Extended the shared fraction-free LDLT factorization with complete exact nullspace-basis recovery from the retained singular
   factors. Existing one-vector callers remain unchanged. A focused rank sweep verified that every returned basis has the exact
   requested nullity, independent columns, and zero matrix product.
@@ -743,7 +1010,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 - Added `support_pruned_dickinson` as a separate self-contained Coposit-created model, leaving `dickinson_2019` unchanged. It retains
   Dickinson's exact solves, nullspace branch, strict-zero termination, and general coverage intervals. When a retained signature has
   `N_A(u)` equal to the complete index universe, the copied FracESSA support generator now removes every later branch containing
-  `support(u)` before that support is emitted. Signatures with a proper upper bound remain ordinary Dickinson lookup entries.
+  `support(u)` before that support is emitted. Signatures with a proper upper bound remain non-strict Dickinson lookup entries.
 - Added a detailed model-local `ALGORITHM.md` and focused checks for global upward pruning, bounded-interval safety, singular vectors,
   arbitrary-precision scaling, boundary matrix 9161, packed supports beyond 64 coordinates, and public validation. The complete
   Release build and all 27 C++/Python tests passed; 1,600 deterministic random matrices through order eight matched base Dickinson.
@@ -768,7 +1035,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 - Applied the control-flow change independently to `dickinson_2019`, `rhs_dickinson`, `frank_wolfe_dickinson`,
   `one_step_frank_wolfe_dickinson`, `exact_frank_wolfe_dickinson`, `pairwise_frank_wolfe_dickinson`,
   `support_polished_frank_wolfe_dickinson`, and `zischg_dickinson`. Removed the redundant quadratic-zero calculation from the
-  ordinary positive-right-hand-side paths; RHS Dickinson retains its general exact post-solve check because it searches modified
+  non-strict positive-right-hand-side paths; RHS Dickinson retains its general exact post-solve check because it searches modified
   right-hand sides.
 - The complete Release build and all 26 C++/Python tests passed. Eight clean five-second runs used parent CPU 3 and workers on CPUs
   4–9. Every run covered all 2,233 matrices with no mismatch, error, or node limit; database integrity returned `ok`.
@@ -951,7 +1218,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 ## 2026-08-08 — Generalized Dickinson pair certificates
 
 - Added `generalized_dickinson` as a separate Coposit-created model, leaving the published `dickinson_2019` baseline unchanged. When
-  ordinary coverage fails, it tests exact equal-weight sums of eligible earlier certificate vectors and accepts only sums satisfying
+  non-strict coverage fails, it tests exact equal-weight sums of eligible earlier certificate vectors and accepts only sums satisfying
   Dickinson's original support and product conditions.
 - Retained sparse parent values and full exact products so product-sign cancellation is decided without approximation. Successful
   sums record strict nonnegative zeros and cache only packed coverage signatures; they do not become recursive combination parents.

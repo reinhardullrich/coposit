@@ -21,20 +21,20 @@ from pycoposit import ALGORITHMS, COPOSITIVITY_MODES, PREPROCESSING_MODES, Matri
 from pycoposit.core import load_native_module
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_DATABASE = REPOSITORY_ROOT / "testdata" / "Copos_testdata.sqlite3"
+DEFAULT_DATABASE = REPOSITORY_ROOT / "testdata" / "copos_testdata.sqlite3"
 STARTUP_TIMEOUT_SECONDS = 30.0
 TIMEOUT_GRACE_SECONDS = 1.0
 TIMEOUT_SIGNAL = signal.SIGUSR1
 DETAILED_PROGRESS_LIMIT = 100
 PROGRESS_INTERVAL_SECONDS = 1.0
 DATABASE_QUEUE_PER_WORKER = 2
-MATRIX_SETS = ("smoke_set", "representative_core", "stress_test", "scale_set")
+MATRIX_SETS = ("smoke_set", "representative_core", "stress_test", "scale_set", "timeout_5s_strict_set")
 
 RESULT_UPSERT_SQL = """INSERT INTO results (
-       matrix_id, model_id, mode, parameters, binary_sha256, status, is_copositive,
+       matrix_id, model_id, mode, preprocessing, binary_sha256, status, is_copositive,
        is_strictly_copositive, elapsed_ns, timeout_ns, recorded_at, message
    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-   ON CONFLICT(matrix_id, model_id, mode, parameters, binary_sha256) DO UPDATE SET
+   ON CONFLICT(matrix_id, model_id, mode, preprocessing, binary_sha256) DO UPDATE SET
        status = excluded.status,
        is_copositive = excluded.is_copositive,
        is_strictly_copositive = excluded.is_strictly_copositive,
@@ -180,6 +180,8 @@ def _decode_result(
     timeout_seconds: float,
 ) -> tuple[str, int | None, int | None, int | None, str | None]:
     status = int(result["status"])
+    if status == int(StatusCode.PARSE_ERROR):
+        return "parse_error", None, None, None, result["error_message"] or "invalid matrix input"
     if status == int(StatusCode.TIMEOUT):
         return "timeout", None, None, None, f"exceeded {timeout_seconds:g} seconds"
     if status == int(StatusCode.NODE_LIMIT):
@@ -245,7 +247,7 @@ def run(arguments) -> bool:
     os.sched_setaffinity(0, {arguments.parent_cpu})
     native_module = load_native_module(arguments.model)
     binary = Path(native_module.__file__).resolve()
-    binary_sha256 = "" if arguments.model == "hadeler_1983" else _sha256(binary)
+    binary_sha256 = _sha256(binary)
     timeout_ns = round(arguments.timeout_seconds * 1_000_000_000)
 
     connection = sqlite3.connect(arguments.database)
@@ -266,18 +268,21 @@ def run(arguments) -> bool:
         ]
         if arguments.matrix_set:
             where += " AND (" + " OR ".join(f"m.{matrix_set} = 1" for matrix_set in arguments.matrix_set) + ")"
+
+        database_directory = arguments.database.resolve().parent
+
         if arguments.retry_timeouts:
             where += (
                 " AND EXISTS (SELECT 1 FROM results r WHERE r.matrix_id = m.matrix_id AND r.model_id = ? "
-                "AND r.mode = ? AND r.parameters = ? AND r.binary_sha256 = ? AND r.status = 'timeout')"
+                "AND r.mode = ? AND r.preprocessing = ? AND r.binary_sha256 = ? AND r.status = 'timeout')"
             )
-            query_values.extend((arguments.model, arguments.mode, arguments.parameters, binary_sha256))
+            query_values.extend((arguments.model, arguments.mode, arguments.preprocessing, binary_sha256))
         elif not arguments.rerun:
             where += (
                 " AND NOT EXISTS (SELECT 1 FROM results r WHERE r.matrix_id = m.matrix_id AND r.model_id = ? "
-                "AND r.mode = ? AND r.parameters = ? AND r.binary_sha256 = ?)"
+                "AND r.mode = ? AND r.preprocessing = ? AND r.binary_sha256 = ?)"
             )
-            query_values.extend((arguments.model, arguments.mode, arguments.parameters, binary_sha256))
+            query_values.extend((arguments.model, arguments.mode, arguments.preprocessing, binary_sha256))
 
         matrix_ids = [row[0] for row in connection.execute(
             f"SELECT matrix_id FROM matrices m WHERE {where} ORDER BY dimension, matrix_id", query_values
@@ -285,7 +290,6 @@ def run(arguments) -> bool:
         total = len(matrix_ids)
         print(
             f"model={arguments.model} mode={arguments.mode} preprocessing={arguments.preprocessing} "
-            f"parameters={arguments.parameters!r} "
             f"binary_sha256={binary_sha256 or 'none'} matrices={total} "
             f"timeout_seconds={arguments.timeout_seconds:g} "
             f"dimensions={arguments.dimension_from}..{arguments.dimension_to or 'max'} parent_cpu={arguments.parent_cpu} "
@@ -306,7 +310,8 @@ def run(arguments) -> bool:
             if matrix_id is None:
                 return None
             return connection.execute(
-                "SELECT matrix_id, dimension, matrix, is_copositive, is_strictly_copositive FROM matrices WHERE matrix_id = ?",
+                "SELECT matrix_id, dimension, matrix, is_copositive, is_strictly_copositive "
+                "FROM matrices WHERE matrix_id = ?",
                 (matrix_id,),
             ).fetchone()
 
@@ -359,7 +364,7 @@ def run(arguments) -> bool:
                 matrix_id,
                 arguments.model,
                 arguments.mode,
-                arguments.parameters,
+                arguments.preprocessing,
                 binary_sha256,
                 status,
                 copositive,
@@ -378,7 +383,8 @@ def run(arguments) -> bool:
             actual = (copositive, strictly_copositive)
             comparison = "match" if status == "ok" and actual == expected else ("MISMATCH" if status == "ok" else status)
             now = monotonic()
-            if (total <= DETAILED_PROGRESS_LIMIT or completed_count == total or comparison == "MISMATCH" or status == "error"
+            if (total <= DETAILED_PROGRESS_LIMIT or completed_count == total or comparison == "MISMATCH"
+                    or status in ("parse_error", "error")
                     or now - last_progress_at >= PROGRESS_INTERVAL_SECONDS):
                 print(
                     f"[{completed_count}/{total}] matrix={matrix_id} dimension={dimension} cpu={worker['cpu_id']} "
@@ -489,11 +495,8 @@ def run(arguments) -> bool:
                     worker["row"] = (matrix_id, dimension, expected_copositive, expected_strictly_copositive)
                     worker["state"] = "assigned"
                     worker["deadline"] = monotonic() + STARTUP_TIMEOUT_SECONDS
-                    worker["messages"].send(Matrix(
-                        matrix_id,
-                        values,
-                        {"dimension": dimension, "base_directory": str(arguments.database.resolve().parent)},
-                    ))
+                    matrix_source = str(database_directory / values[5:]) if values.startswith("file:") else f"{dimension}#{values}"
+                    worker["messages"].send(Matrix(matrix_source, matrix_id=matrix_id))
         finally:
             try:
                 for worker in workers.values():
@@ -532,19 +535,15 @@ def main() -> None:
     parser.add_argument("--parent-cpu", type=int, required=True, metavar="ID")
     parser.add_argument("--cpus", type=int, nargs="+", required=True, metavar="ID")
     parser.add_argument("--database", type=Path, default=DEFAULT_DATABASE)
-    parser.add_argument("--parameters", default="", help="free-text model parameters stored with every result")
     parser.add_argument("--preprocessing", choices=PREPROCESSING_MODES, default="none")
     selection = parser.add_mutually_exclusive_group()
-    selection.add_argument("--rerun", action="store_true", help="replace every selected row for this model, parameters, and binary")
+    selection.add_argument("--rerun", action="store_true", help="replace every selected row for this model, preprocessing, and binary")
     selection.add_argument(
         "--retry-timeouts",
         action="store_true",
-        help="replace only selected timeout rows for this model, parameters, and binary",
+        help="replace only selected timeout rows for this model, preprocessing, and binary",
     )
     arguments = parser.parse_args()
-    if arguments.preprocessing != "none":
-        preprocessing_parameter = f"preprocessing={arguments.preprocessing}"
-        arguments.parameters = f"{arguments.parameters};{preprocessing_parameter}" if arguments.parameters else preprocessing_parameter
     arguments.database = arguments.database.resolve()
     try:
         interrupted = run(arguments)

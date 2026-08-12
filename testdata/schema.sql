@@ -1,7 +1,14 @@
+PRAGMA auto_vacuum = FULL;
+
 CREATE TABLE matrices (
     matrix_id INTEGER PRIMARY KEY,
     dimension INTEGER NOT NULL CHECK(dimension > 0),
     matrix TEXT NOT NULL CHECK(length(matrix) > 0),
+    file_sha256 TEXT CHECK(
+        (matrix NOT LIKE 'file:%' AND file_sha256 IS NULL)
+        OR (matrix LIKE 'file:%' AND file_sha256 IS NOT NULL
+            AND length(file_sha256) = 64 AND file_sha256 NOT GLOB '*[^0-9a-f]*')
+    ),
     is_strictly_copositive INTEGER NOT NULL CHECK(is_strictly_copositive IN (0, 1)),
     is_copositive INTEGER CHECK(is_copositive IS NULL OR is_copositive IN (0, 1)),
     source TEXT,
@@ -10,6 +17,7 @@ CREATE TABLE matrices (
     representative_core INTEGER NOT NULL DEFAULT 0 CHECK(representative_core IN (0, 1)),
     stress_test INTEGER NOT NULL DEFAULT 0 CHECK(stress_test IN (0, 1)),
     scale_set INTEGER NOT NULL DEFAULT 0 CHECK(scale_set IN (0, 1)),
+    timeout_5s_strict_set INTEGER NOT NULL DEFAULT 0 CHECK(timeout_5s_strict_set IN (0, 1)),
     CHECK(is_strictly_copositive = 0 OR is_copositive IS 1)
 ) STRICT;
 
@@ -17,28 +25,29 @@ CREATE TABLE results (
     matrix_id INTEGER NOT NULL REFERENCES matrices(matrix_id) ON DELETE CASCADE,
     model_id TEXT NOT NULL CHECK(length(model_id) > 0 AND model_id = lower(model_id)),
     mode TEXT NOT NULL CHECK(mode IN ('copositive', 'strictly_copositive', 'both')),
-    parameters TEXT NOT NULL DEFAULT '',
+    preprocessing TEXT NOT NULL CHECK(preprocessing IN ('none', 'connected_components', 'pre_checks', 'both')),
     binary_sha256 TEXT NOT NULL CHECK(
         (model_id = 'hadeler_1983' AND binary_sha256 = '')
-        OR (model_id <> 'hadeler_1983' AND length(binary_sha256) = 64 AND binary_sha256 NOT GLOB '*[^0-9a-f]*')
+        OR (length(binary_sha256) = 64 AND binary_sha256 NOT GLOB '*[^0-9a-f]*')
     ),
-    status TEXT NOT NULL CHECK(status IN ('ok', 'timeout', 'node_limit', 'error')),
+    status TEXT NOT NULL CHECK(status IN ('ok', 'parse_error', 'timeout', 'node_limit', 'error')),
     is_copositive INTEGER CHECK(is_copositive IN (0, 1)),
     is_strictly_copositive INTEGER CHECK(is_strictly_copositive IN (0, 1)),
     elapsed_ns INTEGER CHECK(elapsed_ns IS NULL OR elapsed_ns >= 0),
     timeout_ns INTEGER NOT NULL CHECK(timeout_ns > 0),
     recorded_at TEXT NOT NULL CHECK(length(recorded_at) > 0),
     message TEXT,
-    PRIMARY KEY (matrix_id, model_id, mode, parameters, binary_sha256),
+    PRIMARY KEY (matrix_id, model_id, mode, preprocessing, binary_sha256),
     CHECK (
         (status = 'ok' AND elapsed_ns IS NOT NULL AND (
             (mode = 'copositive' AND is_copositive IS NOT NULL AND is_strictly_copositive IS NULL)
             OR (mode = 'strictly_copositive' AND is_copositive IS NULL AND is_strictly_copositive IS NOT NULL)
             OR (mode = 'both' AND is_copositive IS NOT NULL AND is_strictly_copositive IS NOT NULL)
         ))
-        OR (status IN ('timeout', 'node_limit', 'error')
+        OR (status IN ('parse_error', 'timeout', 'node_limit', 'error')
             AND is_copositive IS NULL AND is_strictly_copositive IS NULL AND elapsed_ns IS NULL)
-    )
+    ),
+    CHECK(status <> 'ok' OR mode <> 'both' OR is_strictly_copositive = 0 OR is_copositive = 1)
 ) STRICT;
 
 CREATE TABLE preprocessing_results (

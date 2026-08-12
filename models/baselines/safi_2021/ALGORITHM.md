@@ -1,16 +1,16 @@
 # Safi 2021
 
-Classification: exact ordinary implementation and strict adaptation of Safi, Nabavi, and Caron's simplex algorithm.
+Classification: exact non-strict implementation and strict adaptation of Safi, Nabavi, and Caron's simplex algorithm.
 
 ## Decision Modes
 
 The simplex state, maximal SNC slice, intersection vertices, child triangulation, and depth-first traversal are identical in both
-modes. Only mathematically meaningful boundary comparisons change. Ordinary mode rejects a vertex or centre only when its value is
+modes. Only mathematically meaningful boundary comparisons change. Non-strict mode rejects a vertex or centre only when its value is
 negative and accepts the centre-radius certificate when its exact lower bound is nonnegative. Strict mode rejects a nonpositive
-vertex or centre and requires a strictly positive lower bound. An ordinary node with a zero-diagonal vertex and a negative incident
+vertex or centre and requires a strictly positive lower bound. A non-strict node with a zero-diagonal vertex and a negative incident
 edge is rejected immediately because that two-vertex face contains negative values; this also avoids a degenerate zero-pivot slice.
 
-`solve(A, mode)` defaults to `strictly_copositive` and returns only that predicate's Boolean. In ordinary mode an exact zero is not a
+`solve(A, mode)` defaults to `strictly_copositive` and returns only that predicate's Boolean. In non-strict mode an exact zero is not a
 failure, so a boundary input may keep refining until a certificate is reached or a timeout/node limit leaves the result unresolved.
 
 ## What The Algorithm Does
@@ -20,7 +20,7 @@ chooses one vertex with positive quadratic value and cuts every troublesome edge
 inner simplex around the chosen vertex. The paper proves that the inner simplex never needs to be searched separately: proving the
 remaining polyhedron safe also proves the removed simplex safe.
 
-The remaining polyhedron is divided into ordinary simplices and processed recursively. SNC therefore uses a more aggressive slice
+The remaining polyhedron is divided into standard simplices and processed recursively. SNC therefore uses a more aggressive slice
 than a binary edge split, but every child still has the same dimension as its parent.
 
 ## Name And Sources
@@ -231,9 +231,9 @@ Boundary matrices are the fundamental termination problem. If an exact nonnegati
 centre, SNC can produce progressively smaller simplices approaching that zero without exposing it in a finite step. Such a run is
 unresolved rather than a negative classification.
 
-## Ordinary Source Rules, Strict Adaptation, Choices, And Limits
+## Non-strict Source Rules, Strict Adaptation, Choices, And Limits
 
-The published Algorithm 1 supplies ordinary mode. Coposit keeps its maximal slicing parameters and child construction in both modes
+The published Algorithm 1 supplies non-strict mode. Coposit keeps its maximal slicing parameters and child construction in both modes
 and changes only the terminal inequalities when strict mode is requested:
 
 - a nonpositive vertex or centre rejects;
