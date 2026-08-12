@@ -2,28 +2,30 @@
 
 Last updated: 2026-08-10
 
-This report has two explicit scopes. The current baseline section covers all 2,084 retained matrices with `n <= 100`, through corpus
-ID 10597, in both ordinary- and strict-copositivity mode. The later all-model comparison remains the preserved 2,078-matrix snapshot
+This report has two explicit scopes. `SCP` means a strict-copositivity check; `CP` means a copositivity check using the non-strict
+inequality. The current baseline section covers all 2,084 retained matrices with `n <= 100`, through corpus ID 10597, in both modes.
+The later all-model comparison remains the preserved 2,078-matrix snapshot
 through ID 10504 because the Coposit-created variants have not all been rerun on the six later order-51 matrices.
 
 ## Current Eight-Baseline Completion
 
 All eight literature baselines were run in both modes with a five-second per-matrix cutoff, CPU 3 reserved for dispatch and database
-writes, and four persistent solver workers pinned to CPUs 4–7. Dutour, Bundfuss, Safi, and Sponsel use the current 50,000 unfinished-node
-limit; the other baselines do not use that shared queue limit. Every model/mode identity has exactly 2,084 rows. Every completed result
-matches the corresponding stored corpus truth, there are no execution errors, and every timeout or node-limit result remains unresolved.
+writes, and four persistent solver workers pinned to CPUs 4–7. Dutour, Danninger, Bundfuss, Safi, and Sponsel use the current 50,000
+unfinished-node limit; the other baselines do not use that shared limit. Every model/mode identity has exactly 2,084 rows. Every
+completed result matches the corresponding stored corpus truth, there are no execution errors, and every timeout or node-limit result
+remains unresolved.
 
-The current corpus contains 588 strictly copositive, 989 copositive-boundary, and 507 non-copositive matrices. Ordinary truth is known
+The current corpus contains 588 strictly copositive, 989 copositive-boundary, and 507 non-copositive matrices. Non-strict truth is known
 for every row.
 
-| Model | Native-module SHA-256 | Strict ok | Strict timeout | Strict node limit | Ordinary ok | Ordinary timeout | Ordinary node limit |
+| Model | Native-module SHA-256 | SCP ok | SCP timeout | SCP node limit | CP ok | CP timeout | CP node limit |
 |---|---|---:|---:|---:|---:|---:|---:|
 | Bundfuss 2008 | <code>73d547f0f949bd953c2d115201f568d92a86d80f32b344d785c25cc92c688622</code> | 1,749 | 333 | 2 | 1,620 | 462 | 2 |
 | COPOMATRIX 2011 | <code>75a89f5d88057a65cef727fa52e976578fb786f31f757cbac5a4dd726dd9ff33</code> | 1,928 | 156 | 0 | 1,839 | 245 | 0 |
 | Danninger 1990 | <code>f5b73a0336dc95abe519b2f92682911d2911c169962bf71b5ca0ce561a8405a1</code> | 1,798 | 286 | 0 | 1,684 | 400 | 0 |
 | Dickinson 2019 | <code>7d710f0561249f81364a6651ecb626bb04225ca1a5497f108b972d2f28d928d6</code> | 1,910 | 174 | 0 | 1,806 | 278 | 0 |
 | Dutour 2018 | <code>b3272e36609e8c1c4af770ab4235fe3c9a1dc5638be37517d38a17e7de4d10ae</code> | 1,764 | 289 | 31 | 1,613 | 427 | 44 |
-| Hadeler 1983 — LDLT reference | _(empty; hash-independent baseline)_ | 1,894 | 190 | 0 | 1,745 | 339 | 0 |
+| Hadeler 1983 — LDLT reference | _(empty; legacy unidentified rows)_ | 1,894 | 190 | 0 | 1,745 | 339 | 0 |
 | Safi 2021 | <code>f976207182391af88ae1ef79992a319627ee8d6158553e8052765cf7656d047c</code> | 1,848 | 236 | 0 | 1,716 | 368 | 0 |
 | Sponsel 2012 | <code>29c2f67e5e7cbfaea2c0d3a1d6ed657ed17ebd2f7f9e6c2199127acaaeb4d76d</code> | 1,791 | 293 | 0 | 1,697 | 387 | 0 |
 
@@ -40,13 +42,13 @@ same 2,078 rows through corpus ID 10504.
 The report covers all 2,078 snapshot matrices with 1 <= n <= 100. The snapshot truth is strict copositivity:
 
 - **strictly copositive** means the stored strict result is true;
-- **not strictly copositive** means the stored strict result is false; ordinary copositivity may still hold;
+- **not strictly copositive** means the stored strict result is false; non-strict copositivity may still hold;
 - **solved** means the stored model result is ok, and every such result matches the corpus;
 - **node limit**, **timeout**, and **error** are unresolved outcomes, never negative classifications.
 
 Every detailed result cell has the form matrix count (average distinct n). The average uses each represented dimension once.
 
-All selected result identities use empty parameter text and a five-second cutoff. The seven historical cone runs used seven
+All selected result identities use `preprocessing=none` and a five-second cutoff. The seven historical cone runs used seven
 workers; all other complete reference runs used six. Reconstructed wall time is substituted worker work divided by that run's
 worker count. Substituted work uses stored native time for a completed result and the stored five-second cutoff for every
 unresolved outcome. It is a deterministic reconstruction from the result rows, not the originally observed dispatcher wall clock.
@@ -55,7 +57,7 @@ unresolved outcome. It is a deterministic reconstruction from the result rows, n
 
 | Model | Native-module SHA-256 | Workers |
 |---|---|---:|
-| Hadeler 1983 — LDLT reference | _(empty; hash-independent baseline)_ | 6 |
+| Hadeler 1983 — LDLT reference | _(empty; legacy unidentified rows)_ | 6 |
 | Zischg–Hadeler | <code>91bbc1349d328c719a9129993f701afde53d31325e4cc1bc8636ab64e982de55</code> | 6 |
 | Dutour 2018 | <code>1b8263b9d3b68b7c6919ce8a508d64cb801692977dbfe5aa45f39ccde7d95b67</code> | 7 |
 | Danninger 1990 | <code>bc67b28681faea6c5c677e1472fd429a838a5cc34f38ed1a3ee05276a6eac312</code> | 7 |
@@ -481,7 +483,8 @@ original set. The current eleven-model intersection through `n <= 20` therefore 
 #### Submatrix and KKT models on these 26 matrices
 
 These are fresh targeted runs with a five-second per-matrix cutoff, parent CPU 3, and workers on CPUs 4–9. They are stored under
-parameters `bad26_strict_zero_5s_2026-08-09`, separately from the complete-corpus reference rows. Every cell is `solved / unresolved`.
+the historical campaign label `bad26_strict_zero_5s_2026-08-09`. The current schema merges those rows into the same structured
+`preprocessing=none` identity as the complete-corpus reference rows. Every cell is `solved / unresolved`.
 
 | Model | Hildebrand circulant (20) | `c-fat` (2) | `cisqrg` (2) | `krcgg` (1) | Strict lift (1) | Total (26) |
 |---|---:|---:|---:|---:|---:|---:|

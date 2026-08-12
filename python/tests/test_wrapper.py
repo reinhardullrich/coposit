@@ -1,4 +1,5 @@
 from contextlib import closing
+import hashlib
 import os
 from pathlib import Path
 import re
@@ -20,12 +21,12 @@ from pycoposit import (
     run,
     run_multiprocessing,
 )
-from pycoposit.core import load_native_module
+from pycoposit.core import load_native_module, matrix_parser_source
 from pycoposit.mp import _max_pending_matrices
 from pycoposit.types import _validate_algorithm, _validate_mode, _validate_preprocessing
 
 
-ORDINARY_BASELINES = (
+COPOSITIVE_BASELINES = (
     "dutour_2018",
     "danninger_1990",
     "copomatrix_2011",
@@ -35,10 +36,12 @@ ORDINARY_BASELINES = (
     "bundfuss_2008",
     "sponsel_2012",
 )
+COPOSITIVE_MODE_ALGORITHMS = COPOSITIVE_BASELINES + ("adaptive_sponsel_copomatrix", "dickinson_final")
+STRICT_ONLY_ALGORITHMS = tuple(algorithm for algorithm in ALGORITHMS if algorithm not in COPOSITIVE_MODE_ALGORITHMS)
 
 
 class WrapperTests(unittest.TestCase):
-    def test_schema_keeps_strict_and_ordinary_truth_consistent(self):
+    def test_schema_keeps_strict_and_copositive_truth_consistent(self):
         root = Path(__file__).resolve().parents[2]
         with closing(sqlite3.connect(":memory:")) as connection:
             connection.executescript((root / "testdata" / "schema.sql").read_text())
@@ -52,11 +55,35 @@ class WrapperTests(unittest.TestCase):
                     "VALUES (2, 1, '1', 1, NULL)"
                 )
 
+    def test_schema_binds_external_files_to_sha256(self):
+        root = Path(__file__).resolve().parents[2]
+        with closing(sqlite3.connect(":memory:")) as connection:
+            connection.executescript((root / "testdata" / "schema.sql").read_text())
+            with self.assertRaises(sqlite3.IntegrityError):
+                connection.execute(
+                    "INSERT INTO matrices(matrix_id, dimension, matrix, is_strictly_copositive, is_copositive) "
+                    "VALUES (1, 1, 'file:matrices/1.mtx', 1, 1)"
+                )
+            connection.execute(
+                "INSERT INTO matrices(matrix_id, dimension, matrix, file_sha256, is_strictly_copositive, is_copositive) "
+                "VALUES (1, 1, 'file:matrices/1.mtx', ?, 1, 1)",
+                ("0" * 64,),
+            )
+            with self.assertRaises(sqlite3.IntegrityError):
+                connection.execute(
+                    "INSERT INTO matrices(matrix_id, dimension, matrix, file_sha256, is_strictly_copositive, is_copositive) "
+                    "VALUES (2, 1, '1', ?, 1, 1)",
+                    ("0" * 64,),
+                )
+
     def test_public_validation(self):
         self.assertIn("hadeler_1983", ALGORITHMS)
         self.assertEqual(COPOSITIVITY_MODES, ("copositive", "strictly_copositive", "both"))
         self.assertEqual(PREPROCESSING_MODES, ("none", "connected_components", "pre_checks", "both"))
-        self.assertEqual(COMBINED_CLASSIFICATION_ALGORITHMS, ("danninger_1990", "hadeler_1983", "dickinson_2019"))
+        self.assertEqual(
+            COMBINED_CLASSIFICATION_ALGORITHMS,
+            ("danninger_1990", "hadeler_1983", "dickinson_2019", "dickinson_final"),
+        )
         self.assertEqual(StatusCode.NODE_LIMIT, 6)
         with self.assertRaises(TypeError):
             _validate_algorithm(1)
@@ -71,24 +98,25 @@ class WrapperTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             _validate_preprocessing("unknown")
         with self.assertRaises(ValueError):
-            Matrix(1 << 63, "1#1")
+            Matrix("1#1", matrix_id=1 << 63)
+        self.assertIsNone(Matrix("1#1").matrix_id)
+        unlabeled_result = run("hadeler_1983", Matrix("1#1"))
+        self.assertEqual(unlabeled_result["status"], StatusCode.OK)
+        self.assertIsNone(unlabeled_result["matrix_id"])
         with self.assertRaises(ValueError):
             MPConfig(workers=0)
         self.assertEqual(_max_pending_matrices(MPConfig(workers=2, prefetch_per_worker=3, queue_maxsize=4)), 4)
 
-    def test_matrix_market_file_reference(self):
+    def test_matrix_market_file_path(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
             matrix_directory = Path(temporary_directory) / "matrices"
             matrix_directory.mkdir()
             (matrix_directory / "7.mtx").write_text(
-                "%%MatrixMarket matrix array integer symmetric\n% exact 2x2 example\n2 2\n1\n-2\n1\n",
+                "%%MatrixMarket matrix array real symmetric\n% exact 2x2 example\n2 2\n5e-1\n-1\n5e-1\n",
                 encoding="ascii",
             )
-            matrix = Matrix(
-                7,
-                "file:matrices/7.mtx",
-                {"dimension": 2, "base_directory": temporary_directory},
-            )
+            matrix = Matrix(str(matrix_directory / "7.mtx"), matrix_id=7)
+            self.assertEqual(matrix_parser_source(matrix), (str(matrix_directory / "7.mtx"), True))
             result = run("hadeler_1983", matrix, "copositive")
             self.assertEqual(result["status"], StatusCode.OK)
             self.assertIs(result["is_copositive"], False)
@@ -97,20 +125,65 @@ class WrapperTests(unittest.TestCase):
                 "%%MatrixMarket matrix coordinate integer symmetric\n3 3 4\n1 1 1\n3 1 -2\n2 2 1\n3 3 1\n",
                 encoding="ascii",
             )
-            sparse = Matrix(
-                8,
-                "file:matrices/8.mtx",
-                {"dimension": 3, "base_directory": temporary_directory},
-            )
+            sparse = Matrix(str(matrix_directory / "8.mtx"), matrix_id=8)
             sparse_result = run("hadeler_1983", sparse, "copositive")
             self.assertEqual(sparse_result["status"], StatusCode.OK)
             self.assertIs(sparse_result["is_copositive"], False)
 
+    def test_direct_matrix_file_path(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            path = Path(temporary_directory) / "matrix with spaces.mtx"
+            matrix_market = "%%MatrixMarket matrix array integer symmetric\n2 2\n1\n-1\n1\n"
+            path.write_text(matrix_market, encoding="ascii")
+            matrix = Matrix(str(path), matrix_id=10)
+            self.assertEqual(matrix_parser_source(matrix), (str(path), True))
+            result = run("hadeler_1983", matrix, "copositive")
+            self.assertEqual(result["status"], StatusCode.OK)
+            self.assertIs(result["is_copositive"], True)
+
+            relative_path = os.path.relpath(path, Path.cwd())
+            self.assertEqual(run("hadeler_1983", Matrix(relative_path), "copositive")["status"], StatusCode.OK)
+
+            inline = Matrix(matrix_market, matrix_id=11)
+            self.assertEqual(matrix_parser_source(inline), (matrix_market, False))
+            self.assertEqual(run("hadeler_1983", inline, "copositive")["status"], StatusCode.OK)
+
+    def test_file_parse_errors_match_sequential_and_multiprocessing(self):
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            malformed = directory / "malformed.mtx"
+            malformed.write_text("%%MatrixMarket matrix array integer symmetric\n2 2\n1\n", encoding="ascii")
+            matrices = [Matrix(str(malformed), matrix_id=1), Matrix(str(directory / "missing.mtx"), matrix_id=2)]
+
+            sequential = [run("hadeler_1983", matrix) for matrix in matrices]
+            multiprocessing = sorted(run_multiprocessing("hadeler_1983", matrices, MPConfig(workers=1)),
+                                         key=lambda result: result["matrix_id"])
+
+            self.assertEqual([result["status"] for result in sequential], [StatusCode.PARSE_ERROR, StatusCode.PARSE_ERROR])
+            self.assertEqual([result["status"] for result in multiprocessing], [StatusCode.PARSE_ERROR, StatusCode.PARSE_ERROR])
+            self.assertTrue(all(result["is_strictly_copositive"] is None for result in sequential + multiprocessing))
+
+    def test_fracessa_fraction_scientific_and_circular_input(self):
+        fraction = run("hadeler_1983", Matrix("2#5e-1,-1/4,+1/2", matrix_id=1))
+        circular = run("hadeler_1983", Matrix("5#1/2,-2.5e-1", matrix_id=2))
+        invalid_sign = run("hadeler_1983", Matrix("2#1,1/-2,1", matrix_id=3))
+
+        self.assertEqual(fraction["status"], StatusCode.OK)
+        self.assertIs(fraction["is_strictly_copositive"], True)
+        self.assertEqual(circular["status"], StatusCode.OK)
+        self.assertIs(circular["is_strictly_copositive"], False)
+        self.assertEqual(invalid_sign["status"], StatusCode.PARSE_ERROR)
+
+    def test_fracessa_input_rejects_whitespace(self):
+        result = run("hadeler_1983", Matrix("2#1, -1,1", matrix_id=1))
+        self.assertEqual(result["status"], StatusCode.PARSE_ERROR)
+        self.assertIn("must not contain whitespace", result["error_message"])
+
     def test_every_native_model(self):
         for algorithm in ALGORITHMS:
             with self.subTest(algorithm=algorithm):
-                positive = run(algorithm, Matrix(1, "2#1,0,1"))
-                boundary = run(algorithm, Matrix(2, "1#0"))
+                positive = run(algorithm, Matrix("2#1,0,1", matrix_id=1))
+                boundary = run(algorithm, Matrix("1#0", matrix_id=2))
                 self.assertEqual(positive["status"], StatusCode.OK)
                 self.assertEqual(positive["mode"], "strictly_copositive")
                 self.assertIsNone(positive["is_copositive"])
@@ -119,35 +192,30 @@ class WrapperTests(unittest.TestCase):
                 native_module = load_native_module(algorithm)
                 self.assertEqual(native_module.STATUS_NODE_LIMIT, StatusCode.NODE_LIMIT)
 
-    def test_every_baseline_decides_ordinary_copositivity(self):
-        for algorithm in ORDINARY_BASELINES:
-            with self.subTest(algorithm=algorithm):
-                boundary = run(algorithm, Matrix(1, "2#1,-1,1"), "copositive")
-                negative = run(algorithm, Matrix(2, "2#1,-2,1"), "copositive")
-                self.assertEqual(boundary["status"], StatusCode.OK)
-                self.assertEqual(boundary["mode"], "copositive")
-                self.assertIs(boundary["is_copositive"], True)
-                self.assertIsNone(boundary["is_strictly_copositive"])
-                self.assertEqual(negative["status"], StatusCode.OK)
-                self.assertIs(negative["is_copositive"], False)
+    def test_every_supported_model_decides_non_strict_copositivity_before_and_after_preprocessing(self):
+        for algorithm in COPOSITIVE_MODE_ALGORITHMS:
+            for preprocessing in ("none", "both"):
+                with self.subTest(algorithm=algorithm, preprocessing=preprocessing):
+                    boundary = run(algorithm, Matrix("2#1,-1,1", matrix_id=1), "copositive", preprocessing)
+                    negative = run(algorithm, Matrix("2#1,-2,1", matrix_id=2), "copositive", preprocessing)
+                    self.assertEqual(boundary["status"], StatusCode.OK)
+                    self.assertEqual(boundary["mode"], "copositive")
+                    self.assertIs(boundary["is_copositive"], True)
+                    self.assertIsNone(boundary["is_strictly_copositive"])
+                    self.assertEqual(negative["status"], StatusCode.OK)
+                    self.assertIs(negative["is_copositive"], False)
 
-    def test_created_models_reject_ordinary_mode(self):
-        result = run("fracessa", Matrix(1, "1#1"), "copositive")
-        self.assertEqual(result["status"], StatusCode.EXEC_ERROR)
-        self.assertIsNone(result["is_copositive"])
-        self.assertIn("supports only strict copositivity", result["error_message"])
-
-    def test_adaptive_sponsel_copomatrix_decides_ordinary_copositivity(self):
-        boundary = run("adaptive_sponsel_copomatrix", Matrix(1, "2#1,-1,1"), "copositive")
-        negative = run("adaptive_sponsel_copomatrix", Matrix(2, "2#1,-2,1"), "copositive")
-        self.assertEqual(boundary["status"], StatusCode.OK)
-        self.assertIs(boundary["is_copositive"], True)
-        self.assertIsNone(boundary["is_strictly_copositive"])
-        self.assertEqual(negative["status"], StatusCode.OK)
-        self.assertIs(negative["is_copositive"], False)
+    def test_every_strict_only_model_rejects_copositive_mode_before_preprocessing(self):
+        for algorithm in STRICT_ONLY_ALGORITHMS:
+            for preprocessing in PREPROCESSING_MODES:
+                with self.subTest(algorithm=algorithm, preprocessing=preprocessing):
+                    result = run(algorithm, Matrix("1#1", matrix_id=1), "copositive", preprocessing)
+                    self.assertEqual(result["status"], StatusCode.EXEC_ERROR)
+                    self.assertIsNone(result["is_copositive"])
+                    self.assertIn("supports only strict copositivity", result["error_message"])
 
     def test_preprocessing_modes_preserve_exact_classification(self):
-        matrix = Matrix(1, "4#1,-1,0,0,1,0,0,1,-1,1")
+        matrix = Matrix("4#1,-1,0,0,1,0,0,1,-1,1", matrix_id=1)
         for preprocessing in PREPROCESSING_MODES:
             with self.subTest(preprocessing=preprocessing):
                 result = run("dickinson_2019", matrix, "copositive", preprocessing)
@@ -164,14 +232,14 @@ class WrapperTests(unittest.TestCase):
         for algorithm in COMBINED_CLASSIFICATION_ALGORITHMS:
             for matrix_id, (matrix, expected_copositive, expected_strict) in enumerate(cases, 1):
                 with self.subTest(algorithm=algorithm, matrix_id=matrix_id):
-                    result = run(algorithm, Matrix(matrix_id, matrix), "both")
+                    result = run(algorithm, Matrix(matrix, matrix_id=matrix_id), "both")
                     self.assertEqual(result["status"], StatusCode.OK)
                     self.assertEqual(result["mode"], "both")
                     self.assertIs(result["is_copositive"], expected_copositive)
                     self.assertIs(result["is_strictly_copositive"], expected_strict)
 
     def test_unsupported_model_rejects_combined_classification(self):
-        result = run("dutour_2018", Matrix(1, "1#1"), "both")
+        result = run("dutour_2018", Matrix("1#1", matrix_id=1), "both")
         self.assertEqual(result["status"], StatusCode.EXEC_ERROR)
         self.assertIsNone(result["is_copositive"])
         self.assertIsNone(result["is_strictly_copositive"])
@@ -179,38 +247,38 @@ class WrapperTests(unittest.TestCase):
 
     def test_dutour_open_node_limit_is_unresolved(self):
         root = Path(__file__).resolve().parents[2]
-        with closing(sqlite3.connect(root / "testdata" / "Copos_testdata.sqlite3")) as connection:
+        with closing(sqlite3.connect(root / "testdata" / "copos_testdata.sqlite3")) as connection:
             dimension, values = connection.execute(
                 "SELECT dimension, matrix FROM matrices WHERE matrix_id = 9660"
             ).fetchone()
 
-        result = run("dutour_2018", Matrix(9660, f"{dimension}#{values}"))
+        result = run("dutour_2018", Matrix(f"{dimension}#{values}", matrix_id=9660))
         self.assertEqual(result["status"], StatusCode.NODE_LIMIT)
         self.assertIsNone(result["is_strictly_copositive"])
         self.assertIn("50000 open nodes", result["error_message"])
 
     def test_sequential_iterable_and_parser_status(self):
-        results = list(run("hadeler_1983", [Matrix(4, "1", {"dimension": 1}), Matrix(5, "1#bad")]))
+        results = list(run("hadeler_1983", [Matrix("1#1", matrix_id=4), Matrix("1#bad", matrix_id=5)]))
         self.assertEqual([result["matrix_id"] for result in results], [4, 5])
         self.assertEqual(results[0]["status"], StatusCode.OK)
         self.assertEqual(results[1]["status"], StatusCode.PARSE_ERROR)
         self.assertIsNone(results[1]["is_strictly_copositive"])
 
     def test_multiprocessing_hadeler(self):
-        matrices = [Matrix(10, "2#1,0,1"), Matrix(11, "2#1,-2,1")]
+        matrices = [Matrix("2#1,0,1", matrix_id=10), Matrix("2#1,-2,1", matrix_id=11)]
         results = list(run_multiprocessing("hadeler_1983", matrices, MPConfig(workers=2)))
         self.assertCountEqual([result["matrix_id"] for result in results], [10, 11])
         self.assertTrue(all(result["status"] == StatusCode.OK for result in results))
         self.assertCountEqual([result["is_strictly_copositive"] for result in results], [True, False])
 
-    def test_multiprocessing_ordinary_hadeler(self):
-        matrices = [Matrix(12, "2#1,-1,1"), Matrix(13, "2#1,-2,1")]
+    def test_multiprocessing_copositive_hadeler(self):
+        matrices = [Matrix("2#1,-1,1", matrix_id=12), Matrix("2#1,-2,1", matrix_id=13)]
         results = list(run_multiprocessing("hadeler_1983", matrices, MPConfig(workers=2), "copositive"))
         self.assertCountEqual([result["matrix_id"] for result in results], [12, 13])
         self.assertCountEqual([result["is_copositive"] for result in results], [True, False])
 
     def test_multiprocessing_combined_hadeler(self):
-        matrices = [Matrix(14, "2#1,-1,1"), Matrix(15, "2#1,-2,1")]
+        matrices = [Matrix("2#1,-1,1", matrix_id=14), Matrix("2#1,-2,1", matrix_id=15)]
         results = list(run_multiprocessing("hadeler_1983", matrices, MPConfig(workers=2), "both"))
         self.assertCountEqual(
             [(result["is_copositive"], result["is_strictly_copositive"]) for result in results],
@@ -286,8 +354,8 @@ class ResultsRunnerTests(unittest.TestCase):
                 connection.executescript((root / "testdata" / "schema.sql").read_text())
                 connection.executemany(
                     "INSERT INTO matrices(matrix_id, dimension, matrix, is_strictly_copositive, is_copositive, "
-                    "representative_core, stress_test) VALUES (?, 1, '1', 1, 1, ?, ?)",
-                    ((1, 1, 0), (2, 0, 1), (3, 0, 0)),
+                    "representative_core, stress_test, timeout_5s_strict_set) VALUES (?, 1, '1', 1, 1, ?, ?, ?)",
+                    ((1, 1, 0, 0), (2, 0, 1, 0), (3, 0, 0, 1), (4, 0, 0, 0)),
                 )
                 connection.commit()
 
@@ -300,6 +368,7 @@ class ResultsRunnerTests(unittest.TestCase):
                 "--matrix-set",
                 "representative_core",
                 "stress_test",
+                "timeout_5s_strict_set",
                 "--parent-cpu",
                 str(self.parent_cpu),
                 "--cpus",
@@ -314,12 +383,104 @@ class ResultsRunnerTests(unittest.TestCase):
             completed = subprocess.run(command, cwd=root, env=environment, check=True, capture_output=True, text=True)
 
             with closing(sqlite3.connect(database)) as connection:
-                rows = connection.execute("SELECT matrix_id, parameters FROM results ORDER BY matrix_id").fetchall()
-            self.assertEqual(rows, [(1, "preprocessing=both"), (2, "preprocessing=both")])
-            self.assertIn("matrix_sets=representative_core,stress_test", completed.stdout)
+                rows = connection.execute("SELECT matrix_id, preprocessing FROM results ORDER BY matrix_id").fetchall()
+            self.assertEqual(rows, [(1, "both"), (2, "both"), (3, "both")])
+            self.assertIn("matrix_sets=representative_core,stress_test,timeout_5s_strict_set", completed.stdout)
             self.assertIn("preprocessing=both", completed.stdout)
 
-    def test_runner_stores_and_resumes_one_hadeler_baseline_result(self):
+    def test_runner_stores_file_parse_error_and_reuses_worker(self):
+        root = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            matrix_directory = directory / "matrices"
+            matrix_directory.mkdir()
+            malformed = matrix_directory / "1.mtx"
+            malformed.write_text("%%MatrixMarket matrix array integer symmetric\n2 2\n1\n", encoding="ascii")
+            database = directory / "results.sqlite3"
+            with closing(sqlite3.connect(database)) as connection:
+                connection.executescript((root / "testdata" / "schema.sql").read_text())
+                connection.execute(
+                    "INSERT INTO matrices(matrix_id, dimension, matrix, file_sha256, is_strictly_copositive, is_copositive) "
+                    "VALUES (1, 2, 'file:matrices/1.mtx', ?, 1, 1)",
+                    (hashlib.sha256(malformed.read_bytes()).hexdigest(),),
+                )
+                connection.execute(
+                    "INSERT INTO matrices(matrix_id, dimension, matrix, is_strictly_copositive, is_copositive) "
+                    "VALUES (2, 1, '1', 1, 1)"
+                )
+                connection.commit()
+
+            command = [
+                sys.executable,
+                str(root / "python" / "run_results.py"),
+                "hadeler_1983",
+                "--timeout-seconds",
+                "5",
+                "--parent-cpu",
+                str(self.parent_cpu),
+                "--cpus",
+                str(self.worker_cpu),
+                "--database",
+                str(database),
+            ]
+            environment = os.environ.copy()
+            environment["PYTHONPATH"] = str(root / "python")
+            completed = subprocess.run(command, cwd=root, env=environment, check=True, capture_output=True, text=True)
+
+            with closing(sqlite3.connect(database)) as connection:
+                rows = connection.execute(
+                    "SELECT matrix_id, status, is_strictly_copositive, elapsed_ns, message FROM results ORDER BY matrix_id"
+                ).fetchall()
+            self.assertEqual(rows[0][0:4], (1, "parse_error", None, None))
+            self.assertTrue(rows[0][4])
+            self.assertEqual(rows[1][0:3], (2, "ok", 1))
+            self.assertGreaterEqual(rows[1][3], 0)
+            worker_pids = re.findall(r"\bpid=(\d+)", completed.stdout)
+            self.assertEqual(len(worker_pids), 2)
+            self.assertEqual(len(set(worker_pids)), 1)
+
+    def test_runner_reuses_external_result_without_reading_or_hashing_the_file(self):
+        root = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            matrix_directory = directory / "matrices"
+            matrix_directory.mkdir()
+            matrix_path = matrix_directory / "1.mtx"
+            matrix_path.write_text("%%MatrixMarket matrix array integer symmetric\n1 1\n1\n", encoding="ascii")
+            database = directory / "results.sqlite3"
+            with closing(sqlite3.connect(database)) as connection:
+                connection.executescript((root / "testdata" / "schema.sql").read_text())
+                connection.execute(
+                    "INSERT INTO matrices(matrix_id, dimension, matrix, file_sha256, is_strictly_copositive, is_copositive) "
+                    "VALUES (1, 1, 'file:matrices/1.mtx', ?, 1, 1)",
+                    (hashlib.sha256(matrix_path.read_bytes()).hexdigest(),),
+                )
+                connection.commit()
+
+            command = [
+                sys.executable,
+                str(root / "python" / "run_results.py"),
+                "hadeler_1983",
+                "--timeout-seconds",
+                "5",
+                "--parent-cpu",
+                str(self.parent_cpu),
+                "--cpus",
+                str(self.worker_cpu),
+                "--database",
+                str(database),
+            ]
+            environment = os.environ.copy()
+            environment["PYTHONPATH"] = str(root / "python")
+            subprocess.run(command, cwd=root, env=environment, check=True, capture_output=True, text=True)
+            matrix_path.unlink()
+            reused = subprocess.run(command, cwd=root, env=environment, check=True, capture_output=True, text=True)
+
+            self.assertIn("matrices=0", reused.stdout)
+            with closing(sqlite3.connect(database)) as connection:
+                self.assertEqual(connection.execute("SELECT COUNT(*) FROM results").fetchone()[0], 1)
+
+    def test_runner_stores_and_resumes_hadeler_by_binary_hash(self):
         root = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as temporary_directory:
             database = Path(temporary_directory) / "results.sqlite3"
@@ -351,42 +512,57 @@ class ResultsRunnerTests(unittest.TestCase):
                 str(self.worker_cpu),
                 "--database",
                 str(database),
-                "--parameters",
-                "baseline defaults",
             ]
             environment = os.environ.copy()
             environment["PYTHONPATH"] = str(root / "python")
             first = subprocess.run(command, cwd=root, env=environment, check=True, capture_output=True, text=True)
             second = subprocess.run(command, cwd=root, env=environment, check=True, capture_output=True, text=True)
             alternative_command = command.copy()
-            alternative_command[-1] = "alternate parameters"
-            alternative_command.extend(("--matrix-id-from", "2", "--matrix-id-to", "2"))
+            alternative_command.extend(("--preprocessing", "both", "--matrix-id-from", "2", "--matrix-id-to", "2"))
             third = subprocess.run(alternative_command, cwd=root, env=environment, check=True, capture_output=True, text=True)
-            ordinary_command = command.copy()
-            ordinary_command[3:3] = ("--mode", "copositive")
-            ordinary = subprocess.run(ordinary_command, cwd=root, env=environment, check=True, capture_output=True, text=True)
+            copositive_command = command.copy()
+            copositive_command[3:3] = ("--mode", "copositive")
+            copositive_run = subprocess.run(copositive_command, cwd=root, env=environment, check=True, capture_output=True, text=True)
 
             with closing(sqlite3.connect(database)) as connection:
                 rows = connection.execute(
-                    """SELECT model_id, mode, parameters, length(binary_sha256), status, is_copositive,
+                    """SELECT model_id, mode, preprocessing, length(binary_sha256), status, is_copositive,
                               is_strictly_copositive, elapsed_ns, timeout_ns, message
-                       FROM results ORDER BY mode, matrix_id, parameters"""
+                       FROM results ORDER BY mode, matrix_id, preprocessing"""
                 ).fetchall()
                 with self.assertRaises(sqlite3.IntegrityError):
                     connection.execute(
                         """INSERT INTO results (
-                               matrix_id, model_id, mode, parameters, binary_sha256, status, is_copositive,
+                               matrix_id, model_id, mode, preprocessing, binary_sha256, status, is_copositive,
                                is_strictly_copositive, elapsed_ns, timeout_ns, recorded_at, message
-                           ) VALUES (1, 'hadeler_1983', 'strictly_copositive', 'invalid hash', ?,
+                           ) VALUES (1, 'hadeler_1983', 'strictly_copositive', 'none', ?,
                                      'timeout', NULL, NULL, NULL, 1, 'now', NULL)""",
+                        ("0" * 63,),
+                    )
+                with self.assertRaises(sqlite3.IntegrityError):
+                    connection.execute(
+                        """INSERT INTO results (
+                               matrix_id, model_id, mode, preprocessing, binary_sha256, status, is_copositive,
+                               is_strictly_copositive, elapsed_ns, timeout_ns, recorded_at, message
+                           ) VALUES (1, 'invalid_preprocessing', 'strictly_copositive', 'invalid', ?,
+                                     'ok', NULL, 1, 0, 1, 'now', NULL)""",
+                        ("0" * 64,),
+                    )
+                with self.assertRaises(sqlite3.IntegrityError):
+                    connection.execute(
+                        """INSERT INTO results (
+                               matrix_id, model_id, mode, preprocessing, binary_sha256, status, is_copositive,
+                               is_strictly_copositive, elapsed_ns, timeout_ns, recorded_at, message
+                           ) VALUES (1, 'invalid_combined', 'both', 'none', ?,
+                                     'ok', 0, 1, 0, 1, 'now', NULL)""",
                         ("0" * 64,),
                     )
             self.assertEqual(len(rows), 5)
-            self.assertTrue(all(row[0] == "hadeler_1983" and row[3:5] == (0, "ok") for row in rows))
-            self.assertEqual({row[2] for row in rows}, {"baseline defaults", "alternate parameters"})
-            ordinary_rows = [row for row in rows if row[1] == "copositive"]
+            self.assertTrue(all(row[0] == "hadeler_1983" and row[3:5] == (64, "ok") for row in rows))
+            self.assertEqual({row[2] for row in rows}, {"none", "both"})
+            copositive_rows = [row for row in rows if row[1] == "copositive"]
             strict_rows = [row for row in rows if row[1] == "strictly_copositive"]
-            self.assertEqual([(row[5], row[6]) for row in ordinary_rows], [(1, None), (0, None)])
+            self.assertEqual([(row[5], row[6]) for row in copositive_rows], [(1, None), (0, None)])
             self.assertEqual([(row[5], row[6]) for row in strict_rows], [(None, 1), (None, 0), (None, 0)])
             self.assertTrue(all(row[7] >= 0 for row in rows))
             self.assertTrue(all(row[8:] == (1_000_000_000_000_000, None) for row in rows))
@@ -395,11 +571,11 @@ class ResultsRunnerTests(unittest.TestCase):
             self.assertEqual(len(set(worker_pids)), 1)
             self.assertIn("matrices=0", second.stdout)
             self.assertIn("matrices=1", third.stdout)
-            self.assertIn("matrices=2", ordinary.stdout)
+            self.assertIn("matrices=2", copositive_run.stdout)
 
     def test_runner_reuses_worker_after_cooperative_timeout(self):
         root = Path(__file__).resolve().parents[2]
-        with closing(sqlite3.connect(root / "testdata" / "Copos_testdata.sqlite3")) as source:
+        with closing(sqlite3.connect(root / "testdata" / "copos_testdata.sqlite3")) as source:
             dimension, hard_matrix, expected, expected_copositive = source.execute(
                 "SELECT dimension, matrix, is_strictly_copositive, is_copositive FROM matrices WHERE matrix_id = 9656"
             ).fetchone()

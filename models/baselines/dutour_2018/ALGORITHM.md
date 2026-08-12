@@ -1,6 +1,6 @@
 # Dutour 2018
 
-Classification: exact ordinary- and strict-copositivity implementation of Dutour Sikirić's source traversal.
+Classification: exact non-strict- and strict-copositivity implementation of Dutour Sikirić's source traversal.
 
 ## Decision Modes
 
@@ -8,11 +8,11 @@ The same cone partition serves two predicates. In `copositive` mode a node rejec
 negative two-generator restriction only when $g_{ij}^2>g_{ii}g_{jj}$. Equality is allowed, so an equality edge is subdivided and
 its zero direction may become a child generator. In `strictly_copositive` mode the comparisons are $g_{ii}\leq0$ and
 $g_{ij}^2\geq g_{ii}g_{jj}$ because a zero already disproves strict positivity. Both modes use the identical maximum-ratio pair,
-sum ray, child order, and LIFO traversal. An entrywise-nonnegative Gram matrix is safe in ordinary mode with nonnegative diagonal;
+sum ray, child order, and LIFO traversal. An entrywise-nonnegative Gram matrix is safe in non-strict mode with nonnegative diagonal;
 strict mode reaches that acceptance only after checking that every diagonal is positive.
 
 The public call is `solve(A, mode)` and defaults to `strictly_copositive`. It returns the Boolean value of only the requested
-predicate; it is not a three-state classification. Ordinary boundary inputs can still exhaust the node limit when the preserved
+predicate; it is not a three-state classification. Non-strict boundary inputs can still exhaust the node limit when the preserved
 same-dimensional subdivision approaches an interior zero without generating it exactly.
 
 ## What The Algorithm Does
@@ -80,7 +80,7 @@ b_{ii}\leq0,
 \]
 
 then $v_i\geq0$ is a nonzero direction with nonpositive quadratic value. Strict copositivity fails immediately.
-Ordinary mode rejects only $b_{ii}<0$.
+Non-strict mode rejects only $b_{ii}<0$.
 
 ### 2. Inspect every negative generator pair
 
@@ -110,7 +110,7 @@ $a=b_{ii}>0$, $b=b_{jj}>0$, and $c=b_{ij}<0$, the nonnegative coefficient vector
 \]
 
 This is an actual direction in the current cone, not merely a heuristic warning.
-Ordinary mode rejects only $b_{ij}^2>b_{ii}b_{jj}$; equality is retained and subdivided.
+Non-strict mode rejects only $b_{ij}^2>b_{ii}b_{jj}$; equality is retained and subdivided.
 
 ### 3. Accept an entrywise nonnegative Gram matrix
 

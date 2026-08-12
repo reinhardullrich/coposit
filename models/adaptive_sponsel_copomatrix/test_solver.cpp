@@ -1,4 +1,5 @@
 #include <coposit/model.hpp>
+#include <coposit/progress.hpp>
 
 #include <gtest/gtest.h>
 
@@ -39,12 +40,12 @@ TEST(AdaptiveSponselCopomatrixModelTest, UsesDirectStopsThroughOrderThree)
     EXPECT_FALSE(model::solve(symmetric_matrix(3, {1, -1, 0, 1, 0, 1})));
 }
 
-TEST(AdaptiveSponselCopomatrixModelTest, UsesOrdinaryDirectBoundaries)
+TEST(AdaptiveSponselCopomatrixModelTest, UsesCopositiveDirectBoundaries)
 {
-    constexpr auto ordinary = model::copositivity_mode::copositive;
-    EXPECT_TRUE(model::solve(symmetric_matrix(1, {0}), ordinary));
-    EXPECT_TRUE(model::solve(symmetric_matrix(2, {1, -1, 1}), ordinary));
-    EXPECT_FALSE(model::solve(symmetric_matrix(2, {1, -2, 1}), ordinary));
+    constexpr auto copositive = model::copositivity_mode::copositive;
+    EXPECT_TRUE(model::solve(symmetric_matrix(1, {0}), copositive));
+    EXPECT_TRUE(model::solve(symmetric_matrix(2, {1, -1, 1}), copositive));
+    EXPECT_FALSE(model::solve(symmetric_matrix(2, {1, -2, 1}), copositive));
     EXPECT_FALSE(model::solve(symmetric_matrix(2, {1, -1, 1})));
 }
 
@@ -69,11 +70,11 @@ TEST(AdaptiveSponselCopomatrixModelTest, ChoosesTheFirstMinimumChildPivot)
     EXPECT_EQ(minimum_child_pivot(tied), 0U);
 }
 
-TEST(AdaptiveSponselCopomatrixModelTest, HandlesZeroCopomatrixPivotsInOrdinaryMode)
+TEST(AdaptiveSponselCopomatrixModelTest, HandlesZeroCopomatrixPivotsInCopositiveMode)
 {
-    constexpr auto ordinary = model::copositivity_mode::copositive;
-    EXPECT_TRUE(model::solve(symmetric_matrix(4, {0, 1, 1, 1, 1, 0, 0, 1, 0, 1}), ordinary));
-    EXPECT_FALSE(model::solve(symmetric_matrix(4, {0, -1, 1, 1, 1, 0, 0, 1, 0, 1}), ordinary));
+    constexpr auto copositive = model::copositivity_mode::copositive;
+    EXPECT_TRUE(model::solve(symmetric_matrix(4, {0, 1, 1, 1, 1, 0, 0, 1, 0, 1}), copositive));
+    EXPECT_FALSE(model::solve(symmetric_matrix(4, {0, -1, 1, 1, 1, 0, 0, 1, 0, 1}), copositive));
 }
 
 TEST(AdaptiveSponselCopomatrixModelTest, UsesSponselHCertificateWhenEveryPivotIsWide)
@@ -81,17 +82,40 @@ TEST(AdaptiveSponselCopomatrixModelTest, UsesSponselHCertificateWhenEveryPivotIs
     EXPECT_TRUE(model::solve(symmetric_matrix(4, {4, -1, 1, -1, 4, -1, 1, 4, -1, 4})));
 }
 
-TEST(AdaptiveSponselCopomatrixModelTest, UsesOrdinarySponselRulesWhenEveryPivotIsWide)
+TEST(AdaptiveSponselCopomatrixModelTest, ReportsSponselAndCopomatrixWorkSeparately)
 {
-    constexpr auto ordinary = model::copositivity_mode::copositive;
+    progress::detail::reset();
+    progress::detail::state.enabled.store(true, std::memory_order_relaxed);
+    EXPECT_TRUE(model::solve(symmetric_matrix(4, {4, -1, 1, -1, 4, -1, 1, 4, -1, 4})));
+    const progress::snapshot sponsel = progress::detail::load();
+    EXPECT_EQ(sponsel.kind, progress::metric::adaptive);
+    EXPECT_GE(sponsel.sponsel_nodes, 1U);
+    EXPECT_EQ(sponsel.copomatrix_nodes, 0U);
 
-    // zz^T for z=(1,1,-1,-1): every pivot is wide and every selected negative edge is an ordinary boundary equality.
+    matrix_integer identity;
+    identity.set_identity(4);
+    EXPECT_TRUE(model::solve(identity));
+    const progress::snapshot copomatrix = progress::detail::load();
+    progress::detail::state.enabled.store(false, std::memory_order_relaxed);
+    progress::detail::reset();
+
+    EXPECT_EQ(copomatrix.kind, progress::metric::adaptive);
+    EXPECT_EQ(copomatrix.sponsel_nodes, 0U);
+    EXPECT_GE(copomatrix.copomatrix_nodes, 1U);
+    EXPECT_GE(copomatrix.copomatrix_children, 1U);
+}
+
+TEST(AdaptiveSponselCopomatrixModelTest, UsesCopositiveSponselRulesWhenEveryPivotIsWide)
+{
+    constexpr auto copositive = model::copositivity_mode::copositive;
+
+    // zz^T for z=(1,1,-1,-1): every pivot is wide and every selected negative edge is an copositive boundary equality.
     const matrix_integer rank_one_boundary = symmetric_matrix(4, {1, 1, -1, -1, 1, -1, -1, 1, 1, 1});
-    EXPECT_TRUE(model::solve(rank_one_boundary, ordinary));
+    EXPECT_TRUE(model::solve(rank_one_boundary, copositive));
     EXPECT_FALSE(model::solve(rank_one_boundary));
 
     // Replacing positive entries by zero gives the positive-semidefinite Laplacian of the five-cycle.
-    EXPECT_TRUE(model::solve(symmetric_matrix(5, {2, -1, 1, 1, -1, 2, -1, 1, 1, 2, -1, 1, 2, -1, 2}), ordinary));
+    EXPECT_TRUE(model::solve(symmetric_matrix(5, {2, -1, 1, 1, -1, 2, -1, 1, 1, 2, -1, 1, 2, -1, 2}), copositive));
 }
 
 TEST(AdaptiveSponselCopomatrixModelTest, RetainsTheExactSponselSplit)
@@ -128,20 +152,6 @@ TEST(AdaptiveSponselCopomatrixModelTest, HasNoFormerDimensionLimit)
     matrix_integer identity;
     identity.set_identity(70);
     EXPECT_TRUE(model::solve(identity));
-}
-
-TEST(AdaptiveSponselCopomatrixModelTest, RejectsInvalidMatrixShapes)
-{
-    matrix_integer empty;
-    EXPECT_THROW(model::solve(empty), std::invalid_argument);
-
-    matrix_integer non_square(2, 3);
-    EXPECT_THROW(model::solve(non_square), std::invalid_argument);
-
-    matrix_integer asymmetric;
-    asymmetric.set_identity(2);
-    asymmetric(0, 1) = integer(1);
-    EXPECT_THROW(model::solve(asymmetric), std::invalid_argument);
 }
 
 } // namespace

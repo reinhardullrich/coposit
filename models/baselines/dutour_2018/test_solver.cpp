@@ -235,30 +235,17 @@ TEST(Dutour2018ModelTest, HildebrandCase34StopsAtTheOpenNodeLimit) {
     EXPECT_THROW(model::solve(A), open_node_limit_reached);
 }
 
-TEST(Dutour2018ModelTest, RejectsInvalidMatrixShapes) {
-    matrix_integer empty;
-    EXPECT_THROW(model::solve(empty), std::invalid_argument);
-
-    matrix_integer non_square(2, 3);
-    EXPECT_THROW(model::solve(non_square), std::invalid_argument);
-
-    matrix_integer asymmetric(2, 2);
-    asymmetric.set_identity(2);
-    asymmetric(0, 1) = integer(1);
-    EXPECT_THROW(model::solve(asymmetric), std::invalid_argument);
-}
-
-TEST(Dutour2018ModelTest, DecidesOrdinaryCopositivity) {
-    constexpr auto ordinary = model::copositivity_mode::copositive;
+TEST(Dutour2018ModelTest, DecidesCopositivity) {
+    constexpr auto copositive = model::copositivity_mode::copositive;
     matrix_integer boundary(2, 2);
     boundary(0, 0) = integer(1); boundary(0, 1) = integer(-1);
     boundary(1, 0) = integer(-1); boundary(1, 1) = integer(1);
-    EXPECT_TRUE(model::solve(boundary, ordinary));
+    EXPECT_TRUE(model::solve(boundary, copositive));
 
     matrix_integer negative(boundary);
     negative(0, 1) = integer(-2); negative(1, 0) = integer(-2);
-    EXPECT_FALSE(model::solve(negative, ordinary));
+    EXPECT_FALSE(model::solve(negative, copositive));
 
     matrix_integer zero(1, 1);
-    EXPECT_TRUE(model::solve(zero, ordinary));
+    EXPECT_TRUE(model::solve(zero, copositive));
 }

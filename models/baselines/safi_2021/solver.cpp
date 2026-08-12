@@ -1,5 +1,6 @@
 #include <coposit/model.hpp>
 #include <coposit/open_node_limit.hpp>
+#include <coposit/progress.hpp>
 #include <coposit/timeout.hpp>
 
 #include "../source_trace.hpp"
@@ -42,7 +43,7 @@ struct slice_frame {
 };
 
 /*
- * Exact ordinary implementation and strict adaptation of Safi, Nabavi, and Caron's 2021 SNC simplex slicing.
+ * Exact non-strict implementation and strict adaptation of Safi, Nabavi, and Caron's 2021 SNC simplex slicing.
  *
  * Each vertex is z_i / d_i with positive d_i. The stored Gram entry is z_i^T A z_j, whose sign equals the sign of the
  * corresponding rational Gram entry. Slicing and the center-radius certificate therefore use fraction-free integer arithmetic.
@@ -56,6 +57,7 @@ public:
 
     bool check(const matrix_integer& matrix) const
     {
+        progress::tracker progress(progress::metric::traversal, dimension_);
         simplex current(dimension_);
         current.vertices.set_identity(dimension_);
         for (integer& denominator : current.denominators) denominator.set_one();
@@ -67,21 +69,28 @@ public:
 
         while (true) {
             timeout_checkpoint();
+            progress.visit(dimension_, path.size(), open_nodes);
             --open_nodes;
 
             size_t slicing_vertex = dimension_;
             switch (inspect(current, slicing_vertex)) {
                 case inspection::rejected:
                     COPOSIT_SOURCE_TRACE("rejected");
+                    progress.finish();
                     return false;
                 case inspection::certified:
                     COPOSIT_SOURCE_TRACE("certified");
+                    progress.resolved();
                     while (!path.empty() && path.back().next_child == path.back().cut.size()) path.pop_back();
-                    if (path.empty()) return true;
+                    if (path.empty()) {
+                        progress.finish();
+                        return true;
+                    }
                     current = make_next_child(path.back());
                     break;
                 case inspection::split:
                     COPOSIT_SOURCE_TRACE("split", slicing_vertex);
+                    progress.split();
                     path.push_back(begin_slice(std::move(current), slicing_vertex));
                     enforce_open_node_limit(open_nodes + path.back().cut.size());
                     open_nodes += path.back().cut.size();
@@ -313,14 +322,6 @@ bool solve(const matrix_integer& matrix, copositivity_mode mode)
 {
     timeout_checkpoint();
     const size_t dimension = matrix.rows();
-    if (dimension == 0 || matrix.cols() != dimension) throw std::invalid_argument("matrix must be nonempty and square");
-
-    for (size_t i = 0; i < dimension; ++i) {
-        for (size_t j = i + 1; j < dimension; ++j) {
-            if (matrix(i, j).compare(matrix(j, i)) != 0) throw std::invalid_argument("matrix must be symmetric");
-        }
-    }
-
     return snc_checker(matrix, mode).check(matrix);
 }
 

@@ -1,5 +1,6 @@
 #include <coposit/model.hpp>
 #include <coposit/open_node_limit.hpp>
+#include <coposit/progress.hpp>
 #include <coposit/small_copositivity.hpp>
 #include <coposit/timeout.hpp>
 
@@ -44,7 +45,7 @@ private:
 };
 
 /*
- * Exact ordinary- and strict-copositivity reconstruction of Danninger's 1990 dimension-reducing recursion.
+ * Exact non-strict- and strict-copositivity reconstruction of Danninger's 1990 dimension-reducing recursion.
  *
  * For A = [[a, p^T], [p, B]] with a > 0, eliminate the fixed first coordinate. On p^T y >= 0 the child form is B;
  * on p^T y <= 0 it is the division-free Schur form aB - pp^T. Mixed-sign half-orthants use the same lazy staircase
@@ -52,19 +53,26 @@ private:
  */
 class danninger_checker {
 public:
-    explicit danninger_checker(copositivity_mode mode) : mode_(mode) {}
-    explicit danninger_checker(copositivity_classification& classification)
-        : mode_(copositivity_mode::copositive), classification_(&classification)
+    danninger_checker(copositivity_mode mode, size_t dimension)
+        : mode_(mode), progress_(progress::metric::proof, dimension)
+    {
+    }
+    danninger_checker(copositivity_classification& classification, size_t dimension)
+        : mode_(copositivity_mode::copositive), classification_(&classification), progress_(progress::metric::proof, dimension)
     {
     }
 
-    bool check(const matrix_integer& matrix)
+    ~danninger_checker() { progress_.finish(); }
+
+    bool check(const matrix_integer& matrix, long double weight = 1.0L, size_t depth = 0)
     {
         const active_node_scope current_node(open_nodes_);
         timeout_checkpoint();
         const size_t dimension = matrix.rows();
+        progress_.visit(dimension, depth, open_nodes_);
         switch (dimension) {
             case 0:
+                progress_.resolved(weight);
                 return true;
             case 1:
             case 2:
@@ -72,9 +80,14 @@ public:
                 if (classification_ != nullptr) {
                     const copositivity_classification current = small_copositivity::classify(matrix);
                     classification_->is_strictly_copositive &= current.is_strictly_copositive;
+                    if (current.is_copositive) progress_.resolved(weight);
                     return current.is_copositive;
                 }
-                return small_copositivity::check(matrix, mode_);
+                if (small_copositivity::check(matrix, mode_)) {
+                    progress_.resolved(weight);
+                    return true;
+                }
+                return false;
             }
             default:
                 break;
@@ -124,17 +137,29 @@ public:
             for (const integer& entry : p) {
                 if (entry.sign() < 0) return false;
             }
-            return check(block);
+            progress_.split();
+            return check(block, weight, depth + 1);
         }
 
         // With no mixed signs, the complete-orthant child includes the zero-coordinate face of the other half-cone.
         if (negative.empty()) {
             COPOSIT_SOURCE_TRACE("block", dimension);
-            return check(block);
+            progress_.split();
+            return check(block, weight, depth + 1);
         }
         if (positive.empty()) {
             COPOSIT_SOURCE_TRACE("schur", dimension);
-            return check(make_schur(block, pivot, p));
+            progress_.split();
+            return check(make_schur(block, pivot, p), weight, depth + 1);
+        }
+
+        progress_.split();
+        long double child_weight = 0.0L;
+        if (progress_.active()) {
+            integer child_count;
+            fmpz_bin_uiui(child_count.native_handle(), static_cast<ulong>(positive.size() + negative.size()),
+                          static_cast<ulong>(positive.size()));
+            child_weight = weight / fmpz_get_d(child_count.native_handle());
         }
 
         const std::vector<sparse_ray> pair_rays = make_pair_rays(p, positive, negative);
@@ -144,20 +169,20 @@ public:
         for (const size_t index : zero) rays.push_back(coordinate_ray(index));
         rays.push_back(plus_ray(positive, negative, pair_rays, 0, 0));
         COPOSIT_SOURCE_TRACE("plus", positive.size(), negative.size());
-        if (!check_plus_paths(block, positive, negative, pair_rays, 0, 0, rays)) return false;
+        if (!check_plus_paths(block, positive, negative, pair_rays, 0, 0, rays, child_weight, depth + 1)) return false;
 
         const matrix_integer schur = make_schur(block, pivot, p);
         rays.clear();
         for (const size_t index : zero) rays.push_back(coordinate_ray(index));
         rays.push_back(minus_ray(negative, pair_rays, 0, 0));
         COPOSIT_SOURCE_TRACE("minus", positive.size(), negative.size());
-        return check_minus_paths(schur, positive, negative, pair_rays, 0, 0, rays);
+        return check_minus_paths(schur, positive, negative, pair_rays, 0, 0, rays, child_weight, depth + 1);
     }
 
 private:
     bool check_plus_paths(const matrix_integer& matrix, const std::vector<size_t>& positive,
                           const std::vector<size_t>& negative, const std::vector<sparse_ray>& pair_rays,
-                          size_t row, size_t column, std::vector<sparse_ray>& rays)
+                          size_t row, size_t column, std::vector<sparse_ray>& rays, long double weight, size_t depth)
     {
         std::vector<staircase_frame> path;
         path.reserve(64); // Initial capacity only; the shared open-node limit is the actual bound.
@@ -168,7 +193,7 @@ private:
             staircase_frame& current = path.back();
             if (current.row + 1 == positive.size() && current.column == negative.size()) {
                 enforce_open_node_limit(open_nodes_ + 1);
-                if (!check(transform(matrix, rays))) {
+                if (!check(transform(matrix, rays), weight, depth)) {
                     discard_path(path);
                     return false;
                 }
@@ -199,7 +224,7 @@ private:
 
     bool check_minus_paths(const matrix_integer& matrix, const std::vector<size_t>& positive,
                            const std::vector<size_t>& negative, const std::vector<sparse_ray>& pair_rays,
-                           size_t row, size_t column, std::vector<sparse_ray>& rays)
+                           size_t row, size_t column, std::vector<sparse_ray>& rays, long double weight, size_t depth)
     {
         std::vector<staircase_frame> path;
         path.reserve(64); // Initial capacity only; the shared open-node limit is the actual bound.
@@ -210,7 +235,7 @@ private:
             staircase_frame& current = path.back();
             if (current.row == positive.size() && current.column + 1 == negative.size()) {
                 enforce_open_node_limit(open_nodes_ + 1);
-                if (!check(transform(matrix, rays))) {
+                if (!check(transform(matrix, rays), weight, depth)) {
                     discard_path(path);
                     return false;
                 }
@@ -347,39 +372,24 @@ private:
 
     const copositivity_mode mode_;
     copositivity_classification* classification_ = nullptr;
+    progress::tracker progress_;
     size_t open_nodes_ = 0;
 };
-
-void validate_input(const matrix_integer& matrix)
-{
-    const size_t dimension = matrix.rows();
-    if (dimension == 0 || matrix.cols() != dimension) throw std::invalid_argument("matrix must be nonempty and square");
-
-    for (size_t i = 0; i < dimension; ++i) {
-        for (size_t j = i + 1; j < dimension; ++j) {
-            if (matrix(i, j).compare(matrix(j, i)) != 0) throw std::invalid_argument("matrix must be symmetric");
-        }
-    }
-}
 
 } // namespace
 
 bool solve(const matrix_integer& matrix, copositivity_mode mode)
 {
     timeout_checkpoint();
-    validate_input(matrix);
-
-    danninger_checker checker(mode);
+    danninger_checker checker(mode, matrix.rows());
     return checker.check(matrix);
 }
 
 copositivity_classification classify(const matrix_integer& matrix)
 {
     timeout_checkpoint();
-    validate_input(matrix);
-
     copositivity_classification result{true, true};
-    danninger_checker checker(result);
+    danninger_checker checker(result, matrix.rows());
     if (!checker.check(matrix)) result = {false, false};
     return result;
 }

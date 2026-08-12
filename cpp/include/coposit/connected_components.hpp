@@ -1,6 +1,7 @@
 #pragma once
 
 #include <coposit/support.hpp>
+#include <coposit/progress.hpp>
 #include <coposit/timeout.hpp>
 
 #include <cstddef>
@@ -23,6 +24,7 @@ inline size_t visit(const std::vector<support>& negative_neighbors, Visitor&& vi
     support frontier(dimension);
     support discovered(dimension);
     size_t visited_components = 0;
+    size_t visited_vertices = 0;
 
     while (!remaining.empty()) {
         timeout_checkpoint();
@@ -36,6 +38,7 @@ inline size_t visit(const std::vector<support>& negative_neighbors, Visitor&& vi
             timeout_checkpoint();
             const size_t vertex = frontier.lowest_index();
             frontier.reset(vertex);
+            progress::advance_preprocessing(++visited_vertices, dimension);
             discovered = negative_neighbors[vertex];
             discovered.remove(component);
             component.add(discovered);

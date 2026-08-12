@@ -1,12 +1,12 @@
 #pragma once
 
 #include <coposit/matrix_integer.hpp>
+#include <coposit/progress.hpp>
 #include <coposit/small_copositivity.hpp>
 #include <coposit/support.hpp>
 #include <coposit/timeout.hpp>
 
 #include <cstddef>
-#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -16,7 +16,7 @@ struct matrix_scan_requirements {
     bool negative_part_row_sums = false;
     bool all_ones = false;
     bool negative_graph = false;
-    bool ordinary_principal_pairs = false;
+    bool copositive_principal_pairs = false;
     bool strict_principal_pairs = false;
     bool frank_wolfe = false;
 };
@@ -81,7 +81,7 @@ inline void observe_off_diagonal(matrix_scan_result& result, const matrix_scan_r
             result.negative_neighbors[row].set(column);
             result.negative_neighbors[column].set(row);
         }
-        if (requirements.ordinary_principal_pairs) {
+        if (requirements.copositive_principal_pairs) {
             result.all_principal_pairs_copositive &= small_copositivity::check_2x2<model::copositivity_mode::copositive>(
                 row_diagonal, entry, column_diagonal);
         }
@@ -107,8 +107,6 @@ inline void observe_off_diagonal(matrix_scan_result& result, const matrix_scan_r
 inline matrix_scan_result scan_matrix(const matrix_integer& matrix, const matrix_scan_requirements& requirements)
 {
     const size_t dimension = matrix.rows();
-    if (dimension == 0 || matrix.cols() != dimension) throw std::invalid_argument("matrix must be nonempty and square");
-
     matrix_scan_result result = matrix_scan_detail::initialize(dimension, requirements);
     for (size_t index = 0; index < dimension; ++index) {
         timeout_checkpoint();
@@ -117,8 +115,8 @@ inline matrix_scan_result scan_matrix(const matrix_integer& matrix, const matrix
 
     for (size_t row = 0; row < dimension; ++row) {
         timeout_checkpoint();
+        progress::advance_preprocessing(row + 1, dimension);
         for (size_t column = row + 1; column < dimension; ++column) {
-            if (matrix(row, column).compare(matrix(column, row)) != 0) throw std::invalid_argument("matrix must be symmetric");
             matrix_scan_detail::observe_off_diagonal(result, requirements, row, column, matrix(row, column), matrix(row, row),
                                                       matrix(column, column));
         }
@@ -140,6 +138,7 @@ inline scanned_principal_matrix scan_principal_matrix(const matrix_integer& sour
 
     for (size_t row = 0; row < dimension; ++row) {
         timeout_checkpoint();
+        progress::advance_preprocessing(row + 1, dimension);
         const size_t source_row = indices[row];
         result.matrix(row, row) = source(source_row, source_row);
         matrix_scan_detail::observe_diagonal(result.scan, requirements, row, result.matrix(row, row));

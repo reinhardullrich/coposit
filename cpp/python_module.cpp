@@ -9,9 +9,9 @@
 #include <signal.h>
 
 #include <coposit/component_pipeline.hpp>
+#include <coposit/parsers/matrix_parser.hpp>
 #include <coposit/model.hpp>
 #include <coposit/open_node_limit.hpp>
-#include <coposit/parse_integer_matrix.hpp>
 #include <coposit/timeout.hpp>
 
 namespace py = pybind11;
@@ -56,17 +56,13 @@ coposit::component_pipeline::options parse_preprocessing(const std::string& name
     return selected;
 }
 
-native_result compute_matrix_impl(const std::string& input, const std::string& mode_name, const std::string& preprocessing_name)
+native_result solve_matrix(const coposit::matrix_integer& matrix, const std::string& mode_name, const std::string& preprocessing_name)
 {
-    coposit::matrix_integer matrix;
-    try {
-        matrix = coposit::parse_integer_matrix(input);
-    } catch (const std::invalid_argument& error) {
-        return {kStatusParseError, std::nullopt, std::nullopt, 0, error.what()};
-    }
-
     const auto start = std::chrono::steady_clock::now();
     try {
+#ifndef COPOSIT_SUPPORTS_COPOSITIVE
+        if (mode_name == "copositive") throw std::invalid_argument("this model supports only strict copositivity");
+#endif
         const coposit::component_pipeline::options preprocessing = parse_preprocessing(preprocessing_name);
 #ifdef COPOSIT_HAS_COMBINED_CLASSIFICATION
         if (mode_name == "both") {
@@ -106,6 +102,17 @@ native_result compute_matrix_impl(const std::string& input, const std::string& m
     }
 }
 
+template <typename Parser>
+native_result compute_matrix_impl(Parser&& parser, const std::string& mode_name, const std::string& preprocessing_name)
+{
+    try {
+        coposit::matrix_integer matrix = parser();
+        return solve_matrix(matrix, mode_name, preprocessing_name);
+    } catch (const std::invalid_argument& error) {
+        return {kStatusParseError, std::nullopt, std::nullopt, 0, error.what()};
+    }
+}
+
 void timeout_signal_handler(int) noexcept
 {
     coposit::request_timeout();
@@ -120,15 +127,8 @@ void install_timeout_handler(int signal_number)
     if (sigaction(signal_number, &action, nullptr) != 0) throw std::runtime_error("Could not install the timeout signal handler");
 }
 
-py::dict compute_matrix(const std::string& input, const std::string& mode_name, const std::string& preprocessing_name)
+py::dict python_result(const native_result& result)
 {
-    native_result result;
-    {
-        py::gil_scoped_release release;
-        result = compute_matrix_impl(input, mode_name, preprocessing_name);
-        coposit::reset_timeout();
-    }
-
     py::dict output;
     output["status"] = result.status;
     output["is_copositive"] = result.is_copositive ? py::cast(*result.is_copositive) : py::none();
@@ -136,6 +136,31 @@ py::dict compute_matrix(const std::string& input, const std::string& mode_name, 
     output["elapsed_ns"] = result.elapsed_ns;
     output["error_message"] = result.error_message;
     return output;
+}
+
+py::dict compute_matrix(const std::string& input, const std::string& mode_name, const std::string& preprocessing_name)
+{
+    native_result result;
+    {
+        py::gil_scoped_release release;
+        result = compute_matrix_impl([&]() { return coposit::parsers::matrix_parser::parse(input); }, mode_name, preprocessing_name);
+        coposit::reset_timeout();
+    }
+
+    return python_result(result);
+}
+
+py::dict compute_matrix_file(const std::string& filename, const std::string& mode_name, const std::string& preprocessing_name)
+{
+    native_result result;
+    {
+        py::gil_scoped_release release;
+        result = compute_matrix_impl([&]() { return coposit::parsers::matrix_parser::parse_file(filename); }, mode_name,
+                                     preprocessing_name);
+        coposit::reset_timeout();
+    }
+
+    return python_result(result);
 }
 
 } // namespace
@@ -150,6 +175,8 @@ PYBIND11_MODULE(COPOSIT_PYTHON_MODULE, module)
     module.attr("STATUS_NODE_LIMIT") = kStatusNodeLimit;
     module.attr("STATUS_INTERNAL_ERROR") = kStatusInternalError;
     module.def("compute_matrix", &compute_matrix, py::arg("matrix"), py::arg("mode") = "strictly_copositive",
+               py::arg("preprocessing") = "none");
+    module.def("compute_matrix_file", &compute_matrix_file, py::arg("filename"), py::arg("mode") = "strictly_copositive",
                py::arg("preprocessing") = "none");
     module.def("_install_timeout_handler", &install_timeout_handler, py::arg("signal_number"));
     module.def("_reset_timeout", &coposit::reset_timeout);

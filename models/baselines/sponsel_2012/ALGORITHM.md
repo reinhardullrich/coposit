@@ -1,19 +1,19 @@
 # Sponsel 2012
 
-Classification: exact ordinary implementation and strict adaptation of Sponsel, Bundfuss, and Dür's 2012 strengthened
-simplicial-partition framework. It uses the paper's positive-semidefinite `H` certificate in ordinary mode, its strict-safe
+Classification: exact non-strict implementation and strict adaptation of Sponsel, Bundfuss, and Dür's 2012 strengthened
+simplicial-partition framework. It uses the paper's positive-semidefinite `H` certificate in non-strict mode, its strict-safe
 positive-definite form in strict mode, and retains Coposit's exact Bundfuss 2008 split and traversal whenever that certificate does
 not decide a simplex.
 
 ## Decision Modes
 
 The two modes share the stripped matrix $S(G)$, minimum negative edge, three-$\lambda$ split, integer child construction, evaluation
-order, and LIFO traversal. Ordinary mode rejects $g_{ii}<0$ and $g_{ij}^2>g_{ii}g_{jj}$ and accepts the published certificate
+order, and LIFO traversal. Non-strict mode rejects $g_{ii}<0$ and $g_{ij}^2>g_{ii}g_{jj}$ and accepts the published certificate
 $S(G)\succeq0$. Strict mode rejects $g_{ii}\leq0$ and $g_{ij}^2\geq g_{ii}g_{jj}$ and accepts only $S(G)\succ0$. The existing
 fraction-free LDLT factorization obtains both decisions exactly from its rank and positive inertia count; no numerical eigensolver
 or SDP solver is used.
 
-`solve(A, mode)` defaults to `strictly_copositive` and returns only the requested Boolean. An ordinary equality is retained rather
+`solve(A, mode)` defaults to `strictly_copositive` and returns only the requested Boolean. A non-strict equality is retained rather
 than treated as a strict counterexample, while the published semidefinite `H` certificate can often close such a node immediately.
 
 ## What The Algorithm Does
@@ -26,7 +26,7 @@ Bundfuss, and Dür observed that a larger class of Gram matrices can be certifie
 called `H` in the paper, removes every positive off-diagonal entry and asks whether the remaining symmetric matrix is positive
 semidefinite.
 
-The published `H` test certifies ordinary copositivity. Coposit decides strict copositivity, so this model uses the exact stronger
+The published `H` test certifies non-strict copositivity. Coposit decides strict copositivity, so this model uses the exact stronger
 condition that the remaining matrix is positive definite. Positive definiteness is checked by the shared fraction-free LDLT
 factorization; no floating-point eigenvalue, tolerance, linear program, semidefinite program, or external solver is used.
 
@@ -57,7 +57,7 @@ Salmerón's public `bundfuss` implementation at
 [commit `5537fd94768efbce85b3225b05bf39db8d81a332`](https://github.com/josmangarsal/copositivity-detection-bundfuss-faces/commit/5537fd94768efbce85b3225b05bf39db8d81a332).
 No source from that repository is copied into this model.
 
-The 2012 paper defines the ordinary-copositivity framework and its positive-semidefinite `H` certificate. The strict
+The 2012 paper defines the non-strict-copositivity framework and its positive-semidefinite `H` certificate. The strict
 positive-definite analogue and the decision to preserve the maintained Bundfuss split in both modes are explicit Coposit choices.
 
 ## Public Decision Problem
@@ -71,8 +71,7 @@ x^TAx>0
 \qquad\text{for every }x\in\mathbb R_+^n\setminus\{0\}.
 \]
 
-The public boundary rejects empty, nonsquare, and asymmetric matrices with `std::invalid_argument`. Symmetry is checked exactly; the
-input is not silently symmetrized.
+The input parser supplies a nonempty square exactly symmetric matrix. The model assumes that contract without rescanning the matrix.
 
 A completed return value is Boolean. A cooperative timeout or the maintained open-node resource limit is unresolved and is never
 converted to `false`.
@@ -203,7 +202,7 @@ satisfies $S(G)=G\succeq0$, but
 (1,1)G(1,1)^T=0.
 \]
 
-Accepting every $S(G)\succeq0$ node would therefore misclassify an ordinary-copositive boundary matrix as strictly copositive.
+Accepting every $S(G)\succeq0$ node would therefore misclassify a non-strict-copositive boundary matrix as strictly copositive.
 
 The maintained strict certificate is
 
@@ -442,7 +441,7 @@ inspect(G):
     return split at (i,j)
 
 solve(A):
-    validate nonempty, square, symmetric input
+    receive parser-guaranteed nonempty, square, symmetric input
     inspect A
     reject or accept immediately when decided
     otherwise push A and its selected edge
@@ -487,7 +486,7 @@ finite detection of a genuinely negative region when the partition diameter tend
 copositive inputs for certificate families containing the nonnegative cone under the same refinement assumption. Coposit does not
 claim a stronger termination theorem for the concrete inherited lambda rule than its sources establish.
 
-Ordinary-copositive boundary matrices remain the important failure mode for a strict partition search. A zero can lie inside a
+Non-strict-copositive boundary matrices remain the important failure mode for a strict partition search. A zero can lie inside a
 sequence of nested simplices without ever becoming one of the generated vertices or selected two-vertex zeros.
 
 The maintained model bounds simultaneously unfinished nodes at 50,000. If a split would exceed that bound, the result is the
@@ -501,7 +500,7 @@ guarantee for a node on which $S(G)$ is not positive definite.
 
 ### Strict matrices outside the positive-definite `H` certificate
 
-The strict-safe condition is deliberately narrower than the paper's ordinary `H` cone. Positive off-diagonal terms can make $G$
+The strict-safe condition is deliberately narrower than the paper's non-strict `H` cone. Positive off-diagonal terms can make $G$
 strictly copositive even when $S(G)$ is singular. For example, let
 
 \[
@@ -566,7 +565,7 @@ Source-derived from Sponsel, Bundfuss, and Dür 2012:
 - accept nodes using membership in a tractable inner approximation of the copositive cone;
 - define $N^+(G)$ from positive off-diagonal entries;
 - define $S(G)=G-N^+(G)$;
-- use $S(G)\succeq0$ as the paper's ordinary `H` certificate;
+- use $S(G)\succeq0$ as the paper's non-strict `H` certificate;
 - retain simplex subdivision when the selected certificate does not apply.
 
 Inherited unchanged from `bundfuss_2008`:
@@ -609,7 +608,7 @@ The exact inertia implementation used by the certificate is shared model-indepen
 ## What This Model Deliberately Does Not Do
 
 - Strict mode does not accept the paper's complete positive-semidefinite `H` cone, because that would be unsound for strict
-  copositivity; ordinary mode does accept it.
+  copositivity; non-strict mode does accept it.
 - It does not solve the paper's stronger $\mathcal S_++\mathcal N$ semidefinite feasibility problem.
 - It does not use an SDP solver, LP solver, eigenvalue routine, tolerance, or floating-point split decision.
 - It does not use the paper's suggested smallest-eigenvector edge heuristic.

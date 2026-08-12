@@ -3,7 +3,7 @@
 **Status:** research guide  
 **Corpus snapshot:** 2026-08-07  
 **Scope:** 850 literature-derived source occurrences represented by 849 distinct matrices at IDs 9162, 9163, and 9657-10504 in
-`testdata/Copos_testdata.sqlite3`
+`testdata/copos_testdata.sqlite3`
 
 ## Evidence Boundary
 
@@ -713,13 +713,13 @@ Sources: [Baumert 1966](../research/papers/Baumert_1966_extreme_copositive.pdf) 
 
 The exact finite selections are reproducible from:
 
-- `testdata/import_exceptional_matrices_2026_08_07.py` for the McKay/Hoffman-Pereira enumeration, four Kostyukova-Tchemisova examples,
+- `testdata/archive/import_exceptional_matrices_2026_08_07.py` for the McKay/Hoffman-Pereira enumeration, four Kostyukova-Tchemisova examples,
   and Strekelj-Zalar \(C\);
-- `testdata/import_literature_extremes_2026_08_07.py` for Hildebrand \(\operatorname{COP}(5)\), both Baston families, Johnson-Reams, and
+- `testdata/archive/import_literature_extremes_2026_08_07.py` for Hildebrand \(\operatorname{COP}(5)\), both Baston families, Johnson-Reams, and
   Dickinson-de Zeeuw;
-- `testdata/import_hard_literature_matrices_2026_08_07.py` for Dickinson Case 9, Hildebrand-Afonin, Laurent-Vargas, and Hildebrand's
+- `testdata/archive/import_hard_literature_matrices_2026_08_07.py` for Dickinson Case 9, Hildebrand-Afonin, Laurent-Vargas, and Hildebrand's
   circulant family;
-- `testdata/import_perfect_copositive_lifts_2026_08_07.py` for both Dannenberg-Schurmann lift chains.
+- `testdata/archive/import_perfect_copositive_lifts_2026_08_07.py` for both Dannenberg-Schurmann lift chains.
 
 The earlier IDs 9657-9756 were imported before these four consolidated reproducibility scripts. Their complete parameter and diagonal
 choices remain embedded in each database row's `source` field. This guide describes their construction and provenance but does not

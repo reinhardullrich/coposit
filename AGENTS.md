@@ -4,9 +4,10 @@
 
 **Only Coposit-specific instructions and explicit Coposit overrides belong here.**
 
-## Startup
+## Historical Context
 
-1. Before extraction work, read `aidocs/handoffs/COPOSITIVITY_CHECKER_EXTRACTION_HANDOFF.md`.
+1. The standalone extraction is complete. For inherited extraction decisions or the original file map, consult the historical
+   `aidocs/history/COPOSITIVITY_CHECKER_EXTRACTION_HANDOFF.md` only when relevant.
 2. When a task refers to old behavior, work from before the extraction, or anything historically unclear, search the local FracESSA
    folders first, including its source, `aidocs/`, `research/`, and `experiments/`. Prefer this local evidence over remote lookup or
    assumptions.
@@ -26,7 +27,7 @@
 1. Exact mathematical correctness is absolute. Performance is second. Other concerns are secondary.
 2. Keep public input validation explicit and keep proven numerical hot paths small.
 3. Optimize for exact arbitrary-precision work on many small matrices without imposing a false small-dimension limit.
-4. Keep ordinary-copositivity results, strict-copositivity results, and unresolved resource limits distinct. Never turn a timeout
+4. Keep non-strict-copositivity results, strict-copositivity results, and unresolved resource limits distinct. Never turn a timeout
    or resource exhaustion into `false`.
 
 ## Extraction Boundary
@@ -38,8 +39,9 @@
    each model keeps its traversal and pruning policy private.
 3. Do not inherit FracESSA's dimension-63 limit. Remove or omit fixed-width sign-scan, graph, parser, and runner limits before
    claiming unrestricted dimensions, including in the `fracessa` model.
-4. Require symmetry explicitly at the generic boundary. Do not silently replace an input with its symmetric part.
-5. Keep `reference/fracessa/testdata/Copos_testdata.original.sqlite3.xz` as the immutable byte-exact source snapshot for every
+4. Require a nonempty square symmetric matrix at the text parser boundary. The parsers construct both triangles, and model entry
+   points assume that contract without rescanning shape or symmetry; direct C++ callers are responsible for satisfying it.
+5. Keep `testdata/archive/copos_testdata.original.sqlite3.xz` as the immutable byte-exact source snapshot for every
    corpus migration.
 6. Keep the maintained core integer-only. Do not add rational matrix storage; a later input wrapper may clear denominators before
    calling the core.
@@ -50,23 +52,27 @@
 
 ## Model Structure
 
-1. Put unchanged source and literature baselines in `models/baselines/<model-name>/` and Coposit-created variants in
-   `models/<model-name>/`. Each model directory owns its complete algorithm implementation, including copied cone, Danninger, or
-   hybrid code it changes or interweaves.
-   Keep the selected `adaptive_sponsel_copomatrix` model directly under `models/`; put its retired comparison variants under
-   `models/legacy/<model-name>/`. Legacy models remain only for reproducibility and are not used or developed further unless
-   Reinhard explicitly asks for them. Put active, not-yet-selected variants under `models/experiments/<model-name>/`.
+1. Put unchanged source and literature baselines in `models/baselines/<model-name>/`. Keep the selected
+   `adaptive_sponsel_copomatrix` and `dickinson_final` models directly under `models/`; put every other Coposit-created variant or
+   comparison under `models/experiments/<model-name>/`. Do not create a separate legacy-model category. Each model directory owns its
+   complete algorithm implementation, including copied cone, Danninger, or hybrid code it changes or interweaves.
 2. Create a new model by copying the closest existing model and changing that copy independently. Duplication between models is deliberate
    isolation, not Ponytail cleanup debt; share it only when Reinhard explicitly decides that it is stable project-wide infrastructure.
 3. Shared code under `cpp/include/coposit/` is limited to genuinely model-independent infrastructure such as exact integer and
    matrix storage, packed support storage, reusable exact factorization, input parsing, and the minimal model call contract.
-4. Every model implements the same `coposit::model::solve(const matrix_integer&, copositivity_mode)` link-time contract, with strict
-   mode as the default. Literature baselines implement both modes; Coposit-created variants reject ordinary mode until explicitly
+4. Every model implements the same `coposit::model::solve(const matrix_integer&, copositivity_mode)` link-time contract and assumes
+   its matrix is nonempty, square, and symmetric, with strict mode as the default. Literature baselines implement both modes;
+   Coposit-created variants reject non-strict mode until explicitly
    extended. `adaptive_sponsel_copomatrix` is explicitly extended to both individually selected modes but does not implement combined
-   classification. The selected user-facing model
-   builds as the single `coposit` binary with `cpp/model_main.cpp`; model-specific benchmark targets and Python native modules use the
-   model identifier. Every executable or native module links exactly one model. Python may select among those modules by name; do not
-   link model implementations together or add C++ runtime factories, registries, inheritance, or model-selection plumbing.
+   classification. The user-facing `coposit` launcher requires `fast` or `safe`, followed by `strict` or `non-strict`; `safe` also accepts
+   `both` and returns Dickinson Final's two results from one classification traversal. `fast` executes an `adaptive_sponsel_copomatrix`
+   companion and `safe` executes a `dickinson_final` companion, both with connected-component splitting and pre-checks enabled. Each
+   companion and every internal `coposit-analyze` model companion or Python native module links exactly one model; both launchers link
+   none. `coposit-analyze --model MODEL --mode strict|non-strict|both` is the only user-facing C++ model-selection interface and owns
+   the independent connected-component and pre-check controls. Its model inventory is the literature baselines except
+   `dickinson_2019`, plus `dickinson_final` and `adaptive_sponsel_copomatrix`; experimental variants remain Python/reference-run only.
+   Do not add public model-named executables, link model implementations together, or add C++ runtime factories, registries, or
+   inheritance.
 5. Name a faithful historical or external baseline `<first-author>_<year>`, using one surname in the identifier, for example
    `dutour_2018`. Give every such model a local `ALGORITHM.md` that identifies the exact paper or source revision.
 6. A baseline must preserve the source model's mathematical tests, split choice and construction, traversal, pruning, and termination
@@ -104,14 +110,15 @@
 
 ## Matrix Test Sets
 
-Use the four overlapping Boolean flags in the `matrices` table instead of inventing an ad hoc matrix list. See
+Use the five overlapping Boolean flags in the `matrices` table instead of inventing an ad hoc matrix list. See
 `aidocs/BENCHMARK_SETS.md` for their composition and selection evidence.
 
 1. Use `smoke_set` first for fast correctness, build, wrapper, runner, and integration checks after an implementation change.
 2. Use `representative_core` for the normal comparison between algorithms, routine performance measurements, and parameter choices.
 3. Use `stress_test` when testing difficult branching, equality and boundary cases, exact-arithmetic growth, timeouts, or node limits.
 4. Use `scale_set` for large matrices and questions about dimension growth, density, storage, memory use, and scalability.
-5. A matrix may belong to several sets. Run the smallest applicable set first; use the complete corpus only for final reference results
+5. Use `timeout_5s_strict_set` for matrices on which both final pre-checked algorithms timed out in the frozen five-second strict run.
+6. A matrix may belong to several sets. Run the smallest applicable set first; use the complete corpus only for final reference results
    or when the question explicitly requires exhaustive coverage.
 
 ## Style
@@ -134,4 +141,4 @@ ctest --test-dir cpp/build --output-on-failure
 2. Before replacing FracESSA's implementation, verify exact classifications against the preserved corpus and include the documented
    stress matrices.
 3. Bound parallel corpus runs by memory as well as CPU count, and serialize SQLite writes.
-4. Check the copied corpus with `sqlite3 testdata/Copos_testdata.sqlite3 'PRAGMA integrity_check;'`.
+4. Check the copied corpus with `sqlite3 testdata/copos_testdata.sqlite3 'PRAGMA integrity_check;'`.
