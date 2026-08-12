@@ -1,7 +1,7 @@
 #pragma once
 
-#include <coposit/matrix_integer.hpp>
 #include <coposit/parsers/exact_number_parser.hpp>
+#include <coposit/parsers/parsed_matrix.hpp>
 
 #include <algorithm>
 #include <charconv>
@@ -10,12 +10,13 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 namespace coposit::parsers::fracessa_matrix_parser {
 
 /* Parse FracESSA's dimension#values format: a full upper triangle or its short circular-symmetric form. */
-inline matrix_integer parse(std::string_view input)
+inline parsed_matrix parse(std::string_view input)
 {
     if (input.find_first_of(" \t\r\n") != std::string_view::npos) {
         throw std::invalid_argument("compact FracESSA matrix must not contain whitespace");
@@ -89,7 +90,7 @@ inline matrix_integer parse(std::string_view input)
                 matrix(column, row) = matrix(row, column);
             }
         }
-        return matrix;
+        return {std::move(matrix), std::move(common_denominator), true};
     }
 
     for (size_t row = 0; row < dimension; ++row) {
@@ -102,7 +103,7 @@ inline matrix_integer parse(std::string_view input)
         }
     }
 
-    return matrix;
+    return {std::move(matrix), std::move(common_denominator), false};
 }
 
 } // namespace coposit::parsers::fracessa_matrix_parser

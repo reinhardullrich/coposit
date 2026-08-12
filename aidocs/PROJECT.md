@@ -5,8 +5,9 @@ Last verified: 2026-08-12
 ## Purpose And Contract
 
 Coposit is a standalone C++17 project for exact copositivity (CP) and strict copositivity (SCP) decisions on nonempty symmetric
-matrices. Its public parsers accept exact rational input, clear one common positive denominator, and give every maintained algorithm
-an integer matrix. The solving core stores no rational matrices and makes no floating-point classification.
+matrices. Its public parsers accept exact rational input and return the denominator-cleared integer matrix together with the retained
+common positive denominator. Every maintained algorithm receives only the integer matrix. The solving core stores no rational
+matrices and makes no floating-point classification.
 
 Every model implements the link-time contract
 `coposit::model::solve(const matrix_integer&, copositivity_mode)` from `cpp/include/coposit/model.hpp`. A completed call returns the
@@ -50,6 +51,10 @@ nonempty square symmetric matrix before a model is called; model entry points de
 
 The packed support representation uses `ceil(n / 64)` machine words. Shared infrastructure and maintained models must not introduce
 the former dimension-63 limit.
+
+The parser result also records whether FracESSA's short compact circular form supplied the input. Matrix Market and complete
+upper-triangular inputs set this flag to false. The metadata is retained for clients such as FracESSA and ignored by Coposit's
+scale-invariant solving core.
 
 ## Executables And Processing Pipeline
 

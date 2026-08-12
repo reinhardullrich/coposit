@@ -1,7 +1,7 @@
 #pragma once
 
-#include <coposit/matrix_integer.hpp>
 #include <coposit/parsers/exact_number_parser.hpp>
+#include <coposit/parsers/parsed_matrix.hpp>
 
 #include <charconv>
 #include <limits>
@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <utility>
 #include <vector>
 
 namespace coposit::parsers::matrix_market_parser {
@@ -254,7 +255,7 @@ inline exact_number_parser::exact_rational parse_value(field value_field, std::s
 } // namespace detail
 
 /* Parse a NIST Matrix Market matrix declared symmetric and convert its exact real values to one integer scale. */
-inline matrix_integer parse(std::string_view input)
+inline parsed_matrix parse(std::string_view input)
 {
     input = detail::trim(input);
     const detail::document document = detail::parse_document_header(input);
@@ -277,7 +278,7 @@ inline matrix_integer parse(std::string_view input)
     };
 
     if (document.value_field == detail::field::integer || document.value_field == detail::field::pattern) {
-        return fill_matrix([&](integer::reference destination, std::string_view token, size_t line) {
+        matrix_integer matrix = fill_matrix([&](integer::reference destination, std::string_view token, size_t line) {
             if (document.value_field == detail::field::pattern) {
                 destination.set_one();
                 return;
@@ -288,6 +289,7 @@ inline matrix_integer parse(std::string_view input)
                 detail::line_error(line, error.what());
             }
         });
+        return {std::move(matrix), integer(1), false};
     }
 
     integer common_denominator(1);
@@ -306,10 +308,11 @@ inline matrix_integer parse(std::string_view input)
         throw std::invalid_argument("Coposit requires a real matrix; a complex Matrix Market entry has a nonzero imaginary part");
     }
 
-    return fill_matrix([&](integer::reference destination, std::string_view real_token, size_t line) {
+    matrix_integer matrix = fill_matrix([&](integer::reference destination, std::string_view real_token, size_t line) {
         const exact_number_parser::exact_rational value = detail::parse_value(document.value_field, real_token, line);
         exact_number_parser::set_scaled(destination, value, common_denominator);
     });
+    return {std::move(matrix), std::move(common_denominator), false};
 }
 
 inline bool has_banner(std::string_view input) noexcept
