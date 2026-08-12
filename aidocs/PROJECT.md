@@ -14,6 +14,10 @@ Every model implements the link-time contract
 Boolean for the selected predicate. A timeout, node limit, parse failure, or execution failure remains unresolved and is never
 reported as `false`.
 
+C++ clients that need the maintained exact SCP decision include `coposit/safe.hpp`, call
+`coposit::safe::is_strictly_copositive()`, and link `Coposit::safe`. This public composition applies the complete pre-check and
+connected-component pipeline before Dickinson Final. `Coposit::core` exposes only the model-independent headers and exact types.
+
 The eight literature baselines, `adaptive_sponsel_copomatrix`, and `dickinson_final` support separately selected CP and SCP. Hadeler
 1983, Dickinson 2019, Dickinson Final, and Danninger 1990 can additionally classify both predicates in one traversal. Other
 Coposit-created models reject CP and combined mode explicitly.
@@ -222,8 +226,10 @@ construction evidence is in [`LITERATURE_MATRIX_FAMILIES.md`](LITERATURE_MATRIX_
 
 ## Build And Verification
 
-Required dependencies are CMake 3.18 or newer, a C++17 compiler, Python 3.11 or newer, FLINT, MPFR, and GMP. CMake fetches pybind11
-and GoogleTest.
+Required dependencies are CMake 3.18 or newer, a C++17 compiler, FLINT, MPFR, and GMP. Python 3.11 or newer and pybind11 are needed
+only for Python modules; GoogleTest is needed only for the test suite. Standalone builds enable applications, Python modules, and
+tests by default. When added with `add_subdirectory()`, Coposit builds only `Coposit::core` and `Coposit::safe` unless the embedding
+project explicitly enables `COPOSIT_BUILD_APPS`, `COPOSIT_BUILD_PYTHON`, or `COPOSIT_BUILD_TESTS`.
 
 ```bash
 cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release

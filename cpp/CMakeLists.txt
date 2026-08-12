@@ -2,14 +2,29 @@ cmake_minimum_required(VERSION 3.18)
 
 project(Coposit LANGUAGES CXX)
 
-include(CTest)
 include(FetchContent)
-find_package(Threads REQUIRED)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-option(COPOSIT_BUILD_PYTHON "Build the Python extension modules" ON)
+
+if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
+    set(COPOSIT_STANDALONE_DEFAULT ON)
+else()
+    set(COPOSIT_STANDALONE_DEFAULT OFF)
+endif()
+
+option(COPOSIT_BUILD_APPS "Build the command-line applications" ${COPOSIT_STANDALONE_DEFAULT})
+option(COPOSIT_BUILD_PYTHON "Build the Python extension modules" ${COPOSIT_STANDALONE_DEFAULT})
+option(COPOSIT_BUILD_TESTS "Build the Coposit test suite" ${COPOSIT_STANDALONE_DEFAULT})
+
+if(COPOSIT_BUILD_TESTS)
+    include(CTest)
+endif()
+
+if(COPOSIT_BUILD_APPS)
+    find_package(Threads REQUIRED)
+endif()
 
 if(COPOSIT_BUILD_PYTHON)
     if(NOT Python3_EXECUTABLE)
@@ -35,25 +50,33 @@ target_include_directories(coposit_core INTERFACE
     ${FLINT_INCLUDE_DIR}
 )
 target_link_libraries(coposit_core INTERFACE ${FLINT_LIBRARY} ${MPFR_LIBRARY} ${GMP_LIBRARY})
+add_library(Coposit::core ALIAS coposit_core)
 
-add_executable(coposit coposit_main.cpp)
-target_link_libraries(coposit PRIVATE Threads::Threads)
+add_library(coposit_safe STATIC ../models/dickinson_final/solver.cpp)
+set_target_properties(coposit_safe PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(coposit_safe PUBLIC coposit_core)
+add_library(Coposit::safe ALIAS coposit_safe)
 
-add_executable(coposit_fast_solver model_main.cpp ../models/adaptive_sponsel_copomatrix/solver.cpp)
-set_target_properties(coposit_fast_solver PROPERTIES OUTPUT_NAME coposit-fast)
-target_compile_definitions(coposit_fast_solver PRIVATE COPOSIT_PUBLIC_FAST=1)
-target_link_libraries(coposit_fast_solver PRIVATE coposit_core)
+if(COPOSIT_BUILD_APPS)
+    add_executable(coposit coposit_main.cpp)
+    target_link_libraries(coposit PRIVATE Threads::Threads)
 
-add_executable(coposit_safe_solver model_main.cpp ../models/dickinson_final/solver.cpp)
-set_target_properties(coposit_safe_solver PROPERTIES OUTPUT_NAME coposit-safe)
-target_compile_definitions(coposit_safe_solver PRIVATE COPOSIT_PUBLIC_SAFE=1)
-target_link_libraries(coposit_safe_solver PRIVATE coposit_core)
+    add_executable(coposit_fast_solver model_main.cpp ../models/adaptive_sponsel_copomatrix/solver.cpp)
+    set_target_properties(coposit_fast_solver PROPERTIES OUTPUT_NAME coposit-fast)
+    target_compile_definitions(coposit_fast_solver PRIVATE COPOSIT_PUBLIC_FAST=1)
+    target_link_libraries(coposit_fast_solver PRIVATE coposit_core)
 
-add_dependencies(coposit coposit_fast_solver coposit_safe_solver)
+    add_executable(coposit_safe_solver model_main.cpp)
+    set_target_properties(coposit_safe_solver PROPERTIES OUTPUT_NAME coposit-safe)
+    target_compile_definitions(coposit_safe_solver PRIVATE COPOSIT_PUBLIC_SAFE=1)
+    target_link_libraries(coposit_safe_solver PRIVATE coposit_safe)
 
-add_executable(coposit_analyze coposit_analyze_main.cpp)
-set_target_properties(coposit_analyze PROPERTIES OUTPUT_NAME coposit-analyze)
-target_link_libraries(coposit_analyze PRIVATE Threads::Threads)
+    add_dependencies(coposit coposit_fast_solver coposit_safe_solver)
+
+    add_executable(coposit_analyze coposit_analyze_main.cpp)
+    set_target_properties(coposit_analyze PROPERTIES OUTPUT_NAME coposit-analyze)
+    target_link_libraries(coposit_analyze PRIVATE Threads::Threads)
+endif()
 
 set(COPOSIT_COMBINED_CLASSIFICATION_MODELS danninger_1990 hadeler_1983 dickinson_2019 dickinson_final)
 set(COPOSIT_COPOSITIVE_MODELS
@@ -87,7 +110,7 @@ function(add_coposit_model_interfaces model_name)
         set(model_directory ${ARGV1})
     endif()
 
-    if(model_name IN_LIST COPOSIT_CXX_ANALYSIS_MODELS)
+    if(COPOSIT_BUILD_APPS AND model_name IN_LIST COPOSIT_CXX_ANALYSIS_MODELS)
         set(analysis_target coposit_analyze_${model_name})
         add_executable(${analysis_target} model_main.cpp ../models/${model_directory}/solver.cpp)
         set_target_properties(${analysis_target} PROPERTIES OUTPUT_NAME coposit-analyze-${model_name})
@@ -144,9 +167,11 @@ add_coposit_model_interfaces(zischg_hadeler)
 add_coposit_model_interfaces(zischg_dickinson)
 add_coposit_model_interfaces(zischg_fracessa)
 
-add_dependencies(coposit_analyze ${COPOSIT_ANALYSIS_TARGETS})
+if(COPOSIT_BUILD_APPS)
+    add_dependencies(coposit_analyze ${COPOSIT_ANALYSIS_TARGETS})
+endif()
 
-if(BUILD_TESTING)
+if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
     FetchContent_Declare(googletest
         GIT_REPOSITORY https://github.com/google/googletest.git
         GIT_TAG v1.14.0
@@ -350,10 +375,15 @@ if(BUILD_TESTING)
     target_link_libraries(test_component_pipeline PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME ComponentPipelineTests COMMAND test_component_pipeline)
 
+    add_executable(test_safe tests/test_safe.cpp)
+    target_link_libraries(test_safe PRIVATE Coposit::safe GTest::gtest_main)
+    add_test(NAME SafeApiTests COMMAND test_safe)
+
     add_executable(test_progress tests/test_progress.cpp)
     target_link_libraries(test_progress PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME ProgressTests COMMAND test_progress)
 
+    if(COPOSIT_BUILD_APPS)
     add_executable(test_companion_launcher tests/test_companion_launcher.cpp)
     target_link_libraries(test_companion_launcher PRIVATE Threads::Threads)
     add_test(NAME CompanionLauncherTimeoutTest COMMAND test_companion_launcher ${CMAKE_COMMAND})
@@ -450,6 +480,7 @@ if(BUILD_TESTING)
 
     add_test(NAME CliUnknownPredicateTest COMMAND coposit fast copositive)
     set_tests_properties(CliUnknownPredicateTest PROPERTIES WILL_FAIL TRUE)
+    endif()
 
     if(COPOSIT_BUILD_PYTHON)
         add_test(NAME PythonWrapperTests
