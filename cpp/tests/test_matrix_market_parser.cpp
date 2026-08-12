@@ -6,49 +6,58 @@ using namespace coposit;
 
 TEST(MatrixMarketTest, ParsesExactRealSymmetricArrayInLowerColumnMajorOrder)
 {
-    const matrix_integer matrix = parsers::matrix_market_parser::parse(
+    const parsers::parsed_matrix parsed = parsers::matrix_market_parser::parse(
         "%%MatrixMarket matrix array real symmetric\n"
         "% exact decimals\n"
         "2 2\n"
         "1e-1\n2.5e-1\n1\n");
+    const matrix_integer& matrix = parsed.matrix;
     EXPECT_EQ(fmpz_cmp_si(matrix(0, 0).native_handle(), 2), 0);
     EXPECT_EQ(fmpz_cmp_si(matrix(1, 0).native_handle(), 5), 0);
     EXPECT_EQ(fmpz_cmp_si(matrix(0, 1).native_handle(), 5), 0);
     EXPECT_EQ(fmpz_cmp_si(matrix(1, 1).native_handle(), 20), 0);
+    EXPECT_EQ(fmpz_cmp_si(parsed.denominator.native_handle(), 20), 0);
+    EXPECT_FALSE(parsed.compact_circular);
 }
 
 TEST(MatrixMarketTest, ParsesIntegerSymmetricArray)
 {
-    const matrix_integer matrix = parsers::matrix_market_parser::parse(
+    const parsers::parsed_matrix parsed = parsers::matrix_market_parser::parse(
         "%%MatrixMarket matrix array integer symmetric\n"
         "3 3\n1\n-2\n0\n+3\n4\n+123456789012345678901234567890\n");
+    const matrix_integer& matrix = parsed.matrix;
     const auto expected_large = parsers::exact_number_parser::parse("123456789012345678901234567890", false, true);
     EXPECT_EQ(fmpz_cmp_si(matrix(0, 1).native_handle(), -2), 0);
     EXPECT_EQ(matrix(0, 1).compare(matrix(1, 0)), 0);
     EXPECT_EQ(fmpz_cmp_si(matrix(1, 2).native_handle(), 4), 0);
     EXPECT_EQ(matrix(2, 2).compare(expected_large.numerator), 0);
+    EXPECT_TRUE(parsed.denominator.is_one());
 }
 
 TEST(MatrixMarketTest, ParsesPatternCoordinateStorage)
 {
-    const matrix_integer pattern = parsers::matrix_market_parser::parse(
+    const parsers::parsed_matrix parsed = parsers::matrix_market_parser::parse(
         "%%MatrixMarket matrix coordinate pattern symmetric\n"
         "3 3 3\n1 1\n2 1\n3 3\n");
+    const matrix_integer& pattern = parsed.matrix;
     EXPECT_TRUE(pattern(0, 0).is_one());
     EXPECT_TRUE(pattern(0, 1).is_one());
     EXPECT_TRUE(pattern(1, 0).is_one());
     EXPECT_TRUE(pattern(1, 1).is_zero());
+    EXPECT_TRUE(parsed.denominator.is_one());
 
 }
 
 TEST(MatrixMarketTest, ParsesRealValuedComplexSymmetricAndRejectsImaginaryValues)
 {
-    const matrix_integer matrix = parsers::matrix_market_parser::parse(
+    const parsers::parsed_matrix parsed = parsers::matrix_market_parser::parse(
         "%%MatrixMarket matrix coordinate complex symmetric\n"
         "2 2 3\n1 1 1 0\n2 1 -2.5 0e100\n2 2 3 0\n");
+    const matrix_integer& matrix = parsed.matrix;
     EXPECT_EQ(fmpz_cmp_si(matrix(0, 0).native_handle(), 2), 0);
     EXPECT_EQ(fmpz_cmp_si(matrix(0, 1).native_handle(), -5), 0);
     EXPECT_EQ(fmpz_cmp_si(matrix(1, 1).native_handle(), 6), 0);
+    EXPECT_EQ(fmpz_cmp_si(parsed.denominator.native_handle(), 2), 0);
 
     EXPECT_THROW(
         parsers::matrix_market_parser::parse("%%MatrixMarket matrix coordinate complex symmetric\n1 1 1\n1 1 1 1e-30\n"),

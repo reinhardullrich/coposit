@@ -12,7 +12,7 @@
 
 namespace coposit::parsers::matrix_parser {
 
-inline matrix_integer parse(std::string_view input)
+inline parsed_matrix parse(std::string_view input)
 {
     if (!input.empty() && input.back() == '\n') {
         input.remove_suffix(1);
@@ -21,7 +21,7 @@ inline matrix_integer parse(std::string_view input)
     return matrix_market_parser::has_banner(input) ? matrix_market_parser::parse(input) : fracessa_matrix_parser::parse(input);
 }
 
-inline matrix_integer parse_file(const std::string& filename)
+inline parsed_matrix parse_file(const std::string& filename)
 {
     std::ifstream file(filename, std::ios::binary | std::ios::ate);
     if (!file) throw std::invalid_argument("cannot open matrix file: " + filename);

@@ -146,13 +146,14 @@ int main(int argc, char* argv[])
 #endif
 #endif
 
-        coposit::matrix_integer matrix;
+        coposit::parsers::parsed_matrix parsed;
         if (!input_argument.empty() && input_argument != "-") {
-            matrix = is_compact_matrix_argument(input_argument) ? coposit::parsers::matrix_parser::parse(input_argument)
+            parsed = is_compact_matrix_argument(input_argument) ? coposit::parsers::matrix_parser::parse(input_argument)
                                                                 : coposit::parsers::matrix_parser::parse_file(input_argument);
         } else {
-            matrix = coposit::parsers::matrix_parser::parse(read_all(std::cin));
+            parsed = coposit::parsers::matrix_parser::parse(read_all(std::cin));
         }
+        const coposit::matrix_integer& matrix = parsed.matrix;
         coposit::progress::reporter reporter(show_progress, std::cerr);
 #if defined(COPOSIT_PUBLIC_SAFE) || defined(COPOSIT_HAS_COMBINED_CLASSIFICATION)
         if (classify_both) {

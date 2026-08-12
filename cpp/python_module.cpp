@@ -106,8 +106,8 @@ template <typename Parser>
 native_result compute_matrix_impl(Parser&& parser, const std::string& mode_name, const std::string& preprocessing_name)
 {
     try {
-        coposit::matrix_integer matrix = parser();
-        return solve_matrix(matrix, mode_name, preprocessing_name);
+        coposit::parsers::parsed_matrix parsed = parser();
+        return solve_matrix(parsed.matrix, mode_name, preprocessing_name);
     } catch (const std::invalid_argument& error) {
         return {kStatusParseError, std::nullopt, std::nullopt, 0, error.what()};
     }
