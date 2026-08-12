@@ -339,6 +339,10 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
     target_link_libraries(test_fracessa_matrix_parser PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME FracessaMatrixParserTests COMMAND test_fracessa_matrix_parser)
 
+    add_executable(test_integer tests/test_integer.cpp)
+    target_link_libraries(test_integer PRIVATE coposit_core GTest::gtest_main)
+    add_test(NAME IntegerTests COMMAND test_integer)
+
     add_executable(test_exact_number_parser tests/test_exact_number_parser.cpp)
     target_link_libraries(test_exact_number_parser PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME ExactNumberParserTests COMMAND test_exact_number_parser)
