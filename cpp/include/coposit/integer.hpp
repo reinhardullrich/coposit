@@ -1,7 +1,10 @@
 #pragma once
 
+#include <flint/flint.h>
 #include <flint/fmpz.h>
 
+#include <stdexcept>
+#include <string>
 #include <utility>
 
 namespace coposit {
@@ -169,6 +172,20 @@ public:
     void addmul(const_reference left, const_reference right) noexcept { ref().addmul(left, right); }
     void submul(const_reference left, const_reference right) noexcept { ref().submul(left, right); }
     void divide_exact(const_reference divisor) noexcept { ref().divide_exact(divisor); }
+
+    void set_string(const std::string& value, int base)
+    {
+        if (fmpz_set_str(data_, value.c_str(), base) != 0) throw std::invalid_argument("Invalid integer text");
+    }
+
+    std::string to_string(int base = 10) const
+    {
+        char* text = fmpz_get_str(nullptr, base, data_);
+        if (text == nullptr) return "0";
+        std::string result(text);
+        flint_free(text);
+        return result;
+    }
 
     int sign() const noexcept { return cref().sign(); }
     bool is_zero() const noexcept { return cref().is_zero(); }
