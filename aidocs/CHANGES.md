@@ -1447,3 +1447,10 @@ This append-only file records meaningful decisions, results, and evidence that a
 - On three repetitions over all 1,412 corpus matrices through order 10, the median summed native time fell from 76.671 ms to
   56.212 ms, a 26.7% reduction, with no classification mismatch. Hadeler remains on ordered indices because it performs no support
   containment tests and would gain only conversion overhead from a packed duplicate.
+
+## 2026-08-13 — Explicit diagonal in compact circular input
+
+- Changed the short FracESSA format from `floor(n/2)` implicit-zero-diagonal values to `floor(n/2)+1` values beginning with the
+  common diagonal. This preserves exact nonzero diagonal payoffs instead of requiring callers to normalize a game first.
+- Kept full upper-triangular input unchanged and made former short strings fail the value-count check rather than acquire an
+  ambiguous new meaning.

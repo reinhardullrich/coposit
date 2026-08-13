@@ -91,9 +91,10 @@ if __name__ == "__main__":
 ```
 
 `Matrix.matrix` normally contains the compact FracESSA `dimension#values` format. It accepts a full row-major upper triangle or the
-short `floor(dimension/2)` circular-symmetric form. Exact values may be integers, decimals, scientific notation, or fractions. A
-fraction is written `[+|-]numerator/denominator`; the nonzero denominator has no sign. Compact matrix text must not contain
-whitespace and must include its own dimension prefix.
+short circular-symmetric form containing `floor(dimension/2)+1` values: the common diagonal followed by the successive circular
+distances. Exact values may be integers, decimals, scientific notation, or fractions. A fraction is written
+`[+|-]numerator/denominator`; the nonzero denominator has no sign. Compact matrix text must not contain whitespace and must include
+its own dimension prefix.
 
 An ordinary string that is neither compact `dimension#values` nor inline Matrix Market text is treated as a file path and passed to
 C++ for loading. Python string literals require quotes; single and double quotes are equivalent, and a path stored in a variable works

@@ -37,7 +37,7 @@ inline parsed_matrix parse(std::string_view input)
     }
 
     const size_t expected_values = dimension * (dimension + 1) / 2;
-    const size_t expected_circular_values = dimension / 2;
+    const size_t expected_circular_values = dimension / 2 + 1;
     const std::string_view values = input.substr(separator + 1);
     const size_t supplied_values = values.empty() ? 0 : 1 + static_cast<size_t>(std::count(values.begin(), values.end(), ','));
     const bool circular_symmetric = dimension >= 2 && supplied_values == expected_circular_values;
@@ -83,10 +83,11 @@ inline parsed_matrix parse(std::string_view input)
             offset = comma == std::string_view::npos ? values.size() : comma + 1;
         }
         for (size_t row = 0; row < dimension; ++row) {
+            matrix(row, row) = distances[0];
             for (size_t column = row + 1; column < dimension; ++column) {
                 const size_t direct_distance = column - row;
                 const size_t circular_distance = std::min(direct_distance, dimension - direct_distance);
-                matrix(row, column) = distances[circular_distance - 1];
+                matrix(row, column) = distances[circular_distance];
                 matrix(column, row) = matrix(row, column);
             }
         }
