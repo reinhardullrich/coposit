@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" width="600" alt="coposit logo" />
+</p>
+
 # Coposit
 
 Coposit decides exact copositivity (CP, the non-strict predicate) and strict copositivity (SCP) for nonempty symmetric integer
