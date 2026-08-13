@@ -5,6 +5,10 @@
 #include <cstdint>
 #include <vector>
 
+#ifdef _MSC_VER
+#include <intrin.h>
+#endif
+
 namespace coposit {
 
 class support {
@@ -83,8 +87,7 @@ public:
     {
         for (size_t word_index = 0; word_index < words_.size(); ++word_index) {
             if (words_[word_index] != 0) {
-                return word_index * bits_per_word
-                    + static_cast<size_t>(__builtin_ctzll(static_cast<unsigned long long>(words_[word_index])));
+                return word_index * bits_per_word + trailing_zero_count(words_[word_index]);
             }
         }
         assert(false);
@@ -97,7 +100,7 @@ public:
         for (size_t word_index = 0; word_index < words_.size(); ++word_index) {
             word_type word = words_[word_index];
             while (word != 0) {
-                const size_t bit = static_cast<size_t>(__builtin_ctzll(static_cast<unsigned long long>(word)));
+                const size_t bit = trailing_zero_count(word);
                 indices.push_back(word_index * bits_per_word + bit);
                 word &= word - 1;
             }
@@ -107,6 +110,17 @@ public:
 private:
     using word_type = std::uint64_t;
     static constexpr size_t bits_per_word = 64;
+
+    static size_t trailing_zero_count(word_type word) noexcept
+    {
+#ifdef _MSC_VER
+        unsigned long index;
+        _BitScanForward64(&index, word);
+        return static_cast<size_t>(index);
+#else
+        return static_cast<size_t>(__builtin_ctzll(static_cast<unsigned long long>(word)));
+#endif
+    }
 
     size_t dimension_;
     std::vector<word_type> words_;
