@@ -28,7 +28,8 @@ TEST(FracessaFormatTest, RejectsInvalidFractionAndWrongValueCount)
     EXPECT_THROW(parsers::fracessa_matrix_parser::parse("2#1,1/-2,1"), std::invalid_argument);
     EXPECT_THROW(parsers::fracessa_matrix_parser::parse("2#1,-1/-2,1"), std::invalid_argument);
     EXPECT_THROW(parsers::fracessa_matrix_parser::parse("2#1,1/2/3,1"), std::invalid_argument);
-    EXPECT_THROW(parsers::fracessa_matrix_parser::parse("2#1,1"), std::invalid_argument);
+    EXPECT_THROW(parsers::fracessa_matrix_parser::parse("2#1"), std::invalid_argument);
+    EXPECT_THROW(parsers::fracessa_matrix_parser::parse("5#1,2"), std::invalid_argument);
     EXPECT_THROW(parsers::fracessa_matrix_parser::parse("1#bogus"), std::invalid_argument);
     EXPECT_THROW(parsers::fracessa_matrix_parser::parse("1#1 2"), std::invalid_argument);
 }
@@ -46,9 +47,10 @@ TEST(FracessaFormatTest, ClearsOneMinimalFractionDecimalAndScientificDenominator
 
 TEST(FracessaFormatTest, ParsesCircularSymmetricForm)
 {
-    const parsers::parsed_matrix parsed = parsers::fracessa_matrix_parser::parse("5#1/2,-2.5e-1");
+    const parsers::parsed_matrix parsed = parsers::fracessa_matrix_parser::parse("5#3/4,1/2,-2.5e-1");
     const matrix_integer& matrix = parsed.matrix;
-    EXPECT_TRUE(matrix(0, 0).is_zero());
+    EXPECT_EQ(fmpz_cmp_si(matrix(0, 0).native_handle(), 3), 0);
+    EXPECT_EQ(matrix(0, 0).compare(matrix(4, 4)), 0);
     EXPECT_EQ(fmpz_cmp_si(matrix(0, 1).native_handle(), 2), 0);
     EXPECT_EQ(fmpz_cmp_si(matrix(0, 2).native_handle(), -1), 0);
     EXPECT_EQ(matrix(0, 2).compare(matrix(0, 3)), 0);

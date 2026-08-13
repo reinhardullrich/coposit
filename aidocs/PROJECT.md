@@ -46,7 +46,7 @@ forbidden-set policy remain private to the `fracessa` model.
 The shared parser accepts:
 
 - compact FracESSA matrices as `dimension#values`, using either a complete row-major upper triangle or the short circular-symmetric
-  form;
+  form containing the common diagonal followed by one value for each positive circular distance;
 - exact integers, decimals, scientific notation, and FracESSA-only fractions written `[+|-]numerator/denominator`; and
 - NIST Matrix Market `array` or `coordinate` matrices declared `symmetric`, with `integer`, `real`, `complex`, or `pattern` fields.
 

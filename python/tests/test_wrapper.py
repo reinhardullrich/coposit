@@ -165,7 +165,7 @@ class WrapperTests(unittest.TestCase):
 
     def test_fracessa_fraction_scientific_and_circular_input(self):
         fraction = run("hadeler_1983", Matrix("2#5e-1,-1/4,+1/2", matrix_id=1))
-        circular = run("hadeler_1983", Matrix("5#1/2,-2.5e-1", matrix_id=2))
+        circular = run("hadeler_1983", Matrix("5#0,1/2,-2.5e-1", matrix_id=2))
         invalid_sign = run("hadeler_1983", Matrix("2#1,1/-2,1", matrix_id=3))
 
         self.assertEqual(fraction["status"], StatusCode.OK)

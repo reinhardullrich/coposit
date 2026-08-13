@@ -22,9 +22,9 @@ ctest --test-dir cpp/build --output-on-failure
 ## Run
 
 Input may use the compact FracESSA format, `dimension#values`. A full list contains the upper triangle in row-major order. A short
-list of `floor(dimension/2)` values creates a zero-diagonal circular-symmetric matrix from its successive circular distances. Values
-may be exact integers, decimals, scientific notation such as `2.5E15`, or fractions such as `-1/2`. A fraction has one optional sign
-before its numerator and an unsigned nonzero integer denominator. Compact matrix text contains no whitespace.
+list of `floor(dimension/2)+1` values creates a circular-symmetric matrix from its common diagonal followed by its successive circular
+distances. Values may be exact integers, decimals, scientific notation such as `2.5E15`, or fractions such as `-1/2`. A fraction has
+one optional sign before its numerator and an unsigned nonzero integer denominator. Compact matrix text contains no whitespace.
 
 ```bash
 cpp/build/coposit fast strict 2#1,0,1
