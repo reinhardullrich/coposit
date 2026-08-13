@@ -8,7 +8,7 @@ experiments, counterexamples, benchmark corpus, or the distinction between produ
 This document covers the copositivity work performed mainly on August 6 and 7, 2026. Current source code and the SQLite corpus are
 authoritative if they disagree with this handover.
 
-Database note: Section 8 documents the preserved FracESSA source snapshot. The maintained Coposit corpus now uses the one-table
+Database note: Section 8 documents the preserved FracESSA source snapshot. The maintained coposit corpus now uses the one-table
 schema documented in `../PROJECT.md`; the original database remains compressed under `testdata/archive/`.
 
 ## 1. Executive summary
@@ -749,8 +749,8 @@ optimized cone and adaptive Danninger/cone code do not need it.
 
 ### 9.6 Ownership and licensing boundary
 
-The extracted Coposit repository should own `integer.hpp`, `matrix_integer.hpp`, and the generic copositivity API. FracESSA should
-consume those headers from Coposit and call the checker directly. Coposit must not include FracESSA headers. This one-way dependency
+The extracted coposit repository should own `integer.hpp`, `matrix_integer.hpp`, and the generic copositivity API. FracESSA should
+consume those headers from coposit and call the checker directly. coposit must not include FracESSA headers. This one-way dependency
 avoids both duplicated wrapper types and a circular dependency, while preserving the current inline C++/FLINT calls and their speed.
 The exact CMake consumption mechanism can be chosen when the repository is created; it does not require a process, serialization,
 or shared-library boundary.
@@ -806,7 +806,7 @@ only when their exact contracts are decided.
 
 The production FracESSA integration should remain a direct exact call. A separate repository does not require a runtime process,
 serialization, or shared library boundary: CMake can consume the checker source directly, preserving inlining and current speed.
-The dependency direction must be `FracESSA -> Coposit`, never the reverse.
+The dependency direction must be `FracESSA -> coposit`, never the reverse.
 
 ## 12. Open mathematical and algorithmic questions
 

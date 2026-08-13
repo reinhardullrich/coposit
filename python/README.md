@@ -120,7 +120,7 @@ Every result contains `algorithm`, `mode`, optional `matrix_id`, integer `status
 `(False, False)`, `(True, False)`, and `(True, True)`. Other models return `EXEC_ERROR` for `both`. Both fields are `None` on any
 failure. The eight baselines under `models/baselines/`, `adaptive_sponsel_copomatrix`, and `dickinson_final` support the two
 individually selected modes.
-Other Coposit-created variants return `EXEC_ERROR` for `copositive` mode rather than silently applying their strict rules. The
+Other coposit-created variants return `EXEC_ERROR` for `copositive` mode rather than silently applying their strict rules. The
 capability check happens before connected-component splitting or pre-checks, so preprocessing cannot bypass that restriction.
 Status codes are `OK=0`,
 `PARSE_ERROR=1`, `EXEC_ERROR=4`, `TIMEOUT=5`,

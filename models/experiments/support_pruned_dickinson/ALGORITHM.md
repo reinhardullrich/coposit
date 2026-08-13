@@ -1,9 +1,9 @@
 # Support-Pruned Dickinson
 
-Classification: Coposit-created exact strict-copositivity hybrid based on Dickinson's certificate algorithm and FracESSA's
+Classification: coposit-created exact strict-copositivity hybrid based on Dickinson's certificate algorithm and FracESSA's
 forbidden-support generator.
 
-Public mode boundary: this Coposit-created model supports only `strictly_copositive`. Calling
+Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
 `solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
 
 ## Idea In Plain Language
@@ -30,7 +30,7 @@ It combines two existing local algorithms:
   Lemma 5.2, and Corollary 5.3 supply the certificate construction and the strict conclusion.
 - FracESSA revision `95e0ec019cf11a60c6423508e8768536a0b88860`, especially
   `cpp/include/fracessa/supports.hpp` (`NonCircularSupportGenerator`) and the support-forbidding orchestration in
-  `cpp/src/fracessa.cpp`. Coposit's local reconstruction is `models/experiments/fracessa/solver.cpp`.
+  `cpp/src/fracessa.cpp`. coposit's local reconstruction is `models/experiments/fracessa/solver.cpp`.
 
 The implementation began as an independent copy of `models/baselines/dickinson_2019/solver.cpp`. Only its fixed-cardinality support loop was
 replaced with a private copy of the recursive FracESSA generator, and only globally covering Dickinson signatures are submitted as
@@ -228,7 +228,7 @@ The full vector and product values are then discarded.
 
 ## Strict-Only Decision
 
-Dickinson's published Algorithms 1 and 2 decide non-strict copositivity. Coposit asks only for strict copositivity.
+Dickinson's published Algorithms 1 and 2 decide non-strict copositivity. coposit asks only for strict copositivity.
 
 A negative witness from the nonsingular solve proves failure directly. A nonnegative singular null vector is a zero and also proves
 strict failure directly. Conversely, Dickinson's Lemma 5.2 and Corollary 5.3 show that a completed certificate contains every
@@ -268,7 +268,7 @@ packed current support only because principal-matrix access needs explicit indic
 Timed Python modules check the cooperative timeout flag at support-recursion, coverage, factorization, and full-product boundaries.
 A timeout is unresolved and is never returned as `false`.
 
-## Source Behavior, Coposit Changes, And Non-Changes
+## Source Behavior, coposit Changes, And Non-Changes
 
 From Dickinson 2019:
 
@@ -285,7 +285,7 @@ From FracESSA:
 - pruning grouped by the forbidden support's lowest index;
 - termination after a cardinality emits no surviving support.
 
-Coposit-specific strict adaptations:
+coposit-specific strict adaptations:
 
 - exact direct rejection through order three;
 - immediate rejection of a generated nonnegative zero;

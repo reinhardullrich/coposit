@@ -2,11 +2,11 @@
   <img src="logo.png" width="600" alt="coposit logo" />
 </p>
 
-# Coposit
+# coposit
 
-Coposit decides exact copositivity (CP, the non-strict predicate) and strict copositivity (SCP) for nonempty symmetric integer
+coposit decides exact copositivity (CP, the non-strict predicate) and strict copositivity (SCP) for nonempty symmetric integer
 matrices. The eight literature baselines and the selected Adaptive Sponsel–COPOMATRIX and Dickinson Final models support both
-selectable modes; the other Coposit-created variants remain explicitly strict-only. Hadeler 1983, Dickinson 2019, Dickinson Final,
+selectable modes; the other coposit-created variants remain explicitly strict-only. Hadeler 1983, Dickinson 2019, Dickinson Final,
 and Danninger 1990 can additionally classify both predicates in one traversal.
 
 ## Build And Test
@@ -68,7 +68,7 @@ option the launcher retains the direct no-watchdog execution path.
 The same file or standard-input boundary accepts NIST Matrix Market `array` and `coordinate` matrices declared `symmetric`, with
 `real`, `complex`, `integer`, or `pattern` fields. Other Matrix Market structures are rejected immediately; the stored lower triangle
 is mirrored, so the parsed matrix is symmetric without a separate symmetry scan. Decimal and scientific values are converted exactly;
-a complex matrix is usable by Coposit only when every imaginary part is zero. Slash fractions remain specific to the compact FracESSA
+a complex matrix is usable by coposit only when every imaginary part is zero. Slash fractions remain specific to the compact FracESSA
 format. The parser clears one least common positive denominator and gives the algorithms only integers.
 The exact-number, FracESSA, Matrix Market, and format-dispatch parsers live under `cpp/include/coposit/parsers/`.
 Model entry points assume this parser-guaranteed nonempty square symmetric matrix and do not repeat the shape or symmetry scan.
@@ -78,7 +78,7 @@ For a worked, introductory explanation of Dickinson's certificate traversal, see
 description remains its local `ALGORITHM.md`.
 
 The selected Adaptive Sponsel–COPOMATRIX and Dickinson Final sources live directly under `models/`. Literature baselines live under
-`models/baselines/<model-name>/`; every other Coposit-created model and comparison lives under
+`models/baselines/<model-name>/`; every other coposit-created model and comparison lives under
 `models/experiments/<model-name>/`. The user-facing `coposit` launcher dispatches `fast` and `safe` to separate one-model companion
 binaries. `coposit-analyze` is the sole C++ analysis command and dispatches an explicit model choice to an internal isolated
 companion. The Python package remains the batch-analysis interface. Model algorithm code is intentionally copied rather than shared

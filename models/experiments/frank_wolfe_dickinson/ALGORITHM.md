@@ -1,9 +1,9 @@
 # Frank–Wolfe Dickinson
 
-Classification: Coposit-created strict-copositivity variant with a bounded Frank–Wolfe witness search in front of the maintained
+Classification: coposit-created strict-copositivity variant with a bounded Frank–Wolfe witness search in front of the maintained
 `dickinson_2019` certificate algorithm.
 
-Public mode boundary: this Coposit-created model supports only `strictly_copositive`. Calling
+Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
 `solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
 
 ## Idea In Plain Language
@@ -45,7 +45,7 @@ Primary sources:
   [DOI 10.1016/j.laa.2018.12.025](https://doi.org/10.1016/j.laa.2018.12.025).
 
 The model is not a faithful historical baseline. The bounded multi-start policy, floating-point proposal phase, integer
-reconstruction, and placement before Dickinson are Coposit choices. The fallback was copied from the maintained
+reconstruction, and placement before Dickinson are coposit choices. The fallback was copied from the maintained
 [`dickinson_2019`](../../baselines/dickinson_2019/ALGORITHM.md) model. The authoritative implementation is [`solver.cpp`](solver.cpp).
 
 ## The Optimization Problem
@@ -330,7 +330,7 @@ local stationarity, or the iteration limit likewise cannot become a classificati
 Cooperative timeouts are checked during the exact input scan, floating row construction, every Frank–Wolfe iteration, exact witness
 verification, and the Dickinson traversal. A timeout is unresolved rather than `false`.
 
-## Source Behavior And Coposit Changes
+## Source Behavior And coposit Changes
 
 From Frank and Wolfe:
 
@@ -345,7 +345,7 @@ From `dickinson_2019`:
 - one admissible exact singular nullspace vector;
 - support traversal, packed signatures, and strict-zero conclusion.
 
-Coposit additions:
+coposit additions:
 
 - treat Frank–Wolfe only as a bounded witness proposal phase for a possibly nonconvex standard quadratic program;
 - reject exact coordinate and all-ones witnesses before allocating the numerical search;

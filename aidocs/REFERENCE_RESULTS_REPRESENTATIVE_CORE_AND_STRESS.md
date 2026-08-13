@@ -88,7 +88,7 @@ modes. Every current batch completed without interruption.
 
 ## Normal Model Results
 
-These are runs without external preprocessing. Literature baselines remain separate in meaning from the Coposit-created adaptive
+These are runs without external preprocessing. Literature baselines remain separate in meaning from the coposit-created adaptive
 model, even though one table keeps their benchmark data together. Each result cell is `solved/unresolved · substituted work`.
 
 | Model | Kind | Core strict | Core non-strict | Stress strict | Stress non-strict | Union wall strict/non-strict |
@@ -101,7 +101,7 @@ model, even though one table keeps their benchmark data together. Each result ce
 | Safi 2021 | Baseline | 292/92 · 473.765 s | 257/127 · 663.151 s | 68/172 · 862.311 s | 54/186 · 936.151 s | 332.837/411.604 s |
 | Bundfuss 2008 | Baseline | 278/106 · 556.016 s | 234/150 · 775.221 s | 45/195 · 989.963 s | 33/207 · 1,050.254 s | 382.249/467.257 s |
 | Sponsel 2012 | Baseline | 304/80 · 422.908 s | 262/122 · 629.423 s | 66/174 · 888.847 s | 64/176 · 895.346 s | 330.404/396.131 s |
-| Adaptive Sponsel–COPOMATRIX | Coposit-created | 364/20 · 129.692 s | 340/44 · 251.757 s | 178/62 · 386.996 s | 162/78 · 468.420 s | 140.637/191.319 s |
+| Adaptive Sponsel–COPOMATRIX | coposit-created | 364/20 · 129.692 s | 340/44 · 251.757 s | 178/62 · 386.996 s | 162/78 · 468.420 s | 140.637/191.319 s |
 
 Relative to the preceding first-narrow-pivot binary, the minimum-child rule changed no completed Boolean classification but moved
 four calls from completed to timeout and rescued none: strict matrix 10488 and non-strict matrices 9648, 10044, and 10489. Three old

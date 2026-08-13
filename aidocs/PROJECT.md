@@ -1,10 +1,10 @@
-# Coposit Project Overview
+# coposit Project Overview
 
 Last verified: 2026-08-12
 
 ## Purpose And Contract
 
-Coposit is a standalone C++17 project for exact copositivity (CP) and strict copositivity (SCP) decisions on nonempty symmetric
+coposit is a standalone C++17 project for exact copositivity (CP) and strict copositivity (SCP) decisions on nonempty symmetric
 matrices. Its public parsers accept exact rational input and return the denominator-cleared integer matrix together with the retained
 common positive denominator. Every maintained algorithm receives only the integer matrix. The solving core stores no rational
 matrices and makes no floating-point classification.
@@ -15,12 +15,12 @@ Boolean for the selected predicate. A timeout, node limit, parse failure, or exe
 reported as `false`.
 
 C++ clients that need the maintained exact SCP decision include `coposit/safe.hpp`, call
-`coposit::safe::is_strictly_copositive()`, and link `Coposit::safe`. This public composition applies the complete pre-check and
-connected-component pipeline before Dickinson Final. `Coposit::core` exposes only the model-independent headers and exact types.
+`coposit::safe::is_strictly_copositive()`, and link `coposit::safe`. This public composition applies the complete pre-check and
+connected-component pipeline before Dickinson Final. `coposit::core` exposes only the model-independent headers and exact types.
 
 The eight literature baselines, `adaptive_sponsel_copomatrix`, and `dickinson_final` support separately selected CP and SCP. Hadeler
 1983, Dickinson 2019, Dickinson Final, and Danninger 1990 can additionally classify both predicates in one traversal. Other
-Coposit-created models reject CP and combined mode explicitly.
+coposit-created models reject CP and combined mode explicitly.
 
 ## Repository Structure
 
@@ -28,8 +28,8 @@ Coposit-created models reject CP and combined mode explicitly.
 - `cpp/include/coposit/` — exact integers and matrices, parsers, packed supports, exact factorization, preprocessing, timeout state,
   open-node limit, and the model call contract.
 - `models/baselines/<model>/` — literature or source baselines.
-- `models/adaptive_sponsel_copomatrix/` and `models/dickinson_final/` — selected Coposit-created models.
-- `models/experiments/<model>/` — every other Coposit-created variant or comparison.
+- `models/adaptive_sponsel_copomatrix/` and `models/dickinson_final/` — selected coposit-created models.
+- `models/experiments/<model>/` — every other coposit-created variant or comparison.
 - `python/pycoposit/` — thin native adapter, sequential runner, and bounded multiprocessing runner.
 - `testdata/` — maintained SQLite corpus, schema, and exact external Matrix Market matrices.
 - `docs/` — human-facing explanations.
@@ -37,7 +37,7 @@ Coposit-created models reject CP and combined mode explicitly.
 - `research/` — papers, literature notes, and source material.
 - `experiments/` — experiment implementations, raw results, and experiment-specific reports.
 
-Coposit owns the generic exact checker infrastructure. The dependency direction is `FracESSA -> Coposit`; shared Coposit code does
+coposit owns the generic exact checker infrastructure. The dependency direction is `FracESSA -> coposit`; shared coposit code does
 not include FracESSA headers or own ESS reasons, game normalization, candidate traversal, or logging. FracESSA-specific traversal and
 forbidden-set policy remain private to the `fracessa` model.
 
@@ -57,7 +57,7 @@ The packed support representation uses `ceil(n / 64)` machine words. Shared infr
 the former dimension-63 limit.
 
 The parser result also records whether FracESSA's short compact circular form supplied the input. Matrix Market and complete
-upper-triangular inputs set this flag to false. The metadata is retained for clients such as FracESSA and ignored by Coposit's
+upper-triangular inputs set this flag to false. The metadata is retained for clients such as FracESSA and ignored by coposit's
 scale-invariant solving core.
 
 ## Executables And Processing Pipeline
@@ -123,7 +123,7 @@ the direct faithful-baseline measurement path.
 ## Model Inventory
 
 Each model owns one authoritative `ALGORITHM.md` beside its implementation. That file contains its provenance, mathematics,
-decision flow, exact representation, source-versus-Coposit boundary, and known difficult inputs; this overview intentionally does not
+decision flow, exact representation, source-versus-coposit boundary, and known difficult inputs; this overview intentionally does not
 duplicate those explanations.
 
 ### Literature baselines
@@ -141,7 +141,7 @@ All eight baselines support individually selected CP and SCP.
 | `bundfuss_2008` | Bundfuss–Dür simplicial partition; [`ALGORITHM.md`](../models/baselines/bundfuss_2008/ALGORITHM.md). |
 | `sponsel_2012` | Sponsel certificates with Bundfuss refinement; [`ALGORITHM.md`](../models/baselines/sponsel_2012/ALGORITHM.md). |
 
-### Selected Coposit-created models
+### Selected coposit-created models
 
 - `adaptive_sponsel_copomatrix` is the selected fast model and supports both individually selected predicates. Its authoritative
   description is [`ALGORITHM.md`](../models/adaptive_sponsel_copomatrix/ALGORITHM.md).
@@ -149,7 +149,7 @@ All eight baselines support individually selected CP and SCP.
   algorithmically identical copy of the Dickinson baseline; the public composition applies the shared prechecks before it. Its
   authoritative description is [`ALGORITHM.md`](../models/dickinson_final/ALGORITHM.md).
 
-### Coposit-created experiments
+### coposit-created experiments
 
 Every model in this table is strict-only.
 
@@ -228,7 +228,7 @@ construction evidence is in [`LITERATURE_MATRIX_FAMILIES.md`](LITERATURE_MATRIX_
 
 Required dependencies are CMake 3.18 or newer, a C++17 compiler, FLINT, MPFR, and GMP. Python 3.11 or newer and pybind11 are needed
 only for Python modules; GoogleTest is needed only for the test suite. Standalone builds enable applications, Python modules, and
-tests by default. When added with `add_subdirectory()`, Coposit builds only `Coposit::core` and `Coposit::safe` unless the embedding
+tests by default. When added with `add_subdirectory()`, coposit builds only `coposit::core` and `coposit::safe` unless the embedding
 project explicitly enables `COPOSIT_BUILD_APPS`, `COPOSIT_BUILD_PYTHON`, or `COPOSIT_BUILD_TESTS`.
 
 ```bash
@@ -254,4 +254,4 @@ explicitly exhaustive question.
 - Model-local `ALGORITHM.md` files, not this overview, are authoritative for algorithm details.
 - Dickinson has not been memory-bound in the maintained workloads. Adaptive Sponsel–COPOMATRIX retains full dense pending siblings;
   memory can become limiting around order 1,000 and above, or earlier on an unusually deep branch.
-- FracESSA is read-only source material for Coposit and is never a dependency of shared code.
+- FracESSA is read-only source material for coposit and is never a dependency of shared code.

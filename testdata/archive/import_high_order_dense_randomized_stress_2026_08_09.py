@@ -106,7 +106,7 @@ def upper_text(matrix: np.ndarray) -> tuple[str, int, float]:
 
 
 def generated_rows() -> Iterator[tuple[int, str, int, str, str, int, float]]:
-    prefix = "Coposit deterministic dense randomized high-order stress generator 2026-08-09"
+    prefix = "coposit deterministic dense randomized high-order stress generator 2026-08-09"
     for dimension in DIMENSIONS:
         seen: set[str] = set()
         for kind in KINDS:

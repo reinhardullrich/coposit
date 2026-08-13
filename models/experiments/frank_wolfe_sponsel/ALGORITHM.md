@@ -1,10 +1,10 @@
 # Exact One-Step Frank–Wolfe Sponsel
 
-Classification: Coposit-created strict-copositivity variant. It adds one exact centre-to-vertex Frank–Wolfe line minimization to
+Classification: coposit-created strict-copositivity variant. It adds one exact centre-to-vertex Frank–Wolfe line minimization to
 the maintained Sponsel 2012 node flow and otherwise retains Sponsel's strict `H` certificate, Bundfuss split, traversal, and
 resource outcomes unchanged.
 
-Public mode boundary: this Coposit-created model supports only `strictly_copositive`. Calling
+Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
 `solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
 
 ## Idea In Plain Language
@@ -37,7 +37,7 @@ Primary sources are:
   Applications* 428(7), 1511–1523 (2008), [DOI 10.1016/j.laa.2007.09.035](https://doi.org/10.1016/j.laa.2007.09.035).
 
 This combination is not a historical algorithm from those papers. The single exact Frank–Wolfe step and its placement after a
-failed strict `H` certificate are Coposit choices. The fallback was copied from
+failed strict `H` certificate are coposit choices. The fallback was copied from
 [`sponsel_2012`](../../baselines/sponsel_2012/ALGORITHM.md). The authoritative implementation is [`solver.cpp`](solver.cpp).
 
 ## Decision Problem And Simplex Nodes
@@ -301,7 +301,7 @@ subsequent result. Consequently:
 - equality is rejected exactly;
 - a timeout or open-node limit remains unresolved rather than `false`.
 
-## Source Behavior And Coposit Changes
+## Source Behavior And coposit Changes
 
 Retained unchanged from `sponsel_2012`:
 
@@ -312,7 +312,7 @@ Retained unchanged from `sponsel_2012`:
 - three-lambda Bundfuss split and exact child construction;
 - child inspection, last-in-first-out traversal, content reduction, timeout checkpoints, and open-node limit.
 
-Added by this Coposit variant:
+Added by this coposit variant:
 
 - one centre point per node that fails the `H` certificate;
 - the minimum-row-sum Frank–Wolfe vertex;
@@ -326,7 +326,7 @@ No implementation is shared with another model. The solver was copied so the Spo
 The Frank–Wolfe addition has no loop and always terminates after one triangular matrix scan and a fixed number of integer operations.
 It can only remove a node by rejection; otherwise it leaves the Sponsel tree unchanged.
 
-The inherited same-dimensional partition need not expose a boundary zero quickly. Coposit stops unresolved if a split would exceed
+The inherited same-dimensional partition need not expose a boundary zero quickly. coposit stops unresolved if a split would exceed
 50,000 simultaneously unfinished nodes. Timed native modules also observe cooperative timeout checkpoints. Neither condition is
 reported as a negative classification.
 

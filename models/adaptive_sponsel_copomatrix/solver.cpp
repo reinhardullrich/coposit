@@ -140,7 +140,7 @@ std::pair<matrix_integer, matrix_integer> sponsel_split(const matrix_integer& gr
 }
 
 /*
- * Coposit-created adaptive combination of Sponsel's H-enhanced Bundfuss split and Xu-Yao COPOMATRIX projection.
+ * coposit-created adaptive combination of Sponsel's H-enhanced Bundfuss split and Xu-Yao COPOMATRIX projection.
  *
  * A node chooses the first COPOMATRIX pivot with the minimum exact immediate-child count. It uses that pivot immediately when the
  * minimum is at most two; otherwise it applies Sponsel's certificate and split. After 1,000 consecutive same-order Sponsel splits on

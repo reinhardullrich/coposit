@@ -26,7 +26,7 @@ certified, and it returns `false` as soon as a vertex or edge supplies a nonposi
 
 ## Name And Sources
 
-The identifier follows Coposit's `<first-author>_<year>` rule. `bundfuss` names Stefan Bundfuss, the paper's first author, and
+The identifier follows coposit's `<first-author>_<year>` rule. `bundfuss` names Stefan Bundfuss, the paper's first author, and
 `2008` is its publication year.
 
 Primary mathematical reference:
@@ -38,7 +38,7 @@ The paper specifies the simplicial-partition method family. This model's concret
 Salmerón's `bundfuss` implementation in
 [`copositivity-detection-bundfuss-faces`](https://github.com/josmangarsal/copositivity-detection-bundfuss-faces), introduced in
 [commit `5537fd94768efbce85b3225b05bf39db8d81a332`](https://github.com/josmangarsal/copositivity-detection-bundfuss-faces/commit/5537fd94768efbce85b3225b05bf39db8d81a332)
-in 2018. The upstream repository contains no captured license, so Coposit does not copy its source into this maintained model. The
+in 2018. The upstream repository contains no captured license, so coposit does not copy its source into this maintained model. The
 independently written exact experiment is retained under
 [`experiments/copositivity_bundfuss_flint_2026-08-07/flint/`](../../../experiments/copositivity_bundfuss_flint_2026-08-07/flint/).
 
@@ -117,7 +117,7 @@ The new point on the selected edge is
 w=\lambda v_i+(1-\lambda)v_j.
 \]
 
-These are the exact formulas used by Salmerón's `bundfuss` route. Coposit reduces the numerator and denominator of λ by their
+These are the exact formulas used by Salmerón's `bundfuss` route. coposit reduces the numerator and denominator of λ by their
 greatest common divisor but does not alter its value.
 
 The three candidates have a geometric meaning. Along the edge, $\lambda_1$ is where $w^TAv_i=0$, $\lambda_3$ is where
@@ -131,7 +131,7 @@ The edge point divides the current simplex into two children:
 - replace $v_i$ with $w$ and retain $v_j$;
 - retain $v_i$ and replace $v_j$ with $w$.
 
-All other vertices remain unchanged. Both child simplices must pass. If $\lambda=p/d$ in lowest terms and $q=d-p$, Coposit stores
+All other vertices remain unchanged. Both child simplices must pass. If $\lambda=p/d$ in lowest terms and $q=d-p$, coposit stores
 $d^2$ times the rational child Gram matrix. Its entries involving the new vertex are
 
 \[
@@ -165,7 +165,7 @@ content is then removed. This changes only scale, not the represented quadratic 
 Each reached child is still independently denominator-cleared and content-reduced before inspection. Delaying the second allocation
 therefore changes neither its stored matrix nor the arithmetic seen by later nodes.
 
-The refinement keeps the same dimension. Coposit allows at most 50,000 open nodes. Before splitting one node into its two
+The refinement keeps the same dimension. coposit allows at most 50,000 open nodes. Before splitting one node into its two
 unfinished children, it returns the distinct unresolved `node_limit` outcome if those children would raise the count above that
 limit. A timed native-module run may also observe the shared signal flag at node and matrix-row boundaries and return a distinct
 timeout outcome. Neither resource outcome is a negative classification.
@@ -192,11 +192,11 @@ The maintained code was compared with that concrete `bundfuss` route and impleme
 Preparing the shared split coefficients once and constructing the second sibling only after the first inspection are
 representation and scheduling optimizations. They do not change a selected edge, λ value, child, inspection, or traversal decision.
 
-Non-strict mode follows the paper's boundary inequalities. Strict mode is Coposit's adaptation: diagonal equality and two-generator
+Non-strict mode follows the paper's boundary inequalities. Strict mode is coposit's adaptation: diagonal equality and two-generator
 equality reject because either one supplies a nonnegative zero. The model must therefore not be described as a line-for-line
 implementation of a strict algorithm from the 2008 paper. It does not implement Salmerón's separate monotonicity-enhanced `zbund`
 route and adds no low-dimensional shortcut, SNC slice, Dutour ratio split, graph reduction, or other solver.
 
 Timeout checkpoints are enabled only in timed native-module builds. Standalone model and test builds compile the same calls to
 no-ops, so they add no timer thread, clock read, or signal handler. The fixed 50,000-open-node guard applies to every build and is a
-Coposit resource boundary; it supplies no mathematical decision.
+coposit resource boundary; it supplies no mathematical decision.

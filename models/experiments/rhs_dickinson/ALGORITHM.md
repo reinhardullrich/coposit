@@ -1,8 +1,8 @@
 # RHS Dickinson
 
-Classification: Coposit-created exact strict-copositivity variant of the maintained `dickinson_2019` adaptation.
+Classification: coposit-created exact strict-copositivity variant of the maintained `dickinson_2019` adaptation.
 
-Public mode boundary: this Coposit-created model supports only `strictly_copositive`. Calling
+Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
 `solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
 
 ## Idea In Plain Language
@@ -30,7 +30,7 @@ is represented by the positively scaled integer vector $q u_0+p d_k$.
 ## Name, Source, And Classification
 
 “RHS” means **right-hand side**. The name distinguishes the model from the historical baseline because choosing a right-hand side to
-maximize later coverage is a Coposit traversal heuristic, not an algorithm specified in the paper.
+maximize later coverage is a coposit traversal heuristic, not an algorithm specified in the paper.
 
 The underlying certificate theorem, non-strict algorithms, and permission to replace $\mathbf1$ by any strictly positive vector come
 from:
@@ -41,9 +41,9 @@ from:
 The note immediately following Dickinson's Algorithms 1 and 2 states that the equation $Xw=\mathbf1$ may use any right-hand side in
 the strictly positive orthant and still yields a valid construction.
 
-This model was copied from Coposit's [`dickinson_2019`](../../baselines/dickinson_2019/ALGORITHM.md) implementation. The local authoritative source
+This model was copied from coposit's [`dickinson_2019`](../../baselines/dickinson_2019/ALGORITHM.md) implementation. The local authoritative source
 is [`solver.cpp`](solver.cpp). The fixed subset traversal, non-strict coverage theorem, singular-vector rule, negative witness, and
-strict final interpretation remain those of the baseline. The exact one-dimensional right-hand-side search is the Coposit change.
+strict final interpretation remain those of the baseline. The exact one-dimensional right-hand-side search is the coposit change.
 
 ## Problem And Notation
 
@@ -270,7 +270,7 @@ RHS heuristic does not improve coverage produced by singular supports.
 
 ## Strict Copositivity
 
-Dickinson's published construction certifies non-strict copositivity. Coposit instead decides only strict copositivity. For every
+Dickinson's published construction certifies non-strict copositivity. coposit instead decides only strict copositivity. For every
 generated vector $u$, it checks
 
 \[
@@ -338,7 +338,7 @@ do not exist.
 Timed Python builds check the cooperative timeout flag at support, certificate, factorization, product-row, and direction boundaries.
 A timeout remains unresolved and is never returned as a negative classification.
 
-## Source Behavior And Coposit Changes
+## Source Behavior And coposit Changes
 
 Preserved from `dickinson_2019`:
 

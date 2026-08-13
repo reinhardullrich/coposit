@@ -1,8 +1,8 @@
 # FracESSA First-Order Global-Minimum Model
 
-Classification: Coposit-created strict-copositivity model adapted from FracESSA's exact safe candidate search.
+Classification: coposit-created strict-copositivity model adapted from FracESSA's exact safe candidate search.
 
-Public mode boundary: this Coposit-created model supports only `strictly_copositive`. Calling
+Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
 `solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
 
 ## Idea In Plain Language
@@ -33,7 +33,7 @@ If the complete pruned search finds only negative candidate payoffs, it returns 
 ## Name And Sources
 
 The model is named `fracessa` because its support traversal and exact candidate equations come from FracESSA. It is not the original
-FracESSA program and is not a historical baseline: Coposit changes the mathematical objective from enumerating and classifying ESSs
+FracESSA program and is not a historical baseline: coposit changes the mathematical objective from enumerating and classifying ESSs
 to deciding the sign of the global value of a standard quadratic program.
 
 The source implementation was read locally from FracESSA revision
@@ -69,7 +69,7 @@ The simplex is compact and the quadratic objective is continuous, so a global ma
 
 ## Shared Direct Test Through Order Three
 
-For every generated support $S$ with $|S|\leq3$, the model first applies Coposit's shared exact strict-copositivity criterion to
+For every generated support $S$ with $|S|\leq3$, the model first applies coposit's shared exact strict-copositivity criterion to
 the principal matrix $A_S$. The check is made on the original input $A$, before constructing the reduced KKT system for $Q=-A$.
 It uses the positive-diagonal rule at order one, the exact determinant rule at order two, and the exact
 determinant-and-adjugate rule at order three. The implementation lives in
@@ -255,7 +255,7 @@ Retained from FracESSA:
 - full outside-strategy inequalities;
 - delayed activation of accepted-support pruning.
 
-Mathematical and output changes made for Coposit:
+Mathematical and output changes made for coposit:
 
 - use $Q=-A$ and decide strict copositivity from exact KKT payoff signs;
 - reject immediately when the shared exact order-at-most-three test finds a nonpositive principal face;
@@ -267,8 +267,8 @@ Mathematical and output changes made for Coposit:
 Representation-only changes:
 
 - replace the fixed 63-bit support mask with the shared packed support class using `ceil(n / 64)` words;
-- accept Coposit's integer matrix directly instead of clearing rational input denominators;
-- reuse Coposit's shared exact fraction-free LDLT factorization;
+- accept coposit's integer matrix directly instead of clearing rational input denominators;
+- reuse coposit's shared exact fraction-free LDLT factorization;
 - retain only the current exact payoff numerator rather than candidate objects, vectors, extended supports, logs, or a best value;
 - omit FracESSA's floating-point prefilter, circular-game symmetry path, and public candidate materialization.
 

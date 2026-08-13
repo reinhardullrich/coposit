@@ -99,9 +99,9 @@ class _QueueRunner:
                 failed = [process for process in self._workers if process.exitcode not in (None, 0)]
                 if failed:
                     details = ", ".join(f"{process.name}={process.exitcode}" for process in failed)
-                    raise RuntimeError(f"Coposit worker exited without a result: {details}")
+                    raise RuntimeError(f"coposit worker exited without a result: {details}")
                 if all(process.exitcode is not None for process in self._workers):
-                    raise RuntimeError("All Coposit workers exited before producing the expected result")
+                    raise RuntimeError("All coposit workers exited before producing the expected result")
 
     def shutdown(self, *, cancel: bool, join_timeout_s: float = 5.0) -> None:
         if cancel:

@@ -14,7 +14,7 @@ It includes only the six maintained historical or source-derived cone baselines:
 - Bundfuss 2008;
 - Sponsel 2012.
 
-Adaptive Dutour-Danninger and Frank–Wolfe Sponsel are excluded because they are Coposit-created variants, not original baselines.
+Adaptive Dutour-Danninger and Frank–Wolfe Sponsel are excluded because they are coposit-created variants, not original baselines.
 “Solved” means the model returned a strict-copositivity Boolean matching the corpus. A timeout, node limit, or error remains
 unresolved and is never counted as a negative classification.
 

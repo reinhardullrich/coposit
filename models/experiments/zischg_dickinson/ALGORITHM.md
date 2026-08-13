@@ -1,9 +1,9 @@
 # Zischg–Dickinson
 
-Classification: Coposit-created strict adaptation of Dickinson's 2019 certificate model using the Level 2 negative-graph reduction
+Classification: coposit-created strict adaptation of Dickinson's 2019 certificate model using the Level 2 negative-graph reduction
 derived from Zischg and Bomze.
 
-Public mode boundary: this Coposit-created model supports only `strictly_copositive`. Calling
+Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
 `solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
 
 ## Idea In Plain Language
@@ -25,7 +25,7 @@ The model combines:
 - Peter J. C. Dickinson, “A New Certificate for Copositivity,” *Linear Algebra and its Applications* 569 (2019), 15–37,
   [DOI 10.1016/j.laa.2018.12.025](https://doi.org/10.1016/j.laa.2018.12.025).
 
-Zischg and Bomze prove non-strict component decomposition. Coposit's
+Zischg and Bomze prove non-strict component decomposition. coposit's
 [local note](../../../research/STRICT_COPOSITIVITY_GRAPH_AND_DUPLICATE_ROW_REDUCTIONS.md) supplies the strict extension and Level 2
 derivation. The rest of this model is copied from `dickinson_2019`, the exact strict adaptation of Dickinson's Algorithms 1 and 2.
 Because the Level 2 rule changes traversal, this is not the published Dickinson baseline.
@@ -109,7 +109,7 @@ for support sizes k = 1,...,n in numeric-mask order:
 return true
 ```
 
-## Source Behavior And Coposit Changes
+## Source Behavior And coposit Changes
 
 Retained from `dickinson_2019` are the support order, coverage theorem, solve and singular branches, strict minimal-zero conclusion,
 packed signature representation, exact LDLT arithmetic, low-order rejection, and termination rules. The sole mathematical change

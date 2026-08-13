@@ -2,7 +2,7 @@
 
 # AGENTS.md
 
-**Only Coposit-specific instructions and explicit Coposit overrides belong here.**
+**Only coposit-specific instructions and explicit coposit overrides belong here.**
 
 ## Historical Context
 
@@ -17,7 +17,7 @@
 1. Work in the main worktree at `/home/reinhard/projects/coposit` unless Reinhard explicitly approves another worktree first.
 2. `/home/reinhard/projects/fracessa` and everything under it are permanently read-only for this project. Never create, modify,
    move, or delete anything there.
-3. Copy needed source material into Coposit.
+3. Copy needed source material into coposit.
 4. Do not copy generated builds, binaries, object files, caches, or nested Git metadata.
 5. FracESSA's ignored `research/` and `experiments/` material is not present in a fresh clone. Preserve the selected files manually
    before the source worktree is removed.
@@ -32,9 +32,9 @@
 
 ## Extraction Boundary
 
-1. Coposit owns its exact integer wrappers, exact matrix storage, and generic copositivity API. The dependency direction is
-   `FracESSA -> Coposit`, never the reverse.
-2. Shared Coposit infrastructure must not include FracESSA headers or own FracESSA concepts such as candidate traversal, ESS reasons,
+1. coposit owns its exact integer wrappers, exact matrix storage, and generic copositivity API. The dependency direction is
+   `FracESSA -> coposit`, never the reverse.
+2. Shared coposit infrastructure must not include FracESSA headers or own FracESSA concepts such as candidate traversal, ESS reasons,
    circular game normalization, or logging. It may own the generic packed support representation used consistently by models, while
    each model keeps its traversal and pruning policy private.
 3. Do not inherit FracESSA's dimension-63 limit. Remove or omit fixed-width sign-scan, graph, parser, and runner limits before
@@ -53,7 +53,7 @@
 ## Model Structure
 
 1. Put unchanged source and literature baselines in `models/baselines/<model-name>/`. Keep the selected
-   `adaptive_sponsel_copomatrix` and `dickinson_final` models directly under `models/`; put every other Coposit-created variant or
+   `adaptive_sponsel_copomatrix` and `dickinson_final` models directly under `models/`; put every other coposit-created variant or
    comparison under `models/experiments/<model-name>/`. Do not create a separate legacy-model category. Each model directory owns its
    complete algorithm implementation, including copied cone, Danninger, or hybrid code it changes or interweaves.
 2. Create a new model by copying the closest existing model and changing that copy independently. Duplication between models is deliberate
@@ -62,7 +62,7 @@
    matrix storage, packed support storage, reusable exact factorization, input parsing, and the minimal model call contract.
 4. Every model implements the same `coposit::model::solve(const matrix_integer&, copositivity_mode)` link-time contract and assumes
    its matrix is nonempty, square, and symmetric, with strict mode as the default. Literature baselines implement both modes;
-   Coposit-created variants reject non-strict mode until explicitly
+   coposit-created variants reject non-strict mode until explicitly
    extended. `adaptive_sponsel_copomatrix` is explicitly extended to both individually selected modes but does not implement combined
    classification. The user-facing `coposit` launcher requires `fast` or `safe`, followed by `strict` or `non-strict`; `safe` also accepts
    `both` and returns Dickinson Final's two results from one classification traversal. `fast` executes an `adaptive_sponsel_copomatrix`
@@ -78,18 +78,18 @@
 6. A baseline must preserve the source model's mathematical tests, split choice and construction, traversal, pruning, and termination
    rules. Arithmetic, storage, and recomputation may be optimized only when those mathematical decisions remain unchanged. Do not
    add another model's shortcut or reduction to a baseline.
-7. Give Coposit-created models descriptive non-citation names. The first mathematical change to a baseline requires a copied model
-   directory and a new name; never let an original baseline silently become a Coposit variant.
+7. Give coposit-created models descriptive non-citation names. The first mathematical change to a baseline requires a copied model
+   directory and a new name; never let an original baseline silently become a coposit variant.
 8. Every maintained algorithm must have one authoritative, human-facing `ALGORITHM.md` beside its implementation. This file is only
    about the algorithm: do not put build instructions, binary usage, benchmarks, experiment results, or development history in it.
    Write for a reader who understands basic programming and mathematics but does not already know the source: begin with the idea
    in plain language, define necessary terms and notation, and only then give exact formulas and implementation details. Explain
-   why the algorithm has its name; classify it as a faithful baseline, strict adaptation, or Coposit-created variant; cite the
+   why the algorithm has its name; classify it as a faithful baseline, strict adaptation, or coposit-created variant; cite the
    primary paper, repository, revision, and local reconstruction or source implementation from which it came; and describe the
    mathematics and complete decision flow in enough detail for a human to reproduce and verify it. Document node state, acceptance
    and rejection tests, witnesses, formulas, reductions or subdivisions, pivot or split selection, child construction and traversal
    order, exact-arithmetic representation, termination behavior, and mathematical limits. Clearly separate source behavior,
-   Coposit changes, and representation-only optimizations. Update `ALGORITHM.md` in the same task as every mathematical or
+   coposit changes, and representation-only optimizations. Update `ALGORITHM.md` in the same task as every mathematical or
    control-flow change. Include a `Known Difficult Inputs` section that explains the matrix structures on which the algorithm's own
    branching, coverage, arithmetic, or termination behavior becomes problematic. This section is about weaknesses, not benefits;
    it may identify a stable corpus matrix as a reproducible example, but must not contain timings, benchmark tables, success rates,

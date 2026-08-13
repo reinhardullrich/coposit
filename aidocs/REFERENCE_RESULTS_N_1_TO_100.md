@@ -5,7 +5,7 @@ Last updated: 2026-08-10
 This report has two explicit scopes. `SCP` means a strict-copositivity check; `CP` means a copositivity check using the non-strict
 inequality. The current baseline section covers all 2,084 retained matrices with `n <= 100`, through corpus ID 10597, in both modes.
 The later all-model comparison remains the preserved 2,078-matrix snapshot
-through ID 10504 because the Coposit-created variants have not all been rerun on the six later order-51 matrices.
+through ID 10504 because the coposit-created variants have not all been rerun on the six later order-51 matrices.
 
 ## Current Eight-Baseline Completion
 

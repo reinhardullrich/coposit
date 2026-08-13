@@ -1,9 +1,9 @@
 # Support-Polished Frank–Wolfe Dickinson
 
-Classification: Coposit-created strict-copositivity variant with a bounded Frank–Wolfe witness search, one exact active-support
+Classification: coposit-created strict-copositivity variant with a bounded Frank–Wolfe witness search, one exact active-support
 polishing test, and the maintained `dickinson_2019` certificate algorithm as its complete fallback.
 
-Public mode boundary: this Coposit-created model supports only `strictly_copositive`. Calling
+Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
 `solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
 
 ## Idea In Plain Language
@@ -47,7 +47,7 @@ Primary sources:
 - Peter J. C. Dickinson, “A New Certificate for Copositivity,” *Linear Algebra and its Applications* 569, 15–37 (2019),
   [DOI 10.1016/j.laa.2018.12.025](https://doi.org/10.1016/j.laa.2018.12.025).
 
-The model is not a faithful historical baseline. It was copied from Coposit's maintained
+The model is not a faithful historical baseline. It was copied from coposit's maintained
 [`frank_wolfe_dickinson`](../frank_wolfe_dickinson/ALGORITHM.md) model. The exact support-polishing step is the sole mathematical
 change. The fallback remains a self-contained copy of the maintained
 [`dickinson_2019`](../../baselines/dickinson_2019/ALGORITHM.md) model. The
@@ -391,7 +391,7 @@ become a classification.
 Cooperative timeouts are checked during the exact input scan, floating row construction, every Frank–Wolfe iteration, exact witness
 verification, support copying and factorization, and the Dickinson traversal. A timeout is unresolved rather than `false`.
 
-## Source Behavior And Coposit Changes
+## Source Behavior And coposit Changes
 
 From Frank and Wolfe:
 
@@ -406,7 +406,7 @@ From `dickinson_2019`:
 - one admissible exact singular nullspace vector;
 - support traversal, packed signatures, and strict-zero conclusion.
 
-Coposit additions:
+coposit additions:
 
 - treat Frank–Wolfe only as a bounded witness proposal phase for a possibly nonconvex standard quadratic program;
 - reject exact coordinate and all-ones witnesses before allocating the numerical search;

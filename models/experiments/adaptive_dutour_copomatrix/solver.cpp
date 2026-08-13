@@ -95,7 +95,7 @@ struct sparse_ray {
 };
 
 /*
- * Coposit-created adaptive combination of Dutour Sikirić's cone split and Xu-Yao COPOMATRIX projection.
+ * coposit-created adaptive combination of Dutour Sikirić's cone split and Xu-Yao COPOMATRIX projection.
  *
  * A node uses the first COPOMATRIX pivot producing at most two children. Otherwise it performs one Dutour split. After 100
  * consecutive same-order Dutour splits on a branch, it forces COPOMATRIX at pivot zero and resets the streak in every reduced child.

@@ -25,7 +25,7 @@ than a binary edge split, but every child still has the same dimension as its pa
 
 ## Name And Sources
 
-The model identifier follows Coposit's `<first-author>_<year>` rule. `safi` names the paper's first author, Mohammadreza Safi, and
+The model identifier follows coposit's `<first-author>_<year>` rule. `safi` names the paper's first author, Mohammadreza Safi, and
 `2021` is the publication year. The paper calls the algorithm **SNC**, formed from the authors' surnames Safi, Nabavi, and Caron.
 
 Primary reference:
@@ -233,7 +233,7 @@ unresolved rather than a negative classification.
 
 ## Non-strict Source Rules, Strict Adaptation, Choices, And Limits
 
-The published Algorithm 1 supplies non-strict mode. Coposit keeps its maximal slicing parameters and child construction in both modes
+The published Algorithm 1 supplies non-strict mode. coposit keeps its maximal slicing parameters and child construction in both modes
 and changes only the terminal inequalities when strict mode is requested:
 
 - a nonpositive vertex or centre rejects;
@@ -244,7 +244,7 @@ The paper leaves the positive slicing vertex and cut order open. This model pres
 choices: first endpoint of the first negative Gram entry, ascending cut indices, and depth-first traversal.
 
 As with other simplex refinements, a boundary matrix may generate an unending refinement without exposing its zero direction.
-Coposit allows at most 50,000 open nodes. Before a slice creates its unfinished children, it returns the distinct unresolved
+coposit allows at most 50,000 open nodes. Before a slice creates its unfinished children, it returns the distinct unresolved
 `node_limit` outcome if the logical unfinished count, including unmaterialized siblings, would exceed that count. A timed native-module run may also
 observe the shared signal flag at simplex and matrix-row boundaries and return a distinct timeout outcome. Neither resource result
 is `false`.

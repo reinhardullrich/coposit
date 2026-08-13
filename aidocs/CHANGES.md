@@ -2,6 +2,12 @@
 
 This append-only file records meaningful decisions, results, and evidence that are not clear from Git. Do not log routine edits here.
 
+## 2026-08-13 — Project name is always lowercase
+
+- Standardized the project and program name as `coposit` everywhere, including human documentation, CMake project metadata, public
+  messages, model descriptions, historical notes, generator provenance, and maintained corpus source labels. Conventional uppercase
+  C/C++ identifiers such as `COPOSIT_*` remain unchanged.
+
 ## 2026-08-12 — Maintained database reclaims replaced result pages
 
 - Enabled SQLite `auto_vacuum=FULL` in the maintained corpus and canonical schema, then ran one full `VACUUM`. Repeated benchmark
@@ -103,7 +109,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 ## 2026-08-11 — Low-order Dickinson shortcut consolidated in the shared precheck
 
-- Removed Coposit's direct order-at-most-three test from both `dickinson_2019` and `dickinson_final`, including the complete-input
+- Removed coposit's direct order-at-most-three test from both `dickinson_2019` and `dickinson_final`, including the complete-input
   shortcut through order three. The baseline now follows Dickinson's coverage and certificate path on every support; the final model
   remains algorithmically identical.
 - Kept the exact low-order criterion solely in the shared precheck. Public `safe` therefore applies it once before `dickinson_final`,
@@ -129,7 +135,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 ## 2026-08-11 — Unselected models consolidated under experiments
 
 - Kept only `adaptive_sponsel_copomatrix`, `baselines/`, and `experiments/` directly under `models/`. Moved every other
-  Coposit-created model and the former Zischg comparison into `models/experiments/`; removed the obsolete `models/legacy/` category.
+  coposit-created model and the former Zischg comparison into `models/experiments/`; removed the obsolete `models/legacy/` category.
 - Removed the empty `generalized_dickinson/` directory left after that model's earlier purge. Updated CMake source and test paths,
   Python native-module registration, current documentation, and model-local cross-references without changing model identifiers or
   algorithms.
@@ -228,9 +234,9 @@ This append-only file records meaningful decisions, results, and evidence that a
 ## 2026-08-11 — One exact C++ number boundary serves FracESSA and Matrix Market input
 
 - Added a standards-aware C++ Matrix Market parser for array and coordinate storage and real, complex, integer, and pattern fields.
-  Coposit accepts only Matrix Market matrices explicitly declared `symmetric`; it rejects every other structure immediately and
+  coposit accepts only Matrix Market matrices explicitly declared `symmetric`; it rejects every other structure immediately and
   mirrors the stored lower triangle without a post-parse symmetry scan. Nonzero complex imaginary parts remain incompatible with
-  Coposit's real-matrix boundary.
+  coposit's real-matrix boundary.
 - Extended the compact format and named it the FracESSA format. It accepts full upper-triangle and short circular-symmetric input,
   exact decimals and scientific notation, plus integer fractions written `[+|-]numerator/denominator`. The denominator must be
   unsigned and nonzero; ambiguous signs such as `1/-2` and `-1/-2` are rejected.
@@ -277,7 +283,7 @@ This append-only file records meaningful decisions, results, and evidence that a
   directory and accept the standard Matrix Market `matrix array integer symmetric` and `matrix coordinate integer symmetric` forms;
   every C++ model still receives the same `dimension#upper-triangle-values` input.
 - Externalized the 201 matrix rows larger than 500 KB into `testdata/matrices/<matrix_id>.mtx`. Symmetric Matrix Market lower-triangle
-  column-major order is identical to Coposit's packed upper-triangle row-major order, so no matrix value or classification changed.
+  column-major order is identical to coposit's packed upper-triangle row-major order, so no matrix value or classification changed.
 - Compared the actual encoded byte counts and retained the smaller exact representation per file: 132 arrays and 69 coordinates. All
   69 coordinate files have below one-percent stored-triangle density; every retained array is at least 75% dense. External matrix
   storage fell from 729,009,854 to 458,287,571 bytes (37%). Streaming canonical hashes matched for all 201 matrices.
@@ -515,7 +521,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 - Copied FracESSA's current generic order exactly: direct exact orders one through three, nonpositive-diagonal rejection,
   nonnegative-off-diagonal acceptance, Qi negative-part diagonal-dominance acceptance, exact all-ones rejection, and negative-entry
   connected-component dispatch to the supplied final algorithm.
-- Reused Coposit's existing exact small criteria and dynamic packed support. The component path therefore crosses 64-bit word
+- Reused coposit's existing exact small criteria and dynamic packed support. The component path therefore crosses 64-bit word
   boundaries without FracESSA's former dimension limit. Input validation and cooperative timeout checkpoints remain explicit.
 - Deliberately omitted FracESSA-specific candidate/Hessian decisions, its experimental KKT route, and the positive-definiteness and
   Z-matrix checks already removed from FracESSA. A non-strict-copositivity adaptation remains deferred until its inequalities are
@@ -539,7 +545,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 ## 2026-08-10 — Selected adaptive model on Representative Core and Stress
 
-- Extended `REFERENCE_RESULTS_REPRESENTATIVE_CORE_AND_STRESS.md` with a separate strict-only Coposit-created-model section rather
+- Extended `REFERENCE_RESULTS_REPRESENTATIVE_CORE_AND_STRESS.md` with a separate strict-only coposit-created-model section rather
   than mixing the selected hybrid into the faithful literature-baseline tables.
 - Ran the current streak-1,000 `adaptive_sponsel_copomatrix` binary on the full 524-matrix Representative Core and Stress union with
   a five-second cutoff, CPU 3 for dispatch/database work, and solver workers on CPUs 4–7. It completed 458 union matrices, timed out
@@ -577,7 +583,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 - Replaced Danninger's recursive staircase walk with an explicit LIFO frame vector while preserving its down-before-right,
   plus-before-minus, and first-child depth-first order.
-- Applied Coposit's existing 50,000-open-node limit to active matrix checks and staircase frames. The native wrapper reports an
+- Applied coposit's existing 50,000-open-node limit to active matrix checks and staircase frames. The native wrapper reports an
   exhausted limit as unresolved `node_limit`, never as a negative classification.
 - Added the order-999 Johnson-Reams generalized Horn construction behind corpus matrix 10244 as a focused regression. Non-strict mode
   now reaches the node limit instead of terminating its worker with `SIGSEGV`; all baseline source-order checks remain intact.
@@ -614,7 +620,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 ## 2026-08-10 — Clarified baseline identity and locked source-defining traces
 
 - Retained the `dickinson_2019` and `copomatrix_2011` identifiers. Their `ALGORITHM.md` files now state prominently that Dickinson
-  adds Coposit's direct order-at-most-three test, while COPOMATRIX uses depth-first principal-before-Schur traversal and early
+  adds coposit's direct order-at-most-three test, while COPOMATRIX uses depth-first principal-before-Schur traversal and early
   all-diagonal checks instead of Algorithm 2's complete-frontier set replacement. The retained Xu–Yao paper was checked directly.
 - Added one test-only source-conformance trace to each of the eight literature baselines. They pin Dutour split/child order,
   Danninger plus-before-minus order, COPOMATRIX principal-before-Schur order, Hadeler numeric-mask pair order, Dickinson certificate
@@ -692,7 +698,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 ## 2026-08-10 — Non-strict and strict decision modes for all baselines
 
 - Replaced the strict-only model contract with `solve(matrix, copositivity_mode)`, defaulting to `strictly_copositive`. The eight
-  literature baselines now also implement exact non-strict copositivity; Coposit-created variants reject non-strict mode explicitly.
+  literature baselines now also implement exact non-strict copositivity; coposit-created variants reject non-strict mode explicitly.
 - Added the non-strict boundary rules from each source family: Danninger's zero-pivot reduction, Hadeler's negative-determinant
   criterion, Dickinson's continued certificate traversal after a nonnegative zero, COPOMATRIX's non-strict projection rules,
   non-strict Dutour/Bundfuss/Safi comparisons, and Sponsel's exact positive-semidefinite `H` certificate.
@@ -744,7 +750,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 - Moved the eight unchanged source and literature baselines—Dutour 2018, Danninger 1990, COPOMATRIX 2011, Hadeler 1983,
   Dickinson 2019, Safi 2021, Bundfuss 2008, and Sponsel 2012—under `models/baselines/`. Model identifiers and public binaries did
-  not change. CMake accepts an optional source-directory argument for the existing Python-module helper; Coposit-created models
+  not change. CMake accepts an optional source-directory argument for the existing Python-module helper; coposit-created models
   remain directly under `models/`. All 31 maintained tests passed after the move.
 - Added validated `--matrix-id-from` and `--matrix-id-to` bounds to `python/run_results.py`, allowing exact targeted corpus runs
   without copying data or selecting unrelated matrices that share the same dimensions.
@@ -951,7 +957,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 ## 2026-08-09 — Adaptive Sponsel–COPOMATRIX with forced progress
 
-- Added `adaptive_sponsel_copomatrix` as an isolated Coposit-created model. It takes the first COPOMATRIX pivot with at most two
+- Added `adaptive_sponsel_copomatrix` as an isolated coposit-created model. It takes the first COPOMATRIX pivot with at most two
   children; otherwise it applies Sponsel's exact strict `H` certificate and inherited Bundfuss split.
 - Each branch forces COPOMATRIX at pivot zero after 100 consecutive Sponsel splits and resets the counter after every lower-order
   projection child. This bounds same-order subdivision and gives the hybrid a finite mathematical recursion tree.
@@ -959,7 +965,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 ## 2026-08-09 — Adaptive Dutour–COPOMATRIX with forced progress
 
-- Added `adaptive_dutour_copomatrix` as an isolated Coposit-created model combining exact maximum-ratio Dutour subdivision with the
+- Added `adaptive_dutour_copomatrix` as an isolated coposit-created model combining exact maximum-ratio Dutour subdivision with the
   Xu–Yao COPOMATRIX projection.
 - The adaptive gate takes the first COPOMATRIX pivot with at most two immediate children. Otherwise it uses Dutour, but forces
   COPOMATRIX at pivot zero after 100 consecutive same-order Dutour splits on each branch and resets the counter after every order
@@ -973,7 +979,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 ## 2026-08-09 — Thirty-second original-cone run on the 26 bad matrices
 
 - Repeated the 26 matrices unsolved by every selected five-second cone run using only the six maintained historical or source-derived
-  cone baselines: Dutour 2018, Danninger 1990, COPOMATRIX 2011, Safi 2021, Bundfuss 2008, and Sponsel 2012. Coposit-created Adaptive
+  cone baselines: Dutour 2018, Danninger 1990, COPOMATRIX 2011, Safi 2021, Bundfuss 2008, and Sponsel 2012. coposit-created Adaptive
   Dutour-Danninger and Frank–Wolfe Sponsel were deliberately excluded.
 - The run used a 30-second per-matrix cutoff, parent CPU 3, workers 4–9, and parameters
   `bad26_original_cone_30s_2026-08-09`. All 156 rows are stored in the maintained database; every completion matched the corpus and
@@ -1007,7 +1013,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 ## 2026-08-09 — Support-Pruned Dickinson hybrid
 
-- Added `support_pruned_dickinson` as a separate self-contained Coposit-created model, leaving `dickinson_2019` unchanged. It retains
+- Added `support_pruned_dickinson` as a separate self-contained coposit-created model, leaving `dickinson_2019` unchanged. It retains
   Dickinson's exact solves, nullspace branch, strict-zero termination, and general coverage intervals. When a retained signature has
   `N_A(u)` equal to the complete index universe, the copied FracESSA support generator now removes every later branch containing
   `support(u)` before that support is emitted. Signatures with a proper upper bound remain non-strict Dickinson lookup entries.
@@ -1075,7 +1081,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 ## 2026-08-08 — Exact multi-step Frank–Wolfe Dickinson
 
-- Added `exact_frank_wolfe_dickinson` as a separate self-contained Coposit model. It keeps the bounded centre-plus-seven-start,
+- Added `exact_frank_wolfe_dickinson` as a separate self-contained coposit model. It keeps the bounded centre-plus-seven-start,
   64-step search and Dickinson fallback, but represents every iterate by homogeneous nonnegative integers and performs every line
   minimization exactly. It has no floating arithmetic, tolerance, or rational reconstruction.
 - Capped a proposed homogeneous denominator at 4,096 bits. Crossing the cap only ends that Frank–Wolfe start and continues with the
@@ -1094,7 +1100,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 ## 2026-08-08 — Exact one-step Frank–Wolfe Dickinson variant
 
-- Added `one_step_frank_wolfe_dickinson` as a separate self-contained Coposit model, leaving `dickinson_2019` unchanged. It starts
+- Added `one_step_frank_wolfe_dickinson` as a separate self-contained coposit model, leaving `dickinson_2019` unchanged. It starts
   at the simplex centre, chooses the first minimum-row-sum vertex, minimizes that one line exactly, and otherwise runs the unchanged
   Dickinson certificate traversal.
 - Kept the front end integer-only. The rational minimizer is represented by positive homogeneous weights
@@ -1110,7 +1116,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 ## 2026-08-08 — Exact one-step Frank–Wolfe Sponsel variant
 
-- Added `frank_wolfe_sponsel` as a separate Coposit-created model, leaving `sponsel_2012` unchanged. Every node that is not accepted
+- Added `frank_wolfe_sponsel` as a separate coposit-created model, leaving `sponsel_2012` unchanged. Every node that is not accepted
   by the strict Sponsel `H` certificate receives one exact Frank–Wolfe line minimization from its simplex centre toward the
   minimum-row-sum vertex before the inherited Bundfuss split.
 - Kept the new rejection entirely rational and exact. Row sums give the direction and closed-form step; homogeneity turns the line
@@ -1125,7 +1131,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 ## 2026-08-08 — Pairwise-away Frank–Wolfe Dickinson
 
-- Added `pairwise_frank_wolfe_dickinson` as a separate self-contained Coposit model. It replaces only the bounded proposal step:
+- Added `pairwise_frank_wolfe_dickinson` as a separate self-contained coposit model. It replaces only the bounded proposal step:
   the global minimum-product coordinate is the toward vertex, the maximum-product positive coordinate is the away vertex, and the
   feasible bound transfers at most the away coordinate's current mass. The centre, seven deterministic vertex starts,
   64-step limit, exact integer reconstruction, and complete Dickinson fallback remain unchanged.
@@ -1142,7 +1148,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 ## 2026-08-08 — Exact support-polished Frank–Wolfe Dickinson
 
-- Added `support_polished_frank_wolfe_dickinson` as a separate self-contained Coposit model. After a best normalized Frank–Wolfe
+- Added `support_polished_frank_wolfe_dickinson` as a separate self-contained coposit model. After a best normalized Frank–Wolfe
   value at most `1e-12` fails exact dyadic reconstruction, it retains every positive finite pre-rounding coordinate and tests that
   one principal support exactly. Supports through order three use the shared direct formulas; larger nonsingular supports use one
   fraction-free KKT solve, and singular supports use one exact kernel vector. Only an exact negative vector or nonnegative zero can
@@ -1182,7 +1188,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 ## 2026-08-08 — Frank–Wolfe witness front end for Dickinson
 
-- Added `frank_wolfe_dickinson` as a separate Coposit-created strict model, leaving `dickinson_2019` unchanged. It runs a bounded
+- Added `frank_wolfe_dickinson` as a separate coposit-created strict model, leaving `dickinson_2019` unchanged. It runs a bounded
   Frank–Wolfe simplex search from the centre and up to seven smallest-diagonal vertices, with at most 64 closed-form line steps per
   start, then falls back to the complete Dickinson certificate traversal.
 - Kept the proposal phase floating and the decision exact. One global power-of-two scale handles arbitrary-size input integers
@@ -1204,7 +1210,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 - Removed the maintained `generalized_dickinson` pair-sum model, all build and Python wiring, and its algorithm document after its
   conic-combination scan proved substantially slower than the unchanged Dickinson baseline. The prior entry below remains as the
   historical reason for the removal.
-- Added `rhs_dickinson` as a separate Coposit-created experiment. For each uncovered nonsingular support above order one, it sweeps
+- Added `rhs_dickinson` as a separate coposit-created experiment. For each uncovered nonsingular support above order one, it sweeps
   the exact rays `1 + t e_k`, evaluates every rational sign breakpoint and intervening interval, and retains the one vector with the
   widest Dickinson coverage interval.
 - Added a focused branch check using strict corpus matrix 9259. Across the 1,412 matrices through dimension 10, the RHS model selected
@@ -1217,7 +1223,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 ## 2026-08-08 — Generalized Dickinson pair certificates
 
-- Added `generalized_dickinson` as a separate Coposit-created model, leaving the published `dickinson_2019` baseline unchanged. When
+- Added `generalized_dickinson` as a separate coposit-created model, leaving the published `dickinson_2019` baseline unchanged. When
   non-strict coverage fails, it tests exact equal-weight sums of eligible earlier certificate vectors and accepts only sums satisfying
   Dickinson's original support and product conditions.
 - Retained sparse parent values and full exact products so product-sign cancellation is decided without approximation. Successful
@@ -1270,11 +1276,11 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 - Renamed the generic `cone` model to `dutour_2018`: one author name plus the year its pair decomposition and strict-copositivity
   traversal entered Polyhedral Common. The model records the pinned 2026 source revision separately.
-- Established author/year identifiers exclusively for faithful historical or external baselines. Coposit-created mathematical
+- Established author/year identifiers exclusively for faithful historical or external baselines. coposit-created mathematical
   variants require separate descriptive names so correctness and runtime comparisons cannot silently mix originals with hybrids.
 - Removed the FracESSA low-dimensional and sign-certificate additions from this baseline. FLINT integers, Gram-only state,
   fraction-free ratio comparison, and exact row-and-column updates remain as non-mathematical implementation optimizations.
-- Standardized the user-facing program name and binary as `Coposit` and `coposit`.
+- Standardized the user-facing program name and binary as `coposit` and `coposit`.
 
 ## 2026-08-07 — Faithful Bundfuss baseline
 
@@ -1283,7 +1289,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 - Kept the maintained code independent of the unlicensed upstream source. Positive integer-scaled Gram matrices reproduce the
   rational convex splits without adding rational matrix storage, floating-point epsilon decisions, or shared algorithm helpers.
 - Preserved the minimum edge, three lambda candidates, child evaluation order, and LIFO traversal. Deliberately omitted the separate
-  `zbund` monotonicity route and every Coposit shortcut.
+  `zbund` monotonicity route and every coposit shortcut.
 - Recorded that boundary matrix 9161 can refine without terminating. Future time-limited runs must classify that outcome as
   unresolved rather than false.
 
@@ -1415,7 +1421,7 @@ This append-only file records meaningful decisions, results, and evidence that a
 
 ## 2026-08-07 — FracESSA first-order global-minimum model
 
-- Added `fracessa`, a Coposit-created adaptation that applies FracESSA's exact safe first-order candidate search to `Q=-A` and decides
+- Added `fracessa`, a coposit-created adaptation that applies FracESSA's exact safe first-order candidate search to `Q=-A` and decides
   strict copositivity from exact KKT payoff signs.
 - Removed all ESS/NSS, local-maximum, inertia, reduced-Schur, and second-order stability work. Superset pruning remains correct for
   the global value because every global maximizer is KKT and a KKT point on a containing support cannot improve the contained KKT

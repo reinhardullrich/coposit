@@ -18,7 +18,7 @@ boundary matrix because it stops at the first generated nonnegative zero, while 
 certificate and finish the non-strict proof.
 
 The standalone model target and explicitly configured Python calls invoke this baseline directly unless preprocessing is selected
-explicitly. Coposit's public `safe` method instead links the independent `dickinson_final` copy, which initially has identical solver
+explicitly. coposit's public `safe` method instead links the independent `dickinson_final` copy, which initially has identical solver
 code and follows the shared fused component/pre-check pipeline.
 
 ## What The Algorithm Does
@@ -42,13 +42,13 @@ lossless representations of its decisions.
 
 ## Name And Source
 
-The identifier follows Coposit's `<first-author>_<year>` rule. It names Peter J. C. Dickinson and the publication year of:
+The identifier follows coposit's `<first-author>_<year>` rule. It names Peter J. C. Dickinson and the publication year of:
 
 - Peter J. C. Dickinson, “A New Certificate for Copositivity,” *Linear Algebra and its Applications* 569, 15–37 (2019),
   [DOI 10.1016/j.laa.2018.12.025](https://doi.org/10.1016/j.laa.2018.12.025).
 
 The model implements the paper's Algorithms 1 and 2. The non-strict-copositivity certificate is Theorem 4.6. The strict conclusion
-used by Coposit follows from Lemma 5.2 and Corollary 5.3. Dickinson explicitly reports that the paper's algorithm had not been
+used by coposit follows from Lemma 5.2 and Corollary 5.3. Dickinson explicitly reports that the paper's algorithm had not been
 implemented; there is therefore no original program whose traversal order can be copied.
 
 ## Terms Used Below
@@ -75,11 +75,11 @@ A previously generated vector $u$ covers a subset $I$ exactly when
 This is exactly the coverage condition in Theorem 4.6. A certificate vector must also lie outside $-\mathbb R_+^n$, meaning that
 it has at least one positive component. In the singular branch the implementation orients the vector to ensure this.
 
-When the displayed containment holds, the certificate already accounts for the subset $I$, so the algorithm skips $A_I$. Coposit
+When the displayed containment holds, the certificate already accounts for the subset $I$, so the algorithm skips $A_I$. coposit
 stores only $\operatorname{supp}(u)$ and the sign of every component of $Au$, because those are
 the only facts needed for later coverage tests.
 
-The current subset $I$, $\operatorname{supp}(u)$, and $N_A(u)$ use Coposit's shared packed support representation. Each support stores
+The current subset $I$, $\operatorname{supp}(u)$, and $N_A(u)$ use coposit's shared packed support representation. Each support stores
 $\lceil n/64\rceil$ unsigned 64-bit words, so coverage is exactly two wordwise subset tests. The traversal also keeps its ordered
 index vector because forming $A_I$ requires those indices directly; maintaining both views avoids converting the packed support on
 every uncovered subset.
@@ -138,7 +138,7 @@ The full vector is then discarded. Keeping only this signature saves memory with
 
 ## Mode-Dependent Zero Termination
 
-The published algorithms decide non-strict copositivity. Coposit must distinguish a strictly copositive matrix from a copositive
+The published algorithms decide non-strict copositivity. coposit must distinguish a strictly copositive matrix from a copositive
 matrix that has a nonnegative zero.
 
 Any generated nonnegative zero is already a direct proof that strict copositivity fails; Corollary 5.3 is not needed for that
@@ -210,12 +210,12 @@ exclusively. These are representation and allocation optimizations and do not ch
 
 The paper fixes the coverage theorem and both branches for every uncovered subset but leaves the subset order and admissible
 singular nullspace vector open. Increasing cardinality, numeric-mask order, and one vector obtained from the first free coordinate
-of Coposit's LDLT factorization are deterministic implementation choices. For nullity greater than one this vector can differ from
+of coposit's LDLT factorization are deterministic implementation choices. For nullity greater than one this vector can differ from
 another valid basis choice and therefore cover different later subsets; Dickinson's Algorithm 2 explicitly permits any nonzero
 null vector outside the nonpositive orthant. Retaining only the coverage signature and storing its two sets as packed words are
 lossless representation optimizations.
 
-The strict zero-termination rule is a Coposit mode layered on the paper's non-strict Algorithm 1. The model itself adds no direct
+The strict zero-termination rule is a coposit mode layered on the paper's non-strict Algorithm 1. The model itself adds no direct
 low-order test, cone subdivision, connected-component reduction, or other solver's certificate vectors or pruning rules. Analysis
 callers may explicitly compose the independent shared prechecks around it; the model-specific solver does not apply them itself.
 

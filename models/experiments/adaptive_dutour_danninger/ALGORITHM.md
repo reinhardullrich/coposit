@@ -1,8 +1,8 @@
 # Adaptive Dutour-Danninger
 
-Classification: Coposit-created experimental strict-copositivity model.
+Classification: coposit-created experimental strict-copositivity model.
 
-Public mode boundary: this Coposit-created model supports only `strictly_copositive`. Calling
+Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
 `solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
 
 ## What The Algorithm Does
@@ -32,16 +32,16 @@ The Danninger part comes from:
 
 - Gabriele Danninger, “A Recursive Algorithm for Determining (Strict) Copositivity of a Symmetric Matrix,” in *XIV Symposium on
   Operations Research (Ulm, 1989)*, *Methods of Operations Research*, volume 62, Hain, 1990, pages 45–52;
-- Coposit's maintained [`danninger_1990` algorithm document](../../baselines/danninger_1990/ALGORITHM.md).
+- coposit's maintained [`danninger_1990` algorithm document](../../baselines/danninger_1990/ALGORITHM.md).
 
 The Dutour part comes from Mathieu Dutour Sikirić's Polyhedral Common implementation:
 
 - [`PairDecomposition` introduction, commit `33ce96e4d0589f340a0fbfd7824ff70f9a2ce093`](https://github.com/MathieuDutSik/polyhedral_common/commit/33ce96e4d0589f340a0fbfd7824ff70f9a2ce093);
 - pinned strict-copositivity source commit
   [`d2252bc89d991fa6df9750ac9647e19b6a9aca02`](https://github.com/MathieuDutSik/polyhedral_common/commit/d2252bc89d991fa6df9750ac9647e19b6a9aca02);
-- Coposit's maintained [`dutour_2018` algorithm document](../../baselines/dutour_2018/ALGORITHM.md).
+- coposit's maintained [`dutour_2018` algorithm document](../../baselines/dutour_2018/ALGORITHM.md).
 
-No paper describes the adaptive choice rule. It is a Coposit-created combination implemented completely in this model's
+No paper describes the adaptive choice rule. It is a coposit-created combination implemented completely in this model's
 [`solver.cpp`](solver.cpp).
 
 ## What A Recursive Node Represents
@@ -1005,7 +1005,7 @@ The flag is not a mathematical test. An interruption supplies neither a witness 
 Memory exhaustion, process termination, or any other failure before a Boolean return has the same logical status: no classification
 was obtained.
 
-## Source Boundary And Coposit Choices
+## Source Boundary And coposit Choices
 
 The model has three provenance layers. They must not be conflated.
 
@@ -1015,15 +1015,15 @@ The model has three provenance layers. They must not be conflated.
 | Integer reduced form | Danninger reconstruction | Use $S=aB-pp^T$ rather than the rational Schur complement. |
 | Sign-defined half-cones | Danninger reconstruction | Use coordinate rays and primitive positive-negative boundary rays. |
 | General mixed-sign branching count | Danninger reconstruction | Count the two staircase families by $\binom{r+s}{r}$. |
-| Direct criteria through order three | Maintained Coposit/Danninger reconstruction | Use exact order-one and order-two tests and Hadeler's order-three criterion. |
+| Direct criteria through order three | Maintained coposit/Danninger reconstruction | Use exact order-one and order-two tests and Hadeler's order-three criterion. |
 | Negative two-ray rejection | Pinned Dutour implementation | Reject when $c_{ij}<0$ and $c_{ij}^2\geq c_{ii}c_{jj}$. |
 | Dutour pair choice | Pinned Dutour implementation | Maximize $c_{ij}^2/(c_{ii}c_{jj})$ by exact cross multiplication; keep the first tie. |
 | Dutour subdivision | Pinned Dutour implementation | Split through the unscaled sum ray $v_i+v_j$ into two covering cones. |
-| Narrow-pivot gate | Coposit-created | Permit Danninger only when $r=0$, $s=0$, or $r=s=1$. |
-| Pivot selection | Coposit-created | Scan current rows in index order and use the first narrow row. |
-| Adaptive routing | Coposit-created | Use one Dutour split only when no row is narrow, then restart the decision in every child. |
-| Matrix-only node storage | Coposit representation choice | Store exact Gram matrices, not complete generator histories. |
-| Cooperative interruption | Shared Coposit infrastructure | Check a signal flag without changing any mathematical branch. |
+| Narrow-pivot gate | coposit-created | Permit Danninger only when $r=0$, $s=0$, or $r=s=1$. |
+| Pivot selection | coposit-created | Scan current rows in index order and use the first narrow row. |
+| Adaptive routing | coposit-created | Use one Dutour split only when no row is narrow, then restart the decision in every child. |
+| Matrix-only node storage | coposit representation choice | Store exact Gram matrices, not complete generator histories. |
+| Cooperative interruption | Shared coposit infrastructure | Check a signal flag without changing any mathematical branch. |
 
 The Danninger citation supports the published dimension-reduction idea, but no original source program and no complete publicly
 accessible copy of the short proceedings article were available for a line-by-line audit. The concrete integer rays, terminal
@@ -1032,11 +1032,11 @@ original Danninger source code. The detailed reconstruction boundary is recorded
 [`danninger_1990` algorithm document](../../baselines/danninger_1990/ALGORITHM.md).
 
 The Dutour fallback was checked against the pinned Polyhedral Common implementation. Its strict pair test, maximum-ratio heuristic,
-first-tie behavior, unscaled sum ray, two children, and child order are source-derived. Coposit's Gram-only storage removes unused
+first-tie behavior, unscaled sum ray, two children, and child order are source-derived. coposit's Gram-only storage removes unused
 generator-coordinate state without changing those mathematical decisions. The detailed fidelity boundary is recorded in the
 [`dutour_2018` algorithm document](../../baselines/dutour_2018/ALGORITHM.md).
 
-No external source describes the hybrid as a whole. These decisions define Coposit's Adaptive Dutour-Danninger model:
+No external source describes the hybrid as a whole. These decisions define coposit's Adaptive Dutour-Danninger model:
 
 1. apply direct exact criteria at orders zero through three;
 2. reject a nonpositive diagonal before any order-four-or-larger transformation;

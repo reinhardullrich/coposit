@@ -1,9 +1,9 @@
 # Pairwise Frank–Wolfe Dickinson
 
-Classification: Coposit-created strict-copositivity variant with a bounded pairwise Frank–Wolfe witness search followed by the
+Classification: coposit-created strict-copositivity variant with a bounded pairwise Frank–Wolfe witness search followed by the
 maintained exact Dickinson certificate algorithm.
 
-Public mode boundary: this Coposit-created model supports only `strictly_copositive`. Calling
+Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
 `solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
 
 ## Idea In Plain Language
@@ -45,7 +45,7 @@ Primary sources are:
 - Peter J. C. Dickinson, “A New Certificate for Copositivity,” *Linear Algebra and its Applications* 569, 15–37 (2019),
   [DOI 10.1016/j.laa.2018.12.025](https://doi.org/10.1016/j.laa.2018.12.025).
 
-This is not a historical baseline. It was copied from Coposit's `frank_wolfe_dickinson` model and changes only the bounded proposal
+This is not a historical baseline. It was copied from coposit's `frank_wolfe_dickinson` model and changes only the bounded proposal
 step. The multi-start policy, floating representation, exact reconstruction, direct witnesses, and Dickinson fallback are retained.
 The convergence guarantees in the pairwise Frank–Wolfe paper assume a convex setting and are not used here: $x^TAx$ may be
 nonconvex on the simplex, and the proposal remains a bounded heuristic.
@@ -275,7 +275,7 @@ complete exact Dickinson fallback. Therefore:
 The pairwise update itself remains feasible because it transfers at most the away coordinate's current mass. It neither partitions
 the simplex nor certifies unexplored points.
 
-## Source Behavior, Coposit Changes, And Representation Optimizations
+## Source Behavior, coposit Changes, And Representation Optimizations
 
 The Lacoste-Julien–Jaggi pairwise rule contributes:
 

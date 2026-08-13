@@ -58,10 +58,10 @@ bool is_compact_matrix_argument(const std::string& argument) noexcept
 void print_usage()
 {
 #ifdef COPOSIT_PUBLIC_FAST
-    std::cout << "Internal companion for the public Coposit interface.\n"
+    std::cout << "Internal companion for the public coposit interface.\n"
                  "Method: fast (Adaptive Sponsel-COPOMATRIX)\n";
 #elif defined(COPOSIT_PUBLIC_SAFE)
-    std::cout << "Internal companion for the public Coposit interface.\n"
+    std::cout << "Internal companion for the public coposit interface.\n"
                  "Method: safe (Dickinson Final)\n";
 #elif defined(COPOSIT_ANALYSIS_COMPANION)
     std::cout << "Internal one-model companion for coposit-analyze. Run coposit-analyze --help for the public analysis interface.\n";
