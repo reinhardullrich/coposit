@@ -3,6 +3,8 @@
 #include <flint/fmpz_mat.h>
 
 #include <cstddef>
+#include <sstream>
+#include <string>
 
 #include <coposit/integer.hpp>
 
@@ -75,6 +77,22 @@ public:
     }
 
     void negate() noexcept { fmpz_mat_neg(data_, data_); }
+
+    // Human-readable row-labelled formatting for diagnostics in callers and embedders such as FracESSA.
+    std::string to_pretty_string() const
+    {
+        std::stringstream stream;
+        for (size_t row = 0; row < rows(); ++row) {
+            stream << "  " << row << ": [";
+            for (size_t column = 0; column < cols(); ++column) {
+                if (column != 0) stream << ", ";
+                stream << integer((*this)(row, column)).to_string();
+            }
+            stream << ']';
+            if (row + 1 != rows()) stream << '\n';
+        }
+        return stream.str();
+    }
 
     void swap(matrix_integer& other) noexcept { fmpz_mat_swap(data_, other.data_); }
 
