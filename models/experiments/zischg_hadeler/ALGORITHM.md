@@ -1,9 +1,9 @@
 # Zischg–Hadeler
 
-Classification: Coposit-created strict adaptation of the optimized Hadeler 1983 baseline using the Level 2 negative-graph reduction
+Classification: coposit-created strict adaptation of the optimized Hadeler 1983 baseline using the Level 2 negative-graph reduction
 derived from Zischg and Bomze.
 
-Public mode boundary: this Coposit-created model supports only `strictly_copositive`. Calling
+Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
 `solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
 
 ## Idea In Plain Language
@@ -28,13 +28,13 @@ This is Level 2 only. The complete input matrix is never split into separate sol
 - K. P. Hadeler, “On Copositive Matrices,” *Linear Algebra and its Applications* 49 (1983), 79–89,
   [DOI 10.1016/0024-3795(83)90095-2](https://doi.org/10.1016/0024-3795(83)90095-2), especially Theorem 3.
 
-Zischg and Bomze state the component theorem for non-strict copositivity of the complete matrix. Coposit's
+Zischg and Bomze state the component theorem for non-strict copositivity of the complete matrix. coposit's
 [local derivation](../../../research/STRICT_COPOSITIVITY_GRAPH_AND_DUPLICATE_ROW_REDUCTIONS.md) proves the strict version and its
 cardinality-ordered Level 2 corollary. Johannes Zischg's 2023 thesis is retained locally as
 `research/papers/Zischg_Johannes_2023_Copositivity_Testing.pdf`.
 
 The Hadeler implementation is copied from `hadeler_1983`, which is pinned to FracESSA commit `36902a3d`. The Zischg reduction makes
-this a new Coposit variant rather than a faithful Hadeler baseline.
+this a new coposit variant rather than a faithful Hadeler baseline.
 
 ## Negative Graph And Level 2 Proof
 
@@ -78,7 +78,7 @@ fixed-width dimension limit.
 
 Let $C=A[S,S]$. Every proper principal face has already passed.
 
-- Orders one through three use Coposit's exact direct criteria.
+- Orders one through three use coposit's exact direct criteria.
 - If $\det C>0$, the support passes.
 - If $\det C<0$, solve one retained exact system $Cy=-\mathbf1$. The support fails exactly when every component of $y$ is positive.
 - If $\det C=0$ and the nullity is one, obtain one exact kernel vector. The support fails exactly when all its entries are nonzero
@@ -104,7 +104,7 @@ return true
 Timeout checkpoints occur at support, graph-frontier, graph-construction-row, principal-copy, factorization, and solve boundaries.
 A timeout is unresolved and is never returned as `false`.
 
-## Source Behavior And Coposit Changes
+## Source Behavior And coposit Changes
 
 Retained unchanged from `hadeler_1983` are cardinality and mask order, low-order criteria, determinant branches, the one-system
 replacement for the adjugate, the singular nullity rule, exact arithmetic, and immediate rejection. The only mathematical change is

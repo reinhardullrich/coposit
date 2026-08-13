@@ -40,7 +40,7 @@ x^TAx>0
 $$
 
 The word “strictly” matters at equality. A nonzero vector $x\geq0$ with $x^TAx=0$ does not disprove non-strict copositivity, but it
-does disprove strict copositivity. Coposit's `dickinson_2019` model decides the strict version.
+does disprove strict copositivity. coposit's `dickinson_2019` model decides the strict version.
 
 There are therefore three mathematical situations:
 
@@ -142,7 +142,7 @@ $$
 
 This says where the product $Au$ is nonnegative. Zero counts as nonnegative.
 
-The complete vector $u$ is not needed for later coverage tests. Coposit stores the two sets $S(u)$ and $N_A(u)$ as the vector's
+The complete vector $u$ is not needed for later coverage tests. coposit stores the two sets $S(u)$ and $N_A(u)$ as the vector's
 **certificate signature**.
 
 ## 5. Dickinson's Certificate Theorem
@@ -323,13 +323,13 @@ Therefore a smallest bad set cannot be covered. If every nonempty $I$ is covered
 Conversely, if $A$ is copositive, every principal submatrix $A_I$ is copositive. Dickinson's lemma supplies a suitable local vector for
 each $I$. Embedding each local vector into $n$ coordinates by putting zeros outside $I$ produces a set $U$ with the required coverage.
 
-The theorem itself proves non-strict copositivity, $x^TAx\geq0$. Coposit uses this certificate construction inside a strict-copositivity
+The theorem itself proves non-strict copositivity, $x^TAx\geq0$. coposit uses this certificate construction inside a strict-copositivity
 solver, so it must additionally reject an exact nonnegative zero with $x^TAx=0$. Equality cannot simply be treated as a successful
 strict result.
 
 ## 6. The Order Of The Search
 
-Coposit visits every possible nonempty coordinate set in increasing size:
+coposit visits every possible nonempty coordinate set in increasing size:
 
 $$
 |I|=1,2,3,\ldots,n.
@@ -340,20 +340,20 @@ skipped, but it does not change the correct final Boolean answer.
 
 For every set $I$, the algorithm asks:
 
-1. Does Coposit's small direct test already disprove strict copositivity on this principal submatrix?
+1. Does coposit's small direct test already disprove strict copositivity on this principal submatrix?
 2. Does an earlier certificate vector cover $I$?
 3. If neither applies, what vector does $A_I$ generate?
 
-## 7. Coposit's Direct Test Through Order Three
+## 7. coposit's Direct Test Through Order Three
 
-This step is a Coposit addition, not part of Dickinson's published algorithm.
+This step is a coposit addition, not part of Dickinson's published algorithm.
 
-When $|I|\leq3$, Coposit first uses exact closed-form tests for strict copositivity of $A_I$.
+When $|I|\leq3$, coposit first uses exact closed-form tests for strict copositivity of $A_I$.
 
 - At order 1, the diagonal entry must be positive.
 - At order 2, the diagonal entries must be positive, and a negative off-diagonal entry must not be strong enough to produce a
   nonpositive quadratic value.
-- At order 3, Coposit checks all order-two faces and then an exact determinant-and-adjugate condition.
+- At order 3, coposit checks all order-two faces and then an exact determinant-and-adjugate condition.
 
 If this small test fails, the principal submatrix already contains a nonzero $z\geq0$ with
 
@@ -361,12 +361,12 @@ $$
 z^TA_Iz\leq0.
 $$
 
-Putting zeros outside $I$ turns $z$ into a witness for the complete matrix, so Coposit returns `false` immediately.
+Putting zeros outside $I$ turns $z$ into a witness for the complete matrix, so coposit returns `false` immediately.
 
 If the small test passes, normal Dickinson processing continues. Passing this test does not create a certificate vector and does not
 cover any later set.
 
-When the complete input has order at most three, Coposit obtains the final answer from this direct criterion and does not start the
+When the complete input has order at most three, coposit obtains the final answer from this direct criterion and does not start the
 Dickinson certificate traversal.
 
 ## 8. What Happens To An Uncovered Set?
@@ -461,8 +461,8 @@ $$
 u^TAu=w^TCw=0.
 $$
 
-This is a nonzero nonnegative zero, so Coposit returns `false` immediately. If $u$ has mixed signs, it is not a nonnegative zero;
-Coposit stores $S(u)$ and $N_A(u)$ as a certificate signature and continues.
+This is a nonzero nonnegative zero, so coposit returns `false` immediately. If $u$ has mixed signs, it is not a nonnegative zero;
+coposit stores $S(u)$ and $N_A(u)$ as a certificate signature and continues.
 
 ### 10.1 The nullspace can have dimension greater than one
 
@@ -520,9 +520,9 @@ Different choices are nevertheless operationally different. Two null vectors can
 $Au$ can have different signs outside $I$. They can therefore cover different later coordinate sets. The choice can change runtime
 and the particular completed certificate, but not the correct Boolean answer.
 
-### 10.3 Which vector Coposit chooses
+### 10.3 Which vector coposit chooses
 
-Suppose the exact factorization finds rank $r<m$. In its transformed coordinates, Coposit:
+Suppose the exact factorization finds rank $r<m$. In its transformed coordinates, coposit:
 
 1. selects the first free coordinate;
 2. gives it a nonzero exact integer value;
@@ -530,16 +530,16 @@ Suppose the exact factorization finds rank $r<m$. In its transformed coordinates
 4. solves backwards for the $r$ pivot coordinates;
 5. reverses the factorization's coordinate operations.
 
-This produces one exact nonzero integer vector $w$ with $Cw=0$, regardless of whether the nullity is 1, 2, or larger. Coposit does
+This produces one exact nonzero integer vector $w$ with $Cw=0$, regardless of whether the nullity is 1, 2, or larger. coposit does
 not construct a nullspace basis. The first-free-coordinate rule is deterministic, but it is an implementation choice rather than a
 special vector required by Dickinson's theorem.
 
 ### 10.4 What if another null vector is nonnegative?
 
-A higher-dimensional nullspace may contain both mixed-sign vectors and nonnegative vectors. Coposit's selected vector might be
+A higher-dimensional nullspace may contain both mixed-sign vectors and nonnegative vectors. coposit's selected vector might be
 mixed-sign even though another vector $v\geq0$ satisfies $Cv=0$.
 
-If the selected vector is nonnegative, Coposit has immediately found
+If the selected vector is nonnegative, coposit has immediately found
 
 $$
 w^TCw=0
@@ -547,13 +547,13 @@ $$
 
 and returns `false`.
 
-There is a stronger reason why selecting only one vector is safe in Coposit's cardinality-first traversal. Suppose the nullity is
+There is a stronger reason why selecting only one vector is safe in coposit's cardinality-first traversal. Suppose the nullity is
 greater than one and some nonzero $v\geq0$ lies in the nullspace. If $v$ already has a zero coordinate, it already lives on a proper
 smaller support. Otherwise $v>0$. Choose an independent null vector $q$. Starting from the positive vector $v$, move along $q$ or
 $-q$ until the first coordinate reaches zero. The resulting vector remains nonnegative and nonzero, still lies in the nullspace, and
 has strictly smaller support.
 
-Thus a nonnegative zero in a higher-dimensional nullspace always leads to a nonnegative zero on a smaller support. Coposit visits
+Thus a nonnegative zero in a higher-dimensional nullspace always leads to a nonnegative zero on a smaller support. coposit visits
 smaller supports first. A support-minimal zero must therefore already have caused strict rejection before a larger higher-nullity
 principal set could hide it behind a mixed-sign choice.
 
@@ -604,7 +604,7 @@ $$
 Thus $C$ is singular but strictly copositive. This example shows why “singular” and even “nullity greater than one” do not by
 themselves imply failure of strict copositivity.
 
-The maintained Coposit model classifies complete matrices through order three with its direct exact shortcut, so this particular
+The maintained coposit model classifies complete matrices through order three with its direct exact shortcut, so this particular
 order-three example does not enter the implemented nullspace branch. It is used here to show the linear algebra of nullity two.
 
 ## 11. The Whole Decision Flow
@@ -774,7 +774,7 @@ $$
 
 This is an explicit proof that $C$ is not copositive.
 
-In the maintained Coposit model, the exact order-two direct test detects this example before the Dickinson linear-system branch. The
+In the maintained coposit model, the exact order-two direct test detects this example before the Dickinson linear-system branch. The
 example is included because it makes the nonsingular branch's witness argument visible.
 
 ## 14. Tiny Singular-Zero Example
@@ -812,12 +812,12 @@ $$
 
 So $C$ is copositive but not strictly copositive.
 
-Again, Coposit's order-two direct test detects the equality before reaching the Dickinson singular branch. On a larger support, the
+Again, coposit's order-two direct test detects the equality before reaching the Dickinson singular branch. On a larger support, the
 same kind of nonnegative nullspace vector is detected by the singular branch and causes immediate strict rejection.
 
 ## 15. Why The Final Strict Test Is Correct
 
-Dickinson's published certificate decides non-strict copositivity. Coposit additionally has to decide whether equality occurs at a
+Dickinson's published certificate decides non-strict copositivity. coposit additionally has to decide whether equality occurs at a
 nonzero nonnegative vector.
 
 One direction is immediate: if the algorithm generates $u\geq0$, $u\neq0$, with $u^TAu=0$, then strict copositivity is false.
@@ -831,12 +831,12 @@ A\text{ is strictly copositive}
 \text{no nonnegative zero was encountered}.
 $$
 
-Coposit returns `false` immediately when it generates such a zero. Conversely, if the traversal finishes without encountering one,
+coposit returns `false` immediately when it generates such a zero. Conversely, if the traversal finishes without encountering one,
 the completed certificate proves that no minimal nonnegative zero exists, so returning `true` is safe.
 
 ## 16. Exact Arithmetic
 
-Coposit uses integer input matrices and exact arithmetic. It does not decide signs from rounded floating-point values.
+coposit uses integer input matrices and exact arithmetic. It does not decide signs from rounded floating-point values.
 
 In the nonsingular branch, the solution of
 
@@ -844,11 +844,11 @@ $$
 Cw=\mathbf1
 $$
 
-may be rational. Coposit's fraction-free factorization represents it as an integer numerator vector together with a positive common
+may be rational. coposit's fraction-free factorization represents it as an integer numerator vector together with a positive common
 denominator. The denominator can be omitted from later sign, support, coverage, and zero tests because multiplying by a positive
 number changes none of those facts.
 
-In the singular branch, Coposit recovers one exact integer nullspace vector from the same partial factorization. It does not need a
+In the singular branch, coposit recovers one exact integer nullspace vector from the same partial factorization. It does not need a
 complete basis of the nullspace.
 
 Exact arithmetic is especially important here because equality has mathematical meaning: a true zero must make strict copositivity
@@ -890,7 +890,7 @@ This happens especially when:
 A timeout is not the answer `false`. It means only that the finite certificate search did not finish within the allowed resource
 limit.
 
-## 19. Paper Algorithm Versus Maintained Coposit Model
+## 19. Paper Algorithm Versus Maintained coposit Model
 
 The following parts come from Dickinson's certificate framework:
 
@@ -901,7 +901,7 @@ The following parts come from Dickinson's certificate framework:
 - rejection when the nonsingular solution is nonpositive;
 - completion of the finite non-strict-copositivity certificate.
 
-Coposit makes these explicit deterministic or strict-problem choices:
+coposit makes these explicit deterministic or strict-problem choices:
 
 - exact direct rejection tests through order three;
 - increasing subset size and fixed numeric-mask order;

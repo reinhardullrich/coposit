@@ -161,7 +161,7 @@ inline document parse_document_header(std::string_view input)
 
     const std::string_view symmetry_name = banner.next();
     if (!ascii_equal(symmetry_name, "symmetric")) {
-        line_error(line.number, "Coposit accepts only Matrix Market matrices declared 'symmetric'");
+        line_error(line.number, "coposit accepts only Matrix Market matrices declared 'symmetric'");
     }
     require_end(banner, line.number);
 
@@ -305,7 +305,7 @@ inline parsed_matrix parse(std::string_view input)
         }
     });
     if (has_nonzero_imaginary_part) {
-        throw std::invalid_argument("Coposit requires a real matrix; a complex Matrix Market entry has a nonzero imaginary part");
+        throw std::invalid_argument("coposit requires a real matrix; a complex Matrix Market entry has a nonzero imaginary part");
     }
 
     matrix_integer matrix = fill_matrix([&](integer::reference destination, std::string_view real_token, size_t line) {

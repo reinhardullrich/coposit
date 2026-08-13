@@ -1,9 +1,9 @@
 # Exact One-Step Frank–Wolfe Dickinson
 
-Classification: Coposit-created strict-copositivity variant with one exact centre-to-vertex Frank–Wolfe line minimization before
+Classification: coposit-created strict-copositivity variant with one exact centre-to-vertex Frank–Wolfe line minimization before
 the maintained exact Dickinson certificate traversal.
 
-Public mode boundary: this Coposit-created model supports only `strictly_copositive`. Calling
+Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
 `solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
 
 ## What The Algorithm Does
@@ -38,7 +38,7 @@ Primary sources are:
 - Peter J. C. Dickinson, “A New Certificate for Copositivity,” *Linear Algebra and its Applications* 569, 15–37 (2019),
   [DOI 10.1016/j.laa.2018.12.025](https://doi.org/10.1016/j.laa.2018.12.025).
 
-This combination is not a historical model from either paper. The exact single-step front end is a Coposit construction. The
+This combination is not a historical model from either paper. The exact single-step front end is a coposit construction. The
 fallback is a self-contained copy of [`dickinson_2019`](../../baselines/dickinson_2019/ALGORITHM.md), which reconstructs Dickinson's Algorithms 1
 and 2. The non-strict certificate is Theorem 4.6, and the strict conclusion uses Lemma 5.2 and Corollary 5.3. Dickinson explicitly
 reports that the paper's algorithm had not been implemented, so there is no original program whose traversal order can be copied.
@@ -157,11 +157,11 @@ A previously generated vector $u$ covers a subset $I$ exactly when
 This is exactly the coverage condition in Theorem 4.6. A certificate vector must also lie outside $-\mathbb R_+^n$, meaning that
 it has at least one positive component. In the singular branch the implementation orients the vector to ensure this.
 
-When the displayed containment holds, the certificate already accounts for the subset $I$, so the algorithm skips $A_I$. Coposit
+When the displayed containment holds, the certificate already accounts for the subset $I$, so the algorithm skips $A_I$. coposit
 stores only $\operatorname{supp}(u)$ and the sign of every component of $Au$, because those are
 the only facts needed for later coverage tests.
 
-The current subset $I$, $\operatorname{supp}(u)$, and $N_A(u)$ use Coposit's shared packed support representation. Each support stores
+The current subset $I$, $\operatorname{supp}(u)$, and $N_A(u)$ use coposit's shared packed support representation. Each support stores
 $\lceil n/64\rceil$ unsigned 64-bit words, so coverage is exactly two wordwise subset tests. The traversal also keeps its ordered
 index vector because forming $A_I$ requires those indices directly; maintaining both views avoids converting the packed support on
 every uncovered subset.
@@ -173,7 +173,7 @@ the scan.
 
 ## Shared Direct Test Through Order Three
 
-Before consulting certificate coverage for a principal subset $I$ with $|I|\leq3$, Coposit applies the shared exact
+Before consulting certificate coverage for a principal subset $I$ with $|I|\leq3$, coposit applies the shared exact
 strict-copositivity criterion to $A_I$. The rule is implemented in `cpp/include/coposit/small_copositivity.hpp` and tests:
 
 - positive diagonal entries at order one;
@@ -238,7 +238,7 @@ The full vector is then discarded. Keeping only this signature saves memory with
 
 ## Strict-Only Zero Termination
 
-The published algorithms decide non-strict copositivity. Coposit must distinguish a strictly copositive matrix from a copositive
+The published algorithms decide non-strict copositivity. coposit must distinguish a strictly copositive matrix from a copositive
 matrix that has a nonnegative zero.
 
 Any generated nonnegative zero is already a direct proof that strict copositivity fails; Corollary 5.3 is not needed for that
@@ -316,14 +316,14 @@ exclusively. These are representation and allocation optimizations and do not ch
 
 The paper fixes the coverage theorem and both branches for every uncovered subset but leaves the subset order and admissible
 singular nullspace vector open. Increasing cardinality, numeric-mask order, and one vector obtained from the first free coordinate
-of Coposit's LDLT factorization are deterministic implementation choices. For nullity greater than one this vector can differ from
+of coposit's LDLT factorization are deterministic implementation choices. For nullity greater than one this vector can differ from
 another valid basis choice and therefore cover different later subsets; Dickinson's Algorithm 2 explicitly permits any nonzero
 null vector outside the nonpositive orthant. Retaining only the coverage signature and storing its two sets as packed words are
 lossless representation optimizations.
 
-The strict-only termination rule is a Coposit change, not part of the paper's non-strict Algorithm 1: a generated nonnegative zero
+The strict-only termination rule is a coposit change, not part of the paper's non-strict Algorithm 1: a generated nonnegative zero
 returns `false` immediately, while Lemma 5.2 and Corollary 5.3 justify `true` after a zero-free completed traversal. The shared
-order-at-most-three test is another Coposit-added strict-only shortcut. It runs before coverage and can terminate on a low-order
+order-at-most-three test is another coposit-added strict-only shortcut. It runs before coverage and can terminate on a low-order
 nonpositive face; after it passes, certificate construction is unchanged. The model adds only the exact one-step rejection front
 end: it adds no certificate vectors or coverage claims. It adds no cone subdivision, connected-component reduction, or other
 solver's pruning rules.

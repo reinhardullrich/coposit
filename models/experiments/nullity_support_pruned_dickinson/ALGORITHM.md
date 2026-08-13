@@ -1,8 +1,8 @@
 # Nullity Support-Pruned Dickinson
 
-Classification: Coposit-created exact strict-copositivity variant of `support_pruned_dickinson`.
+Classification: coposit-created exact strict-copositivity variant of `support_pruned_dickinson`.
 
-Public mode boundary: this Coposit-created model supports only `strictly_copositive`. Calling
+Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
 `solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
 
 ## Idea In Plain Language
@@ -37,7 +37,7 @@ The model uses:
 - `cpp/include/coposit/fraction_free_ldlt.hpp`, whose retained exact factorization now recovers either one null vector or a complete
   exact nullspace basis without refactorization.
 
-This is not a historical Dickinson baseline. The nullspace scoring and search are Coposit changes. The maintained
+This is not a historical Dickinson baseline. The nullspace scoring and search are coposit changes. The maintained
 `dickinson_2019` and `support_pruned_dickinson` models remain independent.
 
 ## Mathematical Problem
@@ -251,7 +251,7 @@ Supports use $\lceil n/64\rceil$ packed 64-bit words and impose no dimension-63 
 timeout flag at support-recursion, factorization, basis-product, candidate, and matrix-row boundaries. A timeout remains unresolved
 and is never returned as `false`.
 
-## Source Behavior And Coposit Changes
+## Source Behavior And coposit Changes
 
 Unchanged from Dickinson and `support_pruned_dickinson`:
 

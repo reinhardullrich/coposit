@@ -3,7 +3,7 @@
 Classification: exact non-strict implementation and strict adaptation of Xu and Yao's COPOMATRIX mathematics, with a non-literal
 depth-first scheduler. The projection, negative-half-simplex geometry, and Vmatrix decomposition are source-derived. Strict
 equality handling, early all-diagonal checks, deterministic traversal, and fraction-free integer representation are explicit
-Coposit choices described below.
+coposit choices described below.
 
 ## Decision Modes
 
@@ -44,7 +44,7 @@ program's scheduling or timings. The identifier is retained; this difference is 
 
 ## Name And Primary Source
 
-The user-selected identifier is an explicit exception to Coposit's usual `<first-author>_<year>` rule: `copomatrix` is the authors'
+The user-selected identifier is an explicit exception to coposit's usual `<first-author>_<year>` rule: `copomatrix` is the authors'
 uppercase algorithm name, not an author name and not “COPOMATRIX 2.0.” `2011` is the journal publication year.
 
 Primary source:
@@ -317,9 +317,9 @@ and
 Thus both children retain the midpoint. The first deletes the first positive label; the second deletes the first negative label.
 Repeating this rule reaches one of the two simplicial boundary cases.
 
-### Coposit's deterministic staircase traversal
+### coposit's deterministic staircase traversal
 
-Algorithm 1 says to choose a pending nonsimplicial polytope but does not specify that choice or a final traversal order. Coposit
+Algorithm 1 says to choose a pending nonsimplicial polytope but does not specify that choice or a final traversal order. coposit
 resolves this in the same deterministic spirit as the maintained Danninger staircase:
 
 1. positive and negative indices retain ascending current-coordinate order;
@@ -391,12 +391,12 @@ When $t=0$, there is only the principal child. Zero pivot entries do not appear 
 
 ## Fraction-Free Integer Representation
 
-The paper's $D$, normalized midpoint rays, and normalized matrices are rational. Coposit keeps the maintained core integer-only.
+The paper's $D$, normalized midpoint rays, and normalized matrices are rational. coposit keeps the maintained core integer-only.
 It represents matrices that are positively diagonally congruent to the paper's matrices, so every sign decision is unchanged.
 
 ### Principal child
 
-The source principal child is $DCD$. Coposit recursively checks $C$ itself. Since $D$ is symmetric,
+The source principal child is $DCD$. coposit recursively checks $C$ itself. Since $D$ is symmetric,
 
 \[
 DCD=D^TCD
@@ -407,7 +407,7 @@ positively diagonally congruent matrices also preserves the normalized pivot sig
 
 ### Schur child
 
-Coposit forms the exact integer matrix
+coposit forms the exact integer matrix
 
 \[
 S=aC-pp^T.
@@ -427,7 +427,7 @@ Each column of $DW$ may be multiplied independently by a positive number. If $H$
 R=DWH,
 \]
 
-then Coposit checks
+then coposit checks
 
 \[
 R^TSR=H(W^TDSDW)H.
@@ -553,7 +553,7 @@ k_{ii}\leq0
 e_i^TKe_i\leq0.
 \]
 
-Coposit checks every diagonal at node entry, following the exact early rule used in the maintained Danninger model. This can expose a
+coposit checks every diagonal at node entry, following the exact early rule used in the maintained Danninger model. This can expose a
 witness earlier than the source work-set order, but it changes no classification or generated child when all diagonals are positive.
 
 ### Entrywise-nonnegative certificate
@@ -587,7 +587,7 @@ The following parts are source behavior:
 - recursive projection until order one;
 - removal of easy entrywise-nonnegative projection matrices.
 
-The following are strict or deterministic Coposit choices:
+The following are strict or deterministic coposit choices:
 
 - change every required positive diagonal comparison from nonnegative to strictly positive;
 - require positive diagonal before using the entrywise-nonnegative strict certificate;

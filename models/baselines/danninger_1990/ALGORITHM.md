@@ -1,6 +1,6 @@
 # Danninger 1990
 
-Classification: exact Coposit reconstruction of Danninger's published reduction; the concrete triangulation and traversal are
+Classification: exact coposit reconstruction of Danninger's published reduction; the concrete triangulation and traversal are
 pinned to the retained experiment rather than a recoverable original program.
 
 ## Decision Modes
@@ -33,7 +33,7 @@ row contains many positive and many negative entries, the two regions may need a
 
 ## Name And Sources
 
-The identifier follows Coposit's `<first-author>_<year>` rule. It names Gabriele Danninger and the 1990 publication year of:
+The identifier follows coposit's `<first-author>_<year>` rule. It names Gabriele Danninger and the 1990 publication year of:
 
 > Gabriele Danninger, “A Recursive Algorithm for Determining (Strict) Copositivity of a Symmetric Matrix,” in *XIV Symposium on
 > Operations Research (Ulm, 1989)*, *Methods of Operations Research*, volume 62, Hain, 1990, pages 45–52.
@@ -251,7 +251,7 @@ descendant tree.
 
 Corpus matrix **10244**, the order-999 Johnson-Reams generalized Horn matrix, is a reproducible depth case. The former native
 staircase recursion exhausted the process stack while following its first-child chain. The explicit LIFO representation now stops
-that traversal at Coposit's shared 50,000-open-node limit and reports the unresolved `node_limit` outcome instead of crashing.
+that traversal at coposit's shared 50,000-open-node limit and reports the unresolved `node_limit` outcome instead of crashing.
 
 ## Termination, Cost, And Fidelity
 
@@ -259,7 +259,7 @@ Every matrix child has order exactly one less than its parent, so a matrix-child
 inside one level can add up to $n-1$ active grid frames, so nested first-child traversal can retain $O(n^2)$ logical frames even
 though every individual branch is finite. The number of completed children can also be combinatorially large.
 
-Coposit counts active matrix checks and active staircase frames together. Before opening another one, it enforces the shared limit
+coposit counts active matrix checks and active staircase frames together. Before opening another one, it enforces the shared limit
 of 50,000. Exceeding it throws the standard resource exception, which the native wrapper reports as unresolved `node_limit`; it is
 never converted to `false`. Completed children no longer count, so the limit bounds simultaneous unfinished work rather than the
 total number of children processed during a run.

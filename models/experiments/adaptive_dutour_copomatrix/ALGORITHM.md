@@ -1,8 +1,8 @@
 # Adaptive Dutour–COPOMATRIX
 
-Classification: Coposit-created experimental strict-copositivity model.
+Classification: coposit-created experimental strict-copositivity model.
 
-Public mode boundary: this Coposit-created model supports only `strictly_copositive`. Calling
+Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
 `solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
 
 ## Idea In Plain Language
@@ -46,7 +46,7 @@ The Dutour operation comes from:
   [`d2252bc89d991fa6df9750ac9647e19b6a9aca02`](https://github.com/MathieuDutSik/polyhedral_common/commit/d2252bc89d991fa6df9750ac9647e19b6a9aca02);
 - the maintained [`../../baselines/dutour_2018/ALGORITHM.md`](../../baselines/dutour_2018/ALGORITHM.md).
 
-The direct low-order rules and adaptive routing start from Coposit's maintained
+The direct low-order rules and adaptive routing start from coposit's maintained
 [`../adaptive_dutour_danninger/`](../adaptive_dutour_danninger/) model. No paper describes this hybrid, its narrow-pivot rule, or its
 100-split cutoff.
 
@@ -373,7 +373,7 @@ Therefore the complete recursion tree is finite for every finite input matrix. T
 the cutoff guarantees eventual progress, not practical speed or memory use. External timeout, process failure, or memory exhaustion
 remains an unresolved resource outcome rather than a negative classification.
 
-## Source Behavior And Coposit Changes
+## Source Behavior And coposit Changes
 
 Source-derived behavior retained locally:
 
@@ -382,7 +382,7 @@ Source-derived behavior retained locally:
   decomposition;
 - exact depth-first conjunction with immediate short-circuit rejection.
 
-Coposit-created mathematical and control-flow choices:
+coposit-created mathematical and control-flow choices:
 
 - direct exact terminal criteria through order three;
 - scanning every row and taking the first COPOMATRIX pivot with at most two children;

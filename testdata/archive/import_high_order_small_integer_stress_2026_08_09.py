@@ -123,7 +123,7 @@ def upper_text(diagonal: list[int], upper: list[dict[int, int]]) -> tuple[str, i
 
 
 def generated_rows() -> Iterator[tuple[int, str, int, str, str, int, int]]:
-    prefix = "Coposit deterministic high-order sparse stress generator 2026-08-09"
+    prefix = "coposit deterministic high-order sparse stress generator 2026-08-09"
     for dimension in DIMENSIONS:
         seen: set[str] = set()
         for kind in KINDS:

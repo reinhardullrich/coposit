@@ -2,7 +2,7 @@
 
 Classification: exact non-strict implementation and strict adaptation of Sponsel, Bundfuss, and Dür's 2012 strengthened
 simplicial-partition framework. It uses the paper's positive-semidefinite `H` certificate in non-strict mode, its strict-safe
-positive-definite form in strict mode, and retains Coposit's exact Bundfuss 2008 split and traversal whenever that certificate does
+positive-definite form in strict mode, and retains coposit's exact Bundfuss 2008 split and traversal whenever that certificate does
 not decide a simplex.
 
 ## Decision Modes
@@ -26,7 +26,7 @@ Bundfuss, and Dür observed that a larger class of Gram matrices can be certifie
 called `H` in the paper, removes every positive off-diagonal entry and asks whether the remaining symmetric matrix is positive
 semidefinite.
 
-The published `H` test certifies non-strict copositivity. Coposit decides strict copositivity, so this model uses the exact stronger
+The published `H` test certifies non-strict copositivity. coposit decides strict copositivity, so this model uses the exact stronger
 condition that the remaining matrix is positive definite. Positive definiteness is checked by the shared fraction-free LDLT
 factorization; no floating-point eigenvalue, tolerance, linear program, semidefinite program, or external solver is used.
 
@@ -35,7 +35,7 @@ exact nonpositive two-vertex restriction, or insert the Bundfuss rational edge p
 
 ## Name And Sources
 
-The identifier follows Coposit's `<first-author>_<year>` rule. `sponsel` names Julia Sponsel, the paper's first author, and `2012` is
+The identifier follows coposit's `<first-author>_<year>` rule. `sponsel` names Julia Sponsel, the paper's first author, and `2012` is
 the journal publication year.
 
 Primary source:
@@ -52,13 +52,13 @@ The inherited subdivision mathematics comes from:
   Applications* 428(7), 1511–1523 (2008), [DOI 10.1016/j.laa.2007.09.035](https://doi.org/10.1016/j.laa.2007.09.035).
 
 The concrete minimum-edge choice, three candidate fractions, two-child construction, child inspection order, and LIFO traversal are
-copied from Coposit's independent [`bundfuss_2008`](../bundfuss_2008/ALGORITHM.md) model. That model pins those choices to J. M. G.
+copied from coposit's independent [`bundfuss_2008`](../bundfuss_2008/ALGORITHM.md) model. That model pins those choices to J. M. G.
 Salmerón's public `bundfuss` implementation at
 [commit `5537fd94768efbce85b3225b05bf39db8d81a332`](https://github.com/josmangarsal/copositivity-detection-bundfuss-faces/commit/5537fd94768efbce85b3225b05bf39db8d81a332).
 No source from that repository is copied into this model.
 
 The 2012 paper defines the non-strict-copositivity framework and its positive-semidefinite `H` certificate. The strict
-positive-definite analogue and the decision to preserve the maintained Bundfuss split in both modes are explicit Coposit choices.
+positive-definite analogue and the decision to preserve the maintained Bundfuss split in both modes are explicit coposit choices.
 
 ## Public Decision Problem
 
@@ -231,7 +231,7 @@ of the certificate is therefore never a rejection; it only means that subdivisio
 
 ## Exact Positive-Definiteness Test
 
-The model constructs $S(G)$ as an integer matrix and factors it with Coposit's reusable fraction-free LDLT implementation. Symmetric
+The model constructs $S(G)$ as an integer matrix and factors it with coposit's reusable fraction-free LDLT implementation. Symmetric
 exact congruence operations expose the inertia, meaning the numbers of positive, negative, and zero quadratic directions.
 
 The certificate passes exactly when the factorization is nonsingular and all $n$ inertia entries are positive. There is no computed
@@ -386,7 +386,7 @@ and
 w^TAw=\frac{p^2\alpha+2pq\gamma+q^2\beta}{d^2}.
 \]
 
-Coposit stores $d^2$ times the complete child Gram matrix. Thus
+coposit stores $d^2$ times the complete child Gram matrix. Thus
 
 \[
 d^2w^TAv_k=d\left(p g_{ik}+q g_{jk}\right)
@@ -413,7 +413,7 @@ Both children are inspected immediately:
 A rejected child ends the complete search. An accepted child is discarded. An unresolved child is appended to a LIFO work list.
 Because the first unresolved child is appended before the second, the second child is the next node expanded when both remain.
 
-The common exact split coefficients and new Gram row are prepared once. Coposit constructs and inspects the first child before
+The common exact split coefficients and new Gram row are prepared once. coposit constructs and inspects the first child before
 constructing the second. If the first child rejects, the unreachable sibling is never allocated. Otherwise the second child is
 constructed exactly as before. This changes no inspection or LIFO traversal order.
 
@@ -483,7 +483,7 @@ hide a negative or zero direction because positive definiteness proves strict po
 
 Subdivision keeps the same matrix order. The tree can therefore grow without a dimension-decreasing bound. The 2012 theory proves
 finite detection of a genuinely negative region when the partition diameter tends to zero, and finite certification of strictly
-copositive inputs for certificate families containing the nonnegative cone under the same refinement assumption. Coposit does not
+copositive inputs for certificate families containing the nonnegative cone under the same refinement assumption. coposit does not
 claim a stronger termination theorem for the concrete inherited lambda rule than its sources establish.
 
 Non-strict-copositive boundary matrices remain the important failure mode for a strict partition search. A zero can lie inside a
@@ -557,7 +557,7 @@ not, both models use the same selected pair, lambda value, child matrices, and t
 Thus Sponsel 2012 is not a dimension-reducing algorithm and does not replace the Bundfuss geometry. It is the Bundfuss partition
 equipped with one stronger exact node certificate.
 
-## Source Behavior And Coposit Choices
+## Source Behavior And coposit Choices
 
 Source-derived from Sponsel, Bundfuss, and Dür 2012:
 
@@ -578,7 +578,7 @@ Inherited unchanged from `bundfuss_2008`:
 - common-content reduction;
 - timeout checkpoints and the open-node resource boundary.
 
-Explicit Coposit strict adaptation:
+Explicit coposit strict adaptation:
 
 - require $S(G)\succ0$ instead of the paper's $S(G)\succeq0$;
 - use exact fraction-free LDLT rather than numerical eigenvalues;

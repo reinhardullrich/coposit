@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-Coposit is licensed under GPL-3.0-or-later.
+coposit is licensed under GPL-3.0-or-later.
 
 ## Maintained Build
 

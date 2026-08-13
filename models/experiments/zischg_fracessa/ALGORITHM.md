@@ -1,9 +1,9 @@
 # Zischg–FracESSA
 
-Classification: Coposit-created strict-copositivity model combining FracESSA's exact first-order support search with the Level 2
+Classification: coposit-created strict-copositivity model combining FracESSA's exact first-order support search with the Level 2
 negative-graph reduction derived from Zischg and Bomze.
 
-Public mode boundary: this Coposit-created model supports only `strictly_copositive`. Calling
+Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
 `solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
 
 ## Idea In Plain Language
@@ -28,10 +28,10 @@ pruning. The complete matrix is never split, so the reduction is Level 2 only.
 - Immanuel M. Bomze, “Detecting All Evolutionarily Stable Strategies,” *Journal of Optimization Theory and Applications* 75(2)
   (1992), 313–329, the origin of FracESSA's candidate and pruning structure.
 
-The published Zischg–Bomze theorem is a non-strict-copositivity component result. Coposit's
+The published Zischg–Bomze theorem is a non-strict-copositivity component result. coposit's
 [local derivation](../../../research/STRICT_COPOSITIVITY_GRAPH_AND_DUPLICATE_ROW_REDUCTIONS.md) proves the strict Level 2 reduction.
 The base first-order copositivity adaptation is documented independently in `models/experiments/fracessa/ALGORITHM.md`. Adding Level 2 makes
-this a separate Coposit model, not a FracESSA historical baseline.
+this a separate coposit model, not a FracESSA historical baseline.
 
 ## Simplex Formulation
 
@@ -140,7 +140,7 @@ KKT candidate. That is not an error: all skipped values are still negative in th
 support with a nonnegative witness and therefore a connected global maximizer with nonnegative payoff. Timeout checkpoints propagate
 an unresolved result.
 
-## Source Behavior And Coposit Changes
+## Source Behavior And coposit Changes
 
 Retained from `fracessa` are $Q=-A$, the low-order exact rejection, cardinality-first packed generator, reduced first-order equations,
 strict support probabilities, outside inequalities, payoff-sign exit, forbidden-superset pruning, exact LDLT arithmetic, and no

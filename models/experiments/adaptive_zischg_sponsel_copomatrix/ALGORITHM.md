@@ -1,9 +1,9 @@
 # Adaptive Zischg–Sponsel–COPOMATRIX
 
-Classification: Coposit-created experimental strict-copositivity comparison retained for reproducibility. It combines an adaptive
+Classification: coposit-created experimental strict-copositivity comparison retained for reproducibility. It combines an adaptive
 Sponsel–COPOMATRIX traversal with Zischg–Bomze negative-graph decomposition after projection.
 
-Public mode boundary: this Coposit-created model supports only `strictly_copositive`. Calling
+Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
 `solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
 
 ## Idea In Plain Language
@@ -66,7 +66,7 @@ The component theorem comes from:
 > certificates,” *Operations Research Perspectives* 14 (2025), 100324,
 > [DOI 10.1016/j.orp.2024.100324](https://doi.org/10.1016/j.orp.2024.100324).
 
-Zischg and Bomze state the non-strict copositivity decomposition. Coposit's
+Zischg and Bomze state the non-strict copositivity decomposition. coposit's
 [`STRICT_COPOSITIVITY_GRAPH_AND_DUPLICATE_ROW_REDUCTIONS.md`](../../../research/STRICT_COPOSITIVITY_GRAPH_AND_DUPLICATE_ROW_REDUCTIONS.md)
 records the strict extension used here. No paper describes this complete hybrid, its projection-local placement of the component
 rule, its narrow-pivot routing, or its 10,000-split cutoff.
@@ -256,7 +256,7 @@ passes through the projection-local component rule described next. Each connecte
 adaptive algorithm with counter zero.
 
 Selecting a pivot other than zero is an exact coordinate permutation before applying the COPOMATRIX projection theorem. The source
-baseline's fixed pivot is changed only by this explicitly Coposit-created adaptive model.
+baseline's fixed pivot is changed only by this explicitly coposit-created adaptive model.
 
 ## Negative-Graph Components After Projection
 
@@ -462,7 +462,7 @@ This model deliberately does not inherit Sponsel's 50,000 simultaneously-open-no
 only the current call stack and pending siblings, while the forced projection supplies the hybrid's termination mechanism. A finite
 tree may nevertheless be far too large for practical time or memory. Timeout or process failure remains unresolved.
 
-## Source Behavior And Coposit Choices
+## Source Behavior And coposit Choices
 
 Source-derived Sponsel behavior:
 
@@ -483,7 +483,7 @@ Source-derived Zischg–Bomze behavior:
 - exact decomposition into negative-graph components;
 - conjunction of component copositivity decisions, extended here to the strict decision by the same quadratic-form identity.
 
-Coposit-created choices:
+coposit-created choices:
 
 - strict positive definiteness instead of the paper's non-strict positive-semidefinite `H` certificate;
 - direct criteria through order three;

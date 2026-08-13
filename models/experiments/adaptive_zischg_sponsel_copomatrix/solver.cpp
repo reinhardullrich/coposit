@@ -215,7 +215,7 @@ std::pair<matrix_integer, matrix_integer> sponsel_split(const matrix_integer& gr
 }
 
 /*
- * Coposit-created adaptive combination of Sponsel's H-enhanced Bundfuss split, Xu-Yao COPOMATRIX projection, and Zischg-Bomze
+ * coposit-created adaptive combination of Sponsel's H-enhanced Bundfuss split, Xu-Yao COPOMATRIX projection, and Zischg-Bomze
  * negative-graph decomposition after each projection.
  *
  * A node uses the first COPOMATRIX pivot producing at most two children. Otherwise it applies Sponsel's certificate and split. After

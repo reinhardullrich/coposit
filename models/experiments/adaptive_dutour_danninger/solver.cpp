@@ -93,7 +93,7 @@ struct sparse_ray {
 };
 
 /*
- * Coposit-created adaptive combination of Danninger's dimension reduction and Dutour Sikirić's cone split.
+ * coposit-created adaptive combination of Danninger's dimension reduction and Dutour Sikirić's cone split.
  *
  * A node first uses the first pivot whose Danninger triangulation has at most two children. If no such pivot exists, it performs
  * one maximum-ratio Dutour split. Every child repeats the same choice from its first row. Algorithm code is intentionally local to

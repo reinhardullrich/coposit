@@ -1,12 +1,12 @@
 # Adaptive Sponsel–COPOMATRIX
 
-Classification: Coposit-created maintained non-strict- and strict-copositivity model.
+Classification: coposit-created maintained non-strict- and strict-copositivity model.
 
 Public mode boundary: `solve(A, copositivity_mode::copositive)` decides non-strict copositivity and
 `solve(A, copositivity_mode::strictly_copositive)` decides strict copositivity. Strict remains the default. The Python `both` mode is
 not advertised for this model because the two answers require separate traversals.
 
-As Coposit's public `fast` method, this solver follows the shared fused component/pre-check pipeline. Globally valid checks run during
+As coposit's public `fast` method, this solver follows the shared fused component/pre-check pipeline. Globally valid checks run during
 the root scan; Frank–Wolfe and exact definiteness are deferred to each negative-entry component. Those stages may decide a matrix
 before this model is entered; otherwise every surviving component follows the algorithm below. The standalone model target and
 explicitly configured Python calls may still invoke the model without that composition.
@@ -277,7 +277,7 @@ and re-enters the complete adaptive algorithm with counter zero and the unchange
 immediately after its diagonal is known nonnegative in non-strict mode or positive in strict mode.
 
 Selecting a pivot other than zero is an exact coordinate permutation before applying the COPOMATRIX projection theorem. The source
-baseline's fixed pivot is changed only by this explicitly Coposit-created adaptive model.
+baseline's fixed pivot is changed only by this explicitly coposit-created adaptive model.
 
 ## The Sponsel Operation
 
@@ -441,7 +441,7 @@ grows as $O(dn^2)$ for same-order branch depth $d$. Memory can become limiting a
 deep branch. The forced projection supplies mathematical termination, not a practical memory bound; timeout or process failure remains
 unresolved.
 
-## Source Behavior And Coposit Choices
+## Source Behavior And coposit Choices
 
 Source-derived Sponsel behavior:
 
@@ -459,7 +459,7 @@ Source-derived COPOMATRIX behavior:
 - pivot-sign normalization and primitive positive-negative boundary geometry;
 - Xu–Yao negative-half-simplex decomposition.
 
-Coposit-created choices:
+coposit-created choices:
 
 - shared exact non-strict and strict direct criteria through order three;
 - exact minimum-child COPOMATRIX pivot across all rows, with first-local-index tie breaking;

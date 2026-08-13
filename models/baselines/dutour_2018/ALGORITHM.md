@@ -27,7 +27,7 @@ determined by how many cone subdivisions are needed before every remaining cone 
 
 ## Name And Sources
 
-The model identifier follows Coposit's `<first-author>_<year>` rule. `dutour` names Mathieu Dutour Sikirić, whose Polyhedral
+The model identifier follows coposit's `<first-author>_<year>` rule. `dutour` names Mathieu Dutour Sikirić, whose Polyhedral
 Common repository supplies the exact source algorithm, and `2018` is the year in which its `PairDecomposition` implementation
 entered that repository. The year identifies the implementation revision, not a separately published 2018 paper.
 
@@ -171,7 +171,7 @@ All signs, products, and ratio comparisons use FLINT arbitrary-precision integer
 reconstructing a basis or multiplying full matrices. This is a representation optimization only; the selected pair, new ray,
 children, and traversal are unchanged from the pinned source.
 
-The cone dimension does not decrease. Runtime depends on how many cones the repeated subdivisions create. Coposit allows at most
+The cone dimension does not decrease. Runtime depends on how many cones the repeated subdivisions create. coposit allows at most
 50,000 open nodes: before a split, the current node is replaced by its two unfinished children, and the run stops with the distinct
 unresolved `node_limit` outcome if that would create 50,001 open nodes. A timed native-module run may likewise observe the shared
 signal flag at node and matrix-row boundaries and return a distinct timeout outcome. Neither resource outcome is reported as
@@ -203,12 +203,12 @@ certificate.
 
 The maintained implementation was compared decision by decision with the pinned Polyhedral Common source. It preserves the source
 implementation's mode-dependent diagonal and two-generator tests, maximum-ratio pair choice and first-tie rule, unscaled sum ray,
-two-child split, and depth-first child order. Storing only the Gram matrix is Coposit's representation optimization: it removes
+two-child split, and depth-first child order. Storing only the Gram matrix is coposit's representation optimization: it removes
 generator coordinates that the source decisions never inspect and changes no generated cone.
 
 The baseline deliberately contains no low-dimensional shortcut, SNC slice, Danninger reduction, Hadeler test, graph decomposition,
-or Coposit-created hybrid rule.
+or coposit-created hybrid rule.
 
 Timeout checkpoints are enabled only in timed native-module builds. Standalone `coposit` and model-test builds compile the same calls
 to no-ops, so the baseline has no timer thread, clock read, or signal handler. The fixed 50,000-open-node guard applies to every
-build and is a Coposit resource boundary, not part of the pinned source algorithm.
+build and is a coposit resource boundary, not part of the pinned source algorithm.

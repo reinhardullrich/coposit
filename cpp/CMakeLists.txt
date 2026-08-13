@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(Coposit LANGUAGES CXX)
+project(coposit LANGUAGES CXX)
 
 include(FetchContent)
 
@@ -16,7 +16,7 @@ endif()
 
 option(COPOSIT_BUILD_APPS "Build the command-line applications" ${COPOSIT_STANDALONE_DEFAULT})
 option(COPOSIT_BUILD_PYTHON "Build the Python extension modules" ${COPOSIT_STANDALONE_DEFAULT})
-option(COPOSIT_BUILD_TESTS "Build the Coposit test suite" ${COPOSIT_STANDALONE_DEFAULT})
+option(COPOSIT_BUILD_TESTS "Build the coposit test suite" ${COPOSIT_STANDALONE_DEFAULT})
 
 if(COPOSIT_BUILD_TESTS)
     include(CTest)
@@ -50,12 +50,12 @@ target_include_directories(coposit_core INTERFACE
     ${FLINT_INCLUDE_DIR}
 )
 target_link_libraries(coposit_core INTERFACE ${FLINT_LIBRARY} ${MPFR_LIBRARY} ${GMP_LIBRARY})
-add_library(Coposit::core ALIAS coposit_core)
+add_library(coposit::core ALIAS coposit_core)
 
 add_library(coposit_safe STATIC ../models/dickinson_final/solver.cpp)
 set_target_properties(coposit_safe PROPERTIES POSITION_INDEPENDENT_CODE ON)
 target_link_libraries(coposit_safe PUBLIC coposit_core)
-add_library(Coposit::safe ALIAS coposit_safe)
+add_library(coposit::safe ALIAS coposit_safe)
 
 if(COPOSIT_BUILD_APPS)
     add_executable(coposit coposit_main.cpp)
@@ -380,7 +380,7 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
     add_test(NAME ComponentPipelineTests COMMAND test_component_pipeline)
 
     add_executable(test_safe tests/test_safe.cpp)
-    target_link_libraries(test_safe PRIVATE Coposit::safe GTest::gtest_main)
+    target_link_libraries(test_safe PRIVATE coposit::safe GTest::gtest_main)
     add_test(NAME SafeApiTests COMMAND test_safe)
 
     add_executable(test_progress tests/test_progress.cpp)

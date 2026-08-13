@@ -13,14 +13,14 @@ This file routes to every other Markdown document under `aidocs/` without duplic
 - `REFERENCE_RESULTS_N_1_TO_100.md` — **current** — five-second non-strict and strict results for all eight literature baselines on
   every retained matrix through order 100, plus the preserved 2,078-row strict-only comparison of all earlier variants and cutoffs.
 - `REFERENCE_RESULTS_REPRESENTATIVE_CORE_AND_STRESS.md` — **current** — five-second non-strict and strict results for all eight
-  literature baselines plus a separate mode-explicit section for selected Coposit-created models on Representative Core and Stress.
+  literature baselines plus a separate mode-explicit section for selected coposit-created models on Representative Core and Stress.
 - `REFERENCE_RESULTS_BAD26_ORIGINAL_CONE_30S.md` — **current** — targeted 30-second results for the six historical or source-derived
   cone baselines on the 26 matrices unsolved by every five-second cone run.
 
 ## Research
 
 - `LITERATURE_MATRIX_FAMILIES.md` — **research** — source-backed constructions, proved properties, and reported difficulty or unusual
-  behavior for 850 literature source occurrences represented by 849 distinct corpus matrices, excluding Coposit's own benchmark conclusions.
+  behavior for 850 literature source occurrences represented by 849 distinct corpus matrices, excluding coposit's own benchmark conclusions.
 
 ## Historical
 

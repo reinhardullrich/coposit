@@ -42,7 +42,7 @@ solve handles a negative determinant, and exact rank plus one kernel vector hand
 
 ## Name And Sources
 
-The identifier follows Coposit's `<first-author>_<year>` rule. It names K. P. Hadeler and the publication year of:
+The identifier follows coposit's `<first-author>_<year>` rule. It names K. P. Hadeler and the publication year of:
 
 - K. P. Hadeler, “On Copositive Matrices,” *Linear Algebra and its Applications* 49, 79–89 (1983),
   [DOI 10.1016/0024-3795(83)90095-2](https://doi.org/10.1016/0024-3795(83)90095-2), especially Theorem 3.
@@ -151,7 +151,7 @@ directly at order three.
 
 These direct rules avoid factorization overhead but make exactly the same decision as the selected Hadeler theorem.
 
-Coposit keeps the mode-aware rules in `cpp/include/coposit/small_copositivity.hpp`; the original strict-only helper remains available
+coposit keeps the mode-aware rules in `cpp/include/coposit/small_copositivity.hpp`; the original strict-only helper remains available
 to strict-only variants. The mode-aware helper accepts either a complete matrix of order at most three or an index set selecting
 such a principal matrix, so the caller does not have to allocate and copy a temporary matrix. Hadeler still invokes the rules at
 exactly the same points in its cardinality-first traversal.
@@ -217,7 +217,7 @@ this preserves the old traversal where it existed while removing the dimension-6
 
 Extracting the order-one, order-two, and order-three formulas into the shared low-order header changes only their source location.
 The formulas and Hadeler control flow are unchanged. Dickinson 2019 and FracESSA also call this exact helper as an explicitly
-documented Coposit shortcut; that reuse does not make their remaining algorithms part of the Hadeler baseline.
+documented coposit shortcut; that reuse does not make their remaining algorithms part of the Hadeler baseline.
 
 The principal-matrix and one-column solution storage are reused across subsets of the same order. Only the lower triangle of each
 principal matrix is copied because the symmetric fraction-free LDLT implementation reads and overwrites that triangle exclusively.
@@ -225,7 +225,7 @@ These allocation and copy reductions do not change the represented matrix, facto
 
 Hadeler's paper supplies the theorem, not this exact software traversal. Increasing-cardinality principal subsets are what establish
 the theorem's inductive premise. The one-system and singular branches are exact consequences of the theorem and are pinned to the
-optimized FracESSA source; they are not claimed as Hadeler's own implementation. Coposit reuses the partial LDLT rank and recovers
+optimized FracESSA source; they are not claimed as Hadeler's own implementation. coposit reuses the partial LDLT rank and recovers
 the single required kernel vector by exact triangular back-substitution instead of restoring the matrix and running a second full
 nullspace elimination. This changes no Hadeler decision. The baseline adds no connected-component decomposition,
 positive-definiteness shortcut, Z-matrix rule, sign certificate, cone split, Danninger reduction, or other solver.
