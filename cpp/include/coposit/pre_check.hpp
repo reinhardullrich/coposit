@@ -6,6 +6,7 @@
 #include <coposit/small_copositivity.hpp>
 #include <coposit/support.hpp>
 #include <coposit/timeout.hpp>
+#include <coposit/z_matrix_precheck.hpp>
 
 #include <cassert>
 #include <algorithm>
@@ -25,23 +26,24 @@ struct options {
     bool nonnegative_off_diagonal = true;
     bool negative_part_diagonal_dominance = true;
     bool all_ones = true;
+    bool z_matrix = true;
     bool frank_wolfe = true;
     bool positive_definiteness = true;
 
     constexpr bool any() const noexcept
     {
         return small_dimension || principal_submatrices || nonnegative_off_diagonal
-            || negative_part_diagonal_dominance || all_ones || frank_wolfe || positive_definiteness;
+            || negative_part_diagonal_dominance || all_ones || z_matrix || frank_wolfe || positive_definiteness;
     }
 
     static constexpr options all() noexcept
     {
-        return {true, true, 3, true, true, true, true, true};
+        return {true, true, 3, true, true, true, true, true, true};
     }
 
     static constexpr options none() noexcept
     {
-        return {false, false, 3, false, false, false, false, false};
+        return {false, false, 3, false, false, false, false, false, false};
     }
 };
 
@@ -63,11 +65,29 @@ matrix_scan_requirements requirements_for(const options& selected, bool force_ne
     matrix_scan_requirements requirements;
     requirements.negative_part_row_sums = selected.negative_part_diagonal_dominance;
     requirements.all_ones = selected.all_ones || selected.frank_wolfe;
-    requirements.negative_graph = force_negative_graph
+    requirements.negative_graph = force_negative_graph || selected.z_matrix
         || (selected.principal_submatrices && selected.principal_submatrices_up_to >= 3);
+    requirements.nonpositive_graph = selected.z_matrix;
     requirements.copositive_principal_pairs = check_principal_pairs && requested != query::strict;
     requirements.strict_principal_pairs = check_principal_pairs && requested != query::copositive;
     requirements.frank_wolfe = selected.frank_wolfe;
+    requirements.motzkin_straus_pattern = selected.z_matrix;
+    return requirements;
+}
+
+template<query requested>
+matrix_scan_requirements preprocessing_requirements()
+{
+    matrix_scan_requirements requirements;
+    requirements.negative_part_row_sums = true;
+    requirements.all_ones = true;
+    requirements.negative_graph = true;
+    requirements.nonpositive_graph = true;
+    requirements.copositive_principal_pairs = requested != query::strict;
+    requirements.strict_principal_pairs = requested != query::copositive;
+    requirements.frank_wolfe = true;
+    requirements.off_diagonal_sign_counts = true;
+    requirements.motzkin_straus_pattern = true;
     return requirements;
 }
 
@@ -118,6 +138,20 @@ struct classification_state {
         }
     }
 
+    void merge(const classification_state& result)
+    {
+        merge_fact(copositive_known, value.is_copositive, result.copositive_known, result.value.is_copositive);
+        merge_fact(strict_known, value.is_strictly_copositive, result.strict_known, result.value.is_strictly_copositive);
+        apply_implications();
+    }
+
+    void combine_by_and(const classification_state& result) noexcept
+    {
+        combine_fact_by_and(copositive_known, value.is_copositive, result.copositive_known, result.value.is_copositive);
+        combine_fact_by_and(strict_known, value.is_strictly_copositive, result.strict_known, result.value.is_strictly_copositive);
+        apply_implications();
+    }
+
     template<query requested>
     bool done() const noexcept
     {
@@ -129,6 +163,44 @@ struct classification_state {
     model::copositivity_classification value{false, false};
     bool copositive_known = false;
     bool strict_known = false;
+
+private:
+    static void merge_fact(bool& known, bool& current, bool result_known, bool result)
+    {
+        if (!result_known) return;
+        if (!known) {
+            known = true;
+            current = result;
+        } else if (current != result) {
+            throw std::logic_error("conflicting exact preprocessing decisions");
+        }
+    }
+
+    static void combine_fact_by_and(bool& known, bool& current, bool result_known, bool result) noexcept
+    {
+        if ((known && !current) || (result_known && !result)) {
+            known = true;
+            current = false;
+        } else if (known && current && result_known && result) {
+            known = true;
+            current = true;
+        } else {
+            known = false;
+            current = false;
+        }
+    }
+
+    void apply_implications() noexcept
+    {
+        if (strict_known && value.is_strictly_copositive) {
+            value.is_copositive = true;
+            copositive_known = true;
+        }
+        if (copositive_known && !value.is_copositive) {
+            value.is_strictly_copositive = false;
+            strict_known = true;
+        }
+    }
 };
 
 inline void observe_nonpositive_value(classification_state& state, int sign) noexcept
@@ -173,6 +245,28 @@ model::copositivity_classification classify_small_matrix(const matrix_integer& m
     } else {
         return small_copositivity::classify(matrix);
     }
+}
+
+template<query requested>
+classification_state classify_small_matrix_state(const matrix_integer& matrix)
+{
+    classification_state state;
+    if constexpr (requested == query::copositive) {
+        if (small_copositivity::check<model::copositivity_mode::copositive>(matrix)) state.accept_copositive();
+        else state.reject_copositive();
+    } else if constexpr (requested == query::strict) {
+        if (small_copositivity::check<model::copositivity_mode::strictly_copositive>(matrix)) state.accept_strict();
+        else state.reject_strict();
+    } else {
+        const model::copositivity_classification result = small_copositivity::classify(matrix);
+        if (!result.is_copositive) state.reject_copositive();
+        else if (result.is_strictly_copositive) state.accept_strict();
+        else {
+            state.accept_copositive();
+            state.reject_strict();
+        }
+    }
+    return state;
 }
 
 template<query requested>
@@ -331,6 +425,112 @@ private:
     slong maximum_exponent_ = 0;
 };
 
+template<query requested>
+classification_state root_checks_scanned(const matrix_integer& matrix, const matrix_scan_result& scan)
+{
+    const size_t dimension = matrix.rows();
+    if (scan.dimension != dimension) throw std::logic_error("matrix scan dimension does not match matrix");
+
+    progress::preprocessing_stage(progress::preprocessing_phase::root_checks, dimension);
+    if (dimension <= 3) return classify_small_matrix_state<requested>(matrix);
+
+    classification_state state;
+    if (!scan.all_diagonals_nonnegative) state.reject_copositive();
+    else if (!scan.all_diagonals_positive) state.reject_strict();
+
+    if (!state.done<requested>()) {
+        if constexpr (requested == query::copositive) {
+            if (!scan.all_principal_pairs_copositive) state.reject_copositive();
+        } else if constexpr (requested == query::strict) {
+            if (!scan.all_principal_pairs_strictly_copositive) state.reject_strict();
+        } else {
+            if (!scan.all_principal_pairs_copositive) state.reject_copositive();
+            else if (!scan.all_principal_pairs_strictly_copositive) state.reject_strict();
+        }
+    }
+
+    if (!state.done<requested>() && !scan.has_negative_off_diagonal) {
+        if (scan.all_diagonals_positive) state.accept_strict();
+        else if (scan.all_diagonals_nonnegative) {
+            state.accept_copositive();
+            state.reject_strict();
+        }
+    }
+    return state;
+}
+
+template<query requested>
+classification_state ordinary_checks_scanned(const matrix_integer& matrix, const matrix_scan_result& scan)
+{
+    const size_t dimension = matrix.rows();
+    if (scan.dimension != dimension) throw std::logic_error("matrix scan dimension does not match matrix");
+    progress::preprocessing_stage(progress::preprocessing_phase::principal_submatrices, dimension, 0, dimension);
+    if (dimension <= 3) return classify_small_matrix_state<requested>(matrix);
+
+    classification_state state;
+    observe_small_principal_triples<requested>(state, matrix, scan.negative_neighbors);
+    if (state.done<requested>()) return state;
+
+    progress::preprocessing_stage(progress::preprocessing_phase::negative_part_diagonal_dominance, dimension);
+    bool all_row_sums_nonnegative = true;
+    bool all_row_sums_positive = true;
+    for (const integer& row_sum : scan.negative_part_row_sums) {
+        all_row_sums_nonnegative &= row_sum.sign() >= 0;
+        all_row_sums_positive &= row_sum.sign() > 0;
+    }
+    observe_positive_certificate(state, all_row_sums_nonnegative, all_row_sums_positive);
+    if (state.done<requested>()) return state;
+
+    progress::preprocessing_stage(progress::preprocessing_phase::all_ones, dimension);
+    observe_nonpositive_value(state, scan.all_ones_quadratic_value.sign());
+    if (state.done<requested>()) return state;
+
+    progress::preprocessing_stage(progress::preprocessing_phase::frank_wolfe, dimension, 0, dimension);
+    frank_wolfe_witness_search search;
+    auto observer = [&](int sign) {
+        observe_nonpositive_value(state, sign);
+        return state.done<requested>();
+    };
+    search.run(matrix, scan, observer);
+    if (state.done<requested>()) return state;
+
+    z_matrix_precheck::request z_request = z_matrix_precheck::request::combined;
+    if constexpr (requested == query::copositive) z_request = z_matrix_precheck::request::copositive;
+    else if constexpr (requested == query::strict) z_request = z_matrix_precheck::request::strict;
+    const z_matrix_precheck::outcome z_result = z_matrix_precheck::check(
+        matrix, scan.negative_neighbors, scan.nonpositive_neighbors, scan.is_motzkin_straus_pattern, z_request);
+    if (z_result == z_matrix_precheck::outcome::not_copositive) state.reject_copositive();
+    else if (z_result == z_matrix_precheck::outcome::not_strictly_copositive) state.reject_strict();
+    if (state.done<requested>()) return state;
+
+    progress::preprocessing_stage(progress::preprocessing_phase::exact_factorization, dimension, 0, dimension);
+    matrix_integer factored(matrix);
+    fraction_free_ldlt_factorization factorization(dimension);
+    factorization.factorize_inplace(factored, progress::enabled());
+    const bool positive_semidefinite = factorization.is_positive_semidefinite();
+    const bool positive_definite = factorization.is_positive_definite();
+    observe_positive_certificate(state, positive_semidefinite, positive_definite);
+    if (state.done<requested>()) return state;
+
+    if constexpr (requested != query::copositive) {
+        if (positive_semidefinite && !positive_definite && dimension - factorization.rank() == 1) {
+            matrix_integer kernel_vector(dimension, 1);
+            factorization.one_nullspace_vector(kernel_vector, factored);
+            bool has_positive = false;
+            bool has_negative = false;
+            for (size_t row = 0; row < dimension; ++row) {
+                timeout_checkpoint();
+                has_positive |= kernel_vector(row, 0).sign() > 0;
+                has_negative |= kernel_vector(row, 0).sign() < 0;
+            }
+            assert(has_positive || has_negative);
+            if (has_positive && has_negative) state.accept_strict();
+            else state.reject_strict();
+        }
+    }
+    return state;
+}
+
 template<query requested, typename FinalClassifier>
 model::copositivity_classification run_scanned(const matrix_integer& matrix, const options& selected,
                                                const matrix_scan_result& scan, FinalClassifier& final_classifier)
@@ -394,6 +594,18 @@ model::copositivity_classification run_scanned(const matrix_integer& matrix, con
     if (check_principal_triples) {
         progress::preprocessing_stage(progress::preprocessing_phase::principal_submatrices, dimension, 0, dimension);
         observe_small_principal_triples<requested>(state, matrix, scan.negative_neighbors);
+        if (state.done<requested>()) return state.value;
+    }
+
+    if (selected.z_matrix) {
+        z_matrix_precheck::request z_request = z_matrix_precheck::request::combined;
+        if constexpr (requested == query::copositive) z_request = z_matrix_precheck::request::copositive;
+        else if constexpr (requested == query::strict) z_request = z_matrix_precheck::request::strict;
+
+        const z_matrix_precheck::outcome z_result = z_matrix_precheck::check(
+            matrix, scan.negative_neighbors, scan.nonpositive_neighbors, scan.is_motzkin_straus_pattern, z_request);
+        if (z_result == z_matrix_precheck::outcome::not_copositive) state.reject_copositive();
+        else if (z_result == z_matrix_precheck::outcome::not_strictly_copositive) state.reject_strict();
         if (state.done<requested>()) return state.value;
     }
 

@@ -6,12 +6,16 @@
 
 coposit decides exact copositivity (CP, the non-strict predicate) and strict copositivity (SCP) for nonempty symmetric integer
 matrices. The eight literature baselines and the selected Adaptive Sponsel–COPOMATRIX and Dickinson Final models support both
-selectable modes; the other coposit-created variants remain explicitly strict-only. Hadeler 1983, Dickinson 2019, Dickinson Final,
-and Danninger 1990 can additionally classify both predicates in one traversal.
+selectable modes; other coposit-created variants remain explicitly strict-only except for `dense_bitset_dickinson`, `cbdd_zed_dickinson`,
+`wide_certificate_cbdd_zed_dickinson`, its 75%, 90%, and 95%-remaining copies, `multithreaded_cbdd_zed_dickinson`, and the
+`ceiling_pruned_dickinson`, `sat_zed_dickinson`, `clingo_sat_zed_dickinson`, and circular-only `fracessa_circular` experiments.
+Hadeler 1983, Dickinson 2019, Dickinson Final, Dense-Bitset Dickinson, Danninger 1990, all CBDD-Zed Dickinson variants, SAT-Zed
+Dickinson, Clingo-SAT-Zed Dickinson, Ceiling-Pruned Dickinson, and FracESSA Circular can classify both predicates in one traversal.
 
 ## Build And Test
 
-Required: CMake 3.18 or newer, a C++17 compiler, Python 3.11 or newer, FLINT, MPFR, and GMP. CMake fetches pybind11 and GoogleTest.
+Required: CMake 3.18 or newer, C and C++17 compilers, Python 3.11 or newer, FLINT, MPFR, and GMP. CMake fetches pybind11, GoogleTest,
+CaDiCaL 2.2.1 for the SAT experiment, and clingo 5.8.2 with clasp 3.4.1 for the Clingo-SAT experiment.
 
 ```bash
 cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release
@@ -50,8 +54,10 @@ After the method, the public command requires `strict` or `non-strict`; `safe` a
 default. Combined safe mode performs one Dickinson classification traversal and prints named `copositive` and
 `strictly_copositive` results. The single-predicate commands print `true` or `false`. Both methods use the fused component/pre-check
 pipeline: globally valid checks run during the root scan, negative-entry components are then visited, and Frank–Wolfe plus exact
-definiteness are deferred to each component. Invalid input, a node limit, or another unresolved resource failure exits nonzero
-instead of returning `false`.
+definiteness and the negative-only maximal-Z-matrix test are deferred to each component. The Z-matrix test automatically bypasses
+Motzkin–Straus graph matrices. Danninger is then attempted when its best pivot creates at most two children; an unresolved matrix
+receives the corresponding COPOMATRIX attempt. Reduction children re-enter the same pipeline up to the internal maximum reduction
+depth of two. Invalid input, a node limit, or another unresolved resource failure exits nonzero instead of returning `false`.
 The public command intentionally has no preprocessing option: both stages are always enabled. Explicit model and preprocessing
 selection belongs to the analysis interfaces described below.
 
@@ -86,26 +92,26 @@ so variants can diverge and interweave algorithms freely. `dickinson_final` is t
 baseline used by the public `safe` method. The `fracessa` model decides
 whether the simplex minimum is positive from exact first-order candidate payoff signs for `-A`, stopping at the first nonnegative
 payoff. Its supports use the shared packed representation with `ceil(n / 64)` machine words, so it has no fixed-width dimension limit.
+The separate `fracessa_circular` experiment assumes a circular-symmetric input and applies FracESSA's direct bracelet generation,
+complete rotation/reflection orbit pruning, and exact affine-multiplier reduction while classifying both CP and SCP.
 
 ## C++ Analysis Interface
 
-Select one comparison model and independently tune preprocessing with `coposit-analyze`:
+Select one comparison model and enable or bypass the complete preprocessing pipeline with `coposit-analyze`:
 
 ```bash
 cpp/build/coposit-analyze \
   --model bundfuss_2008 \
   --mode strict \
   --timeout 30 \
-  --connected-components off \
-  --pre-checks on \
-  --pre-check frank-wolfe off \
-  --principal-submatrices-up-to 2 \
+  --preprocessing off \
   matrix.mtx
 ```
 
-All preprocessing is on by default. Every selectable model supports strict and non-strict mode; Danninger, Hadeler, and Dickinson
-Final additionally support one-pass `--mode both`. The inventory comprises the literature baselines except superseded Dickinson 2019,
-plus Dickinson Final and Adaptive Sponsel–COPOMATRIX. The complete model list, individual pre-check names, output contract, and
+The fixed pipeline is on by default; its internal stages cannot be switched independently. Every selectable model supports strict
+and non-strict mode; Danninger, Hadeler, and Dickinson Final additionally support one-pass `--mode both`. The inventory comprises
+the literature baselines except superseded Dickinson 2019,
+plus Dickinson Final and Adaptive Sponsel–COPOMATRIX. The complete model list, preprocessing flow, output contract, and
 examples are in [`docs/ANALYSIS_CLI.md`](docs/ANALYSIS_CLI.md).
 
 ## Python Analysis Interface

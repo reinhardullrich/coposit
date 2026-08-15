@@ -1,5 +1,6 @@
 from contextlib import closing
 import hashlib
+import json
 import os
 from pathlib import Path
 import re
@@ -18,6 +19,7 @@ from pycoposit import (
     MPConfig,
     Matrix,
     StatusCode,
+    compute_matrix,
     run,
     run_multiprocessing,
 )
@@ -36,11 +38,56 @@ COPOSITIVE_BASELINES = (
     "bundfuss_2008",
     "sponsel_2012",
 )
-COPOSITIVE_MODE_ALGORITHMS = COPOSITIVE_BASELINES + ("adaptive_sponsel_copomatrix", "dickinson_final")
+COPOSITIVE_MODE_ALGORITHMS = COPOSITIVE_BASELINES + (
+    "adaptive_sponsel_copomatrix",
+    "dickinson_final",
+    "dense_bitset_dickinson",
+    "fracessa_circular",
+    "cbdd_zed_dickinson",
+    "wide_certificate_cbdd_zed_dickinson",
+    "wide_75_certificate_cbdd_zed_dickinson",
+    "wide_90_certificate_cbdd_zed_dickinson",
+    "wide_95_certificate_cbdd_zed_dickinson",
+    "multithreaded_cbdd_zed_dickinson",
+    "ceiling_pruned_dickinson",
+    "sat_zed_dickinson",
+    "clingo_sat_zed_dickinson",
+)
 STRICT_ONLY_ALGORITHMS = tuple(algorithm for algorithm in ALGORITHMS if algorithm not in COPOSITIVE_MODE_ALGORITHMS)
 
 
+def initialize_runner_database(connection: sqlite3.Connection, root: Path) -> None:
+    connection.executescript((root / "testdata" / "schema.sql").read_text())
+    connection.executescript((root / "testdata" / "diagnostics_schema.sql").read_text())
+
+
 class WrapperTests(unittest.TestCase):
+    def test_corpus_and_diagnostics_schemas_are_separate(self):
+        root = Path(__file__).resolve().parents[2]
+        with closing(sqlite3.connect(":memory:")) as corpus:
+            corpus.executescript((root / "testdata" / "schema.sql").read_text())
+            self.assertEqual(
+                {row[0] for row in corpus.execute("SELECT name FROM sqlite_schema WHERE type = 'table'")},
+                {"matrices", "sources"},
+            )
+
+        with closing(sqlite3.connect(":memory:")) as diagnostics:
+            diagnostics.executescript((root / "testdata" / "diagnostics_schema.sql").read_text())
+            diagnostics.execute(
+                """INSERT INTO results (
+                       matrix_id, model_id, mode, preprocessing, binary_sha256, status, elapsed_ns,
+                       timeout_ns, recorded_at, diagnostics, certificate_joint_distribution
+                   ) VALUES (1, 'cbdd_zed_dickinson', 'strictly_copositive', 'none', ?, 'timeout',
+                             60000000000, 60000000000, 'now', 'last progress line', '[[2,28,492]]')""",
+                ("1" * 64,),
+            )
+            self.assertEqual(
+                diagnostics.execute(
+                    "SELECT elapsed_ns, diagnostics, certificate_joint_distribution FROM results"
+                ).fetchone(),
+                (60_000_000_000, "last progress line", "[[2,28,492]]"),
+            )
+
     def test_schema_keeps_strict_and_copositive_truth_consistent(self):
         root = Path(__file__).resolve().parents[2]
         with closing(sqlite3.connect(":memory:")) as connection:
@@ -79,10 +126,26 @@ class WrapperTests(unittest.TestCase):
     def test_public_validation(self):
         self.assertIn("hadeler_1983", ALGORITHMS)
         self.assertEqual(COPOSITIVITY_MODES, ("copositive", "strictly_copositive", "both"))
-        self.assertEqual(PREPROCESSING_MODES, ("none", "connected_components", "pre_checks", "both"))
+        self.assertEqual(PREPROCESSING_MODES, ("none", "both"))
         self.assertEqual(
             COMBINED_CLASSIFICATION_ALGORITHMS,
-            ("danninger_1990", "hadeler_1983", "dickinson_2019", "dickinson_final"),
+            (
+                "danninger_1990",
+                "hadeler_1983",
+                "dickinson_2019",
+                "dickinson_final",
+                "dense_bitset_dickinson",
+                "cbdd_zed_dickinson",
+                "wide_certificate_cbdd_zed_dickinson",
+                "wide_75_certificate_cbdd_zed_dickinson",
+                "wide_90_certificate_cbdd_zed_dickinson",
+                "wide_95_certificate_cbdd_zed_dickinson",
+                "multithreaded_cbdd_zed_dickinson",
+                "ceiling_pruned_dickinson",
+                "sat_zed_dickinson",
+                "clingo_sat_zed_dickinson",
+                "fracessa_circular",
+            ),
         )
         self.assertEqual(StatusCode.NODE_LIMIT, 6)
         with self.assertRaises(TypeError):
@@ -99,6 +162,10 @@ class WrapperTests(unittest.TestCase):
             _validate_preprocessing("unknown")
         with self.assertRaises(ValueError):
             Matrix("1#1", matrix_id=1 << 63)
+        with self.assertRaises(TypeError):
+            run("hadeler_1983", Matrix("1#1"), progress="yes")
+        with self.assertRaises(TypeError):
+            compute_matrix("cbdd_zed_dickinson", Matrix("1#1"), collect_certificate_joint_distribution="yes")
         self.assertIsNone(Matrix("1#1").matrix_id)
         unlabeled_result = run("hadeler_1983", Matrix("1#1"))
         self.assertEqual(unlabeled_result["status"], StatusCode.OK)
@@ -106,6 +173,18 @@ class WrapperTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             MPConfig(workers=0)
         self.assertEqual(_max_pending_matrices(MPConfig(workers=2, prefetch_per_worker=3, queue_maxsize=4)), 4)
+
+    def test_serial_dickinson_experiments_collect_sparse_certificate_joint_distributions(self):
+        for model in ("cbdd_zed_dickinson", "czdd_zed_dickinson", "sat_zed_dickinson", "clingo_sat_zed_dickinson"):
+            with self.subTest(model=model):
+                result = compute_matrix(
+                    model,
+                    Matrix("2#1,0,1"),
+                    preprocessing="none",
+                    collect_certificate_joint_distribution=True,
+                )
+                self.assertEqual(result["status"], StatusCode.OK)
+                self.assertEqual(result["certificate_joint_distribution"], [(1, 1, 2, 2)])
 
     def test_matrix_market_file_path(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -169,6 +248,7 @@ class WrapperTests(unittest.TestCase):
         invalid_sign = run("hadeler_1983", Matrix("2#1,1/-2,1", matrix_id=3))
 
         self.assertEqual(fraction["status"], StatusCode.OK)
+        self.assertEqual(fraction["preprocessing"], "both")
         self.assertIs(fraction["is_strictly_copositive"], True)
         self.assertEqual(circular["status"], StatusCode.OK)
         self.assertIs(circular["is_strictly_copositive"], False)
@@ -252,7 +332,7 @@ class WrapperTests(unittest.TestCase):
                 "SELECT dimension, matrix FROM matrices WHERE matrix_id = 9660"
             ).fetchone()
 
-        result = run("dutour_2018", Matrix(f"{dimension}#{values}", matrix_id=9660))
+        result = run("dutour_2018", Matrix(f"{dimension}#{values}", matrix_id=9660), preprocessing="none")
         self.assertEqual(result["status"], StatusCode.NODE_LIMIT)
         self.assertIsNone(result["is_strictly_copositive"])
         self.assertIn("50000 open nodes", result["error_message"])
@@ -306,12 +386,70 @@ class ResultsRunnerTests(unittest.TestCase):
             self.skipTest("results runner needs distinct parent and worker CPUs")
         self.parent_cpu, self.worker_cpu = available_cpus[:2]
 
+    def test_runner_refreshes_fastest_cache_from_separate_diagnostics_database(self):
+        root = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            directory = Path(temporary_directory)
+            corpus = directory / "corpus.sqlite3"
+            diagnostics = directory / "diagnostics.sqlite3"
+            with closing(sqlite3.connect(corpus)) as connection:
+                connection.executescript((root / "testdata" / "schema.sql").read_text())
+                connection.execute(
+                    "INSERT INTO matrices(matrix_id, dimension, matrix, is_strictly_copositive, is_copositive) "
+                    "VALUES (1, 1, '1', 1, 1)"
+                )
+                connection.commit()
+            with closing(sqlite3.connect(diagnostics)) as connection:
+                connection.executescript((root / "testdata" / "diagnostics_schema.sql").read_text())
+                connection.execute(
+                    """INSERT INTO results (
+                           matrix_id, model_id, mode, preprocessing, binary_sha256, status,
+                           is_strictly_copositive, elapsed_ns, timeout_ns, recorded_at
+                       ) VALUES (1, 'wrong_result', 'strictly_copositive', 'none', ?, 'ok', 0, 0, 1, 'now')""",
+                    ("0" * 64,),
+                )
+                connection.commit()
+
+            command = [
+                sys.executable,
+                str(root / "python" / "run_results.py"),
+                "hadeler_1983",
+                "--timeout-seconds",
+                "5",
+                "--parent-cpu",
+                str(self.parent_cpu),
+                "--cpus",
+                str(self.worker_cpu),
+                "--database",
+                str(corpus),
+                "--results-database",
+                str(diagnostics),
+            ]
+            environment = os.environ.copy()
+            environment["PYTHONPATH"] = str(root / "python")
+            subprocess.run(command, cwd=root, env=environment, check=True, capture_output=True, text=True)
+
+            with closing(sqlite3.connect(corpus)) as connection:
+                fastest_elapsed_ns, reference = connection.execute(
+                    "SELECT fastest_elapsed_ns, fastest_result_ref FROM matrices WHERE matrix_id = 1"
+                ).fetchone()
+            with closing(sqlite3.connect(diagnostics)) as connection:
+                result = connection.execute(
+                    """SELECT elapsed_ns, model_id, mode, preprocessing, binary_sha256
+                       FROM results WHERE model_id = 'hadeler_1983'"""
+                ).fetchone()
+            self.assertEqual(fastest_elapsed_ns, result[0])
+            self.assertEqual(
+                json.loads(reference),
+                {"model_id": result[1], "mode": result[2], "preprocessing": result[3], "binary_sha256": result[4]},
+            )
+
     def test_large_runner_throttles_progress_output(self):
         root = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as temporary_directory:
             database = Path(temporary_directory) / "results.sqlite3"
             with closing(sqlite3.connect(database)) as connection:
-                connection.executescript((root / "testdata" / "schema.sql").read_text())
+                initialize_runner_database(connection, root)
                 connection.executemany(
                     "INSERT INTO matrices(matrix_id, dimension, matrix, is_strictly_copositive, is_copositive, source, family) "
                     "VALUES (?, 1, '1', 1, 1, NULL, NULL)",
@@ -351,11 +489,22 @@ class ResultsRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             database = Path(temporary_directory) / "results.sqlite3"
             with closing(sqlite3.connect(database)) as connection:
-                connection.executescript((root / "testdata" / "schema.sql").read_text())
+                initialize_runner_database(connection, root)
                 connection.executemany(
                     "INSERT INTO matrices(matrix_id, dimension, matrix, is_strictly_copositive, is_copositive, "
-                    "representative_core, stress_test, timeout_5s_strict_set) VALUES (?, 1, '1', 1, 1, ?, ?, ?)",
-                    ((1, 1, 0, 0), (2, 0, 1, 0), (3, 0, 0, 1), (4, 0, 0, 0)),
+                    "representative_core, stress_test, timeout_5s_strict_set, references_unsolved) "
+                    "VALUES (?, ?, '1', ?, ?, ?, ?, ?, ?)",
+                    ((1, 1, 1, 1, 1, 0, 0, "[]"), (2, 1, 1, 1, 0, 1, 0, "[]"),
+                     (3, 1, None, None, 0, 0, 1, "[]"),
+                     (4, 101, 1, 1, 0, 0, 0, '[{"source_id":1,"comment":"timeout"}]'),
+                     (5, 1, 1, 1, 1, 0, 0, "[]"), (6, 1, 1, 1, 1, 0, 0, "[]")),
+                )
+                connection.execute(
+                    """INSERT INTO results (
+                           matrix_id, model_id, mode, preprocessing, binary_sha256, status, is_copositive,
+                           is_strictly_copositive, elapsed_ns, timeout_ns, recorded_at, message
+                       ) VALUES (5, 'prior_model', 'strictly_copositive', 'none', ?, 'ok', NULL, 1, 1, 1, 'now', NULL)""",
+                    ("0" * 64,),
                 )
                 connection.commit()
 
@@ -369,24 +518,38 @@ class ResultsRunnerTests(unittest.TestCase):
                 "representative_core",
                 "stress_test",
                 "timeout_5s_strict_set",
+                "n_le_100",
+                "references_unsolved",
+                "--matrix-ids",
+                "1",
+                "2",
+                "3",
+                "4",
+                "5",
+                "--without-results",
                 "--parent-cpu",
                 str(self.parent_cpu),
                 "--cpus",
                 str(self.worker_cpu),
                 "--database",
                 str(database),
-                "--preprocessing",
-                "both",
             ]
             environment = os.environ.copy()
             environment["PYTHONPATH"] = str(root / "python")
             completed = subprocess.run(command, cwd=root, env=environment, check=True, capture_output=True, text=True)
 
             with closing(sqlite3.connect(database)) as connection:
-                rows = connection.execute("SELECT matrix_id, preprocessing FROM results ORDER BY matrix_id").fetchall()
-            self.assertEqual(rows, [(1, "both"), (2, "both"), (3, "both")])
-            self.assertIn("matrix_sets=representative_core,stress_test,timeout_5s_strict_set", completed.stdout)
+                rows = connection.execute(
+                    "SELECT matrix_id, preprocessing FROM results WHERE model_id = 'hadeler_1983' ORDER BY matrix_id"
+                ).fetchall()
+            self.assertEqual(rows, [(1, "both"), (2, "both"), (3, "both"), (4, "both")])
+            self.assertIn(
+                "matrix_sets=representative_core,stress_test,timeout_5s_strict_set,n_le_100,references_unsolved",
+                completed.stdout,
+            )
             self.assertIn("preprocessing=both", completed.stdout)
+            self.assertIn("without_results=yes", completed.stdout)
+            self.assertIn("comparison=unverified", completed.stdout)
 
     def test_runner_stores_file_parse_error_and_reuses_worker(self):
         root = Path(__file__).resolve().parents[2]
@@ -398,7 +561,7 @@ class ResultsRunnerTests(unittest.TestCase):
             malformed.write_text("%%MatrixMarket matrix array integer symmetric\n2 2\n1\n", encoding="ascii")
             database = directory / "results.sqlite3"
             with closing(sqlite3.connect(database)) as connection:
-                connection.executescript((root / "testdata" / "schema.sql").read_text())
+                initialize_runner_database(connection, root)
                 connection.execute(
                     "INSERT INTO matrices(matrix_id, dimension, matrix, file_sha256, is_strictly_copositive, is_copositive) "
                     "VALUES (1, 2, 'file:matrices/1.mtx', ?, 1, 1)",
@@ -449,7 +612,7 @@ class ResultsRunnerTests(unittest.TestCase):
             matrix_path.write_text("%%MatrixMarket matrix array integer symmetric\n1 1\n1\n", encoding="ascii")
             database = directory / "results.sqlite3"
             with closing(sqlite3.connect(database)) as connection:
-                connection.executescript((root / "testdata" / "schema.sql").read_text())
+                initialize_runner_database(connection, root)
                 connection.execute(
                     "INSERT INTO matrices(matrix_id, dimension, matrix, file_sha256, is_strictly_copositive, is_copositive) "
                     "VALUES (1, 1, 'file:matrices/1.mtx', ?, 1, 1)",
@@ -485,7 +648,7 @@ class ResultsRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             database = Path(temporary_directory) / "results.sqlite3"
             with closing(sqlite3.connect(database)) as connection:
-                connection.executescript((root / "testdata" / "schema.sql").read_text())
+                initialize_runner_database(connection, root)
                 connection.execute(
                     "INSERT INTO matrices(matrix_id, dimension, matrix, is_strictly_copositive, is_copositive, source, family) "
                     "VALUES (1, 2, '1,0,1', 1, 1, NULL, NULL)"
@@ -502,6 +665,8 @@ class ResultsRunnerTests(unittest.TestCase):
                 "hadeler_1983",
                 "--timeout-seconds",
                 "1000000",
+                "--preprocessing",
+                "none",
                 "--dimension-from",
                 "2",
                 "--dimension-to",
@@ -583,7 +748,7 @@ class ResultsRunnerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary_directory:
             database = Path(temporary_directory) / "results.sqlite3"
             with closing(sqlite3.connect(database)) as connection:
-                connection.executescript((root / "testdata" / "schema.sql").read_text())
+                initialize_runner_database(connection, root)
                 connection.execute(
                     "INSERT INTO matrices(matrix_id, dimension, matrix, is_strictly_copositive, is_copositive, source, family) "
                     "VALUES (1, ?, ?, ?, ?, NULL, NULL)",
@@ -616,6 +781,8 @@ class ResultsRunnerTests(unittest.TestCase):
                 str(self.parent_cpu),
                 "--cpus",
                 str(self.worker_cpu),
+                "--preprocessing",
+                "none",
                 "--database",
                 str(database),
             ]
@@ -643,6 +810,62 @@ class ResultsRunnerTests(unittest.TestCase):
                 timeout_values = connection.execute("SELECT matrix_id, timeout_ns FROM results ORDER BY matrix_id").fetchall()
             self.assertEqual(timeout_values, [(1, 20_000_000), (2, 10_000_000), (3, 10_000_000)])
             self.assertIn("matrices=1", retried.stdout)
+
+    def test_runner_stores_last_cbdd_certificate_distribution_on_timeout(self):
+        root = Path(__file__).resolve().parents[2]
+        with closing(sqlite3.connect(root / "testdata" / "copos_testdata.sqlite3")) as source:
+            dimension, hard_matrix = source.execute(
+                "SELECT dimension, matrix FROM matrices WHERE matrix_id = 9630"
+            ).fetchone()
+
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            database = Path(temporary_directory) / "results.sqlite3"
+            with closing(sqlite3.connect(database)) as connection:
+                initialize_runner_database(connection, root)
+                connection.execute(
+                    "INSERT INTO matrices(matrix_id, dimension, matrix, is_strictly_copositive, is_copositive) "
+                    "VALUES (1, 2, '1,0,1', 1, 1)"
+                )
+                connection.execute(
+                    "INSERT INTO matrices(matrix_id, dimension, matrix, is_strictly_copositive, is_copositive) "
+                    "VALUES (2, ?, ?, 1, 1)",
+                    (dimension, hard_matrix),
+                )
+                connection.commit()
+
+            command = [
+                sys.executable,
+                str(root / "python" / "run_results.py"),
+                "cbdd_zed_dickinson",
+                "--timeout-seconds",
+                "0.1",
+                "--parent-cpu",
+                str(self.parent_cpu),
+                "--cpus",
+                str(self.worker_cpu),
+                "--database",
+                str(database),
+                "--preprocessing",
+                "none",
+                "--certificate-joint-distribution",
+            ]
+            environment = os.environ.copy()
+            environment["PYTHONPATH"] = str(root / "python")
+            subprocess.run(command, cwd=root, env=environment, check=True, capture_output=True, text=True)
+
+            with closing(sqlite3.connect(database)) as connection:
+                rows = connection.execute(
+                    "SELECT matrix_id, status, elapsed_ns, diagnostics, certificate_joint_distribution "
+                    "FROM results ORDER BY matrix_id"
+                ).fetchall()
+            self.assertEqual(rows[0][:2], (1, "ok"))
+            self.assertGreaterEqual(rows[0][2], 0)
+            self.assertIn("metric=decision-diagram", rows[0][3])
+            self.assertEqual(json.loads(rows[0][4]), [[1, 1, 2, 2]])
+            self.assertEqual(rows[1][1], "timeout")
+            self.assertGreater(rows[1][2], 0)
+            self.assertIn("metric=decision-diagram", rows[1][3])
+            self.assertTrue(json.loads(rows[1][4]))
 
 
 if __name__ == "__main__":

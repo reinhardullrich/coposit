@@ -41,9 +41,79 @@ TEST(PreCheckTest, DefaultsToOnAndCanBeSwitchedFullyOff)
 {
     const pre_check::options defaults;
     EXPECT_EQ(defaults.principal_submatrices_up_to, 3U);
+    EXPECT_TRUE(defaults.z_matrix);
+    EXPECT_FALSE(pre_check::options::none().z_matrix);
 
     size_t calls = 0;
     EXPECT_TRUE(pre_check::check(matrix_integer(), copositive, pre_check::options::none(), [&](const matrix_integer&) {
+        ++calls;
+        return true;
+    }));
+    EXPECT_EQ(calls, 1U);
+}
+
+TEST(PreCheckTest, ZMatrixCheckIsNegativeOnlyAndModeAware)
+{
+    pre_check::options selected = pre_check::options::none();
+    selected.z_matrix = true;
+    size_t calls = 0;
+
+    const matrix_integer positive_definite_block = symmetric_matrix(4, {2, -1, 3, 3, 2, 3, 3, 2, 3, 2});
+    EXPECT_TRUE(pre_check::check(positive_definite_block, strict, selected, [&](const matrix_integer&) {
+        ++calls;
+        return true;
+    }));
+    EXPECT_EQ(calls, 1U);
+
+    const matrix_integer singular_block = symmetric_matrix(4, {1, -1, 2, 2, 1, 2, 2, 1, 2, 1});
+    EXPECT_FALSE(pre_check::check(singular_block, strict, selected, [&](const matrix_integer&) {
+        ++calls;
+        return true;
+    }));
+    EXPECT_EQ(calls, 1U);
+    EXPECT_TRUE(pre_check::check(singular_block, copositive, selected, [&](const matrix_integer&) {
+        ++calls;
+        return true;
+    }));
+    EXPECT_EQ(calls, 2U);
+
+    const auto boundary = pre_check::classify(singular_block, selected, [&](const matrix_integer&) {
+        ++calls;
+        return model::copositivity_classification{true, true};
+    });
+    EXPECT_TRUE(boundary.is_copositive);
+    EXPECT_FALSE(boundary.is_strictly_copositive);
+    EXPECT_EQ(calls, 3U);
+
+    const matrix_integer indefinite_block = symmetric_matrix(4, {1, -2, 2, 2, 1, 2, 2, 1, 2, 1});
+    EXPECT_FALSE(pre_check::check(indefinite_block, copositive, selected, [&](const matrix_integer&) {
+        ++calls;
+        return true;
+    }));
+    const auto rejected = pre_check::classify(indefinite_block, selected, [&](const matrix_integer&) {
+        ++calls;
+        return model::copositivity_classification{true, true};
+    });
+    EXPECT_FALSE(rejected.is_copositive);
+    EXPECT_FALSE(rejected.is_strictly_copositive);
+    EXPECT_EQ(calls, 3U);
+}
+
+TEST(PreCheckTest, ZMatrixCheckIncludesSingletonBlocksAndBypassesMotzkinStrausMatrices)
+{
+    pre_check::options selected = pre_check::options::none();
+    selected.z_matrix = true;
+    size_t calls = 0;
+
+    const matrix_integer negative_singleton = symmetric_matrix(4, {-1, 2, 2, 2, 1, 2, 2, 1, 2, 1});
+    EXPECT_FALSE(pre_check::check(negative_singleton, copositive, selected, [&](const matrix_integer&) {
+        ++calls;
+        return true;
+    }));
+    EXPECT_EQ(calls, 0U);
+
+    const matrix_integer motzkin_straus = symmetric_matrix(4, {1, -1, 1, 1, 1, 1, 1, 1, 1, 1});
+    EXPECT_TRUE(pre_check::check(motzkin_straus, strict, selected, [&](const matrix_integer&) {
         ++calls;
         return true;
     }));

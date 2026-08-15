@@ -62,7 +62,8 @@ fused scan or component representation; it is indiscriminate use of optional cub
 The smallest sound fix is a work-aware default, not a new algorithm and not a false classification. Estimate the triple work from
 the already-built negative degrees and skip it when the estimate exceeds a documented budget. Likewise skip exact whole-component
 LDLT above its budget. Skipping either pre-check preserves correctness because it merely delegates the undecided matrix to the
-selected exact model. Explicit analysis mode can retain an uncensored `all pre-checks` choice.
+selected exact model. An uncensored comparison can use a recorded temporary source-level experiment; the supported interface keeps
+one complete preprocessing switch.
 
 ### P2 — The C++ Launcher Layouts Cannot Be Installed by CMake
 

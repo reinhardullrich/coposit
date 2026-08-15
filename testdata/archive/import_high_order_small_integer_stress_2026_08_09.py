@@ -12,8 +12,8 @@ from typing import Iterator
 
 
 DIMENSIONS = (
-    51, 168, 235, 331, 438, 542, 651, 747, 856, 952, 1057, 1151, 1263, 1360, 1468,
-    1565, 1672, 1770, 1876, 1973, 2084, 2181, 2289, 2386, 2498, 2594, 2701, 2799, 2908, 2997,
+    43, 51, 60, 73, 81, 92, 103, 111, 124, 132, 145, 153, 161, 168, 176, 187, 199,
+    235, 331, 438, 542, 651, 747, 856, 952,
 )
 MASK64 = (1 << 64) - 1
 BASE_SEED = 0xC0A0517_20260809
@@ -122,9 +122,9 @@ def upper_text(diagonal: list[int], upper: list[dict[int, int]]) -> tuple[str, i
     return output.getvalue(), maximum, nonzero
 
 
-def generated_rows() -> Iterator[tuple[int, str, int, str, str, int, int]]:
+def generated_rows(dimensions: tuple[int, ...] = DIMENSIONS) -> Iterator[tuple[int, str, int, str, str, int, int]]:
     prefix = "coposit deterministic high-order sparse stress generator 2026-08-09"
-    for dimension in DIMENSIONS:
+    for dimension in dimensions:
         seen: set[str] = set()
         for kind in KINDS:
             diagonal, upper, proof = build_sparse_matrix(dimension, kind)

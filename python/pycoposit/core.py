@@ -69,19 +69,27 @@ def compute_matrix(
     algorithm: Algorithm,
     matrix: Matrix,
     mode: CopositivityMode = "strictly_copositive",
-    preprocessing: Preprocessing = "none",
+    preprocessing: Preprocessing = "both",
+    progress: bool = False,
+    collect_certificate_joint_distribution: bool = False,
 ) -> dict:
     """Run one matrix through the selected native model."""
 
     _validate_algorithm(algorithm)
     _validate_mode(mode)
     _validate_preprocessing(preprocessing)
+    if type(progress) is not bool:
+        raise TypeError("progress must be a bool")
+    if type(collect_certificate_joint_distribution) is not bool:
+        raise TypeError("collect_certificate_joint_distribution must be a bool")
     matrix_source, is_file = matrix_parser_source(matrix)
     native_module = load_native_module(algorithm)
+    native_compute = native_module.compute_matrix_file if is_file else native_module.compute_matrix
+    native_arguments = (matrix_source, mode, preprocessing, progress)
     native_result = (
-        native_module.compute_matrix_file(matrix_source, mode, preprocessing)
-        if is_file
-        else native_module.compute_matrix(matrix_source, mode, preprocessing)
+        native_compute(*native_arguments, True)
+        if collect_certificate_joint_distribution
+        else native_compute(*native_arguments)
     )
     return {
         "algorithm": algorithm,
@@ -93,4 +101,6 @@ def compute_matrix(
         "is_strictly_copositive": native_result["is_strictly_copositive"],
         "elapsed_ns": native_result["elapsed_ns"],
         "error_message": native_result["error_message"],
+        "diagnostics": native_result.get("diagnostics"),
+        "certificate_joint_distribution": native_result.get("certificate_joint_distribution"),
     }

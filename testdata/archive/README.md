@@ -7,6 +7,57 @@ runtime.
 - `FRACESSA_TESTDATA_README.md` is its historical documentation.
 - `import_*.py` and `corpus_matrix.py` preserve the exact matrix-generation and verification procedures used for dated corpus imports.
 - `externalize_large_matrices.py` and `add_matrix_file_hashes_2026_08_11.py` preserve the completed external-file migration.
+- `restore_fastest_result_cache_from_diagnostics_2026_08_15.sql` restores and verifies the compact fastest-result cache after benchmark
+  rows moved into the separate diagnostics database.
+- `reshape_generated_stress_2026_08_15.py` removes the 120 sparse/dense generated stress matrices above order 1,000, their dependent
+  diagnostics and external payloads, and inserts 90 matrices at 15 additional irregular dimensions from 43 through 199.
+- `add_literature_sources_2026_08_14.py` preserves the initial normalized 78-source migration and 901 literature links.
+- `complete_source_links_2026_08_14.py` adds collection, repository, and local-generator sources and completes all current matrix
+  source links.
+- `add_source_publication_year_2026_08_14.py` adds the earliest documented public year to all 94 normalized sources.
+- `add_additional_matrix_sources_2026_08_14.py` makes the earliest located source primary and stores the original 1,076 explicit or
+  audited class-level reference links; deduplication unions them into 833 links on 509 surviving matrices.
+- `add_literature_solved_references_2026_08_14.py` adds the guarded `references_solved` JSON-object arrays for the original 968
+  identifiable occurrence claims; deduplication unions them into 619 matrix-class claims documented in
+  `aidocs/LITERATURE_SOLVED_REFERENCES.md`.
+- `add_literature_unsolved_references_2026_08_14.py` adds 232 explicit method-specific failure claims on 173 retained matrices to the
+  guarded `references_unsolved` arrays documented in `aidocs/LITERATURE_UNSOLVED_REFERENCES.md`.
+- `import_literature_catalog_2026_08_14.py` reconstructs 1,838 directly materializable new catalog occurrences, excludes the 790 raw
+  QP objectives with a negative diagonal, and imports the 1,048 retained occurrences without deduplication or inferred truth labels.
+- `classify_literature_catalog_truth_2026_08_14.py` applies the 318 paper- or repository-backed truth labels while leaving every
+  unsupported classification `NULL`.
+- `correct_bomze_deklerk_portfolio_2026_08_14.py` replaces the initial unrelated portfolio reconstruction by Bomze-de Klerk's
+  printed `Q4` and its two exact shifted test matrices.
+- `classify_obvious_literature_truth_2026_08_14.py` reconstructs 699 retained short exact matrix certificates and records each proof
+  in the corresponding source comment.
+- `classify_constructed_literature_truth_2026_08_14.py` reconstructs 55 exact Horn, clique-threshold, positive-definite, or explicit
+  negative-witness decisions.
+- `classify_small_exact_literature_truth_2026_08_14.py` classifies eight matrices of order at most five by exact enumeration of every
+  simplex face and records the rational minimum and minimizer.
+- `remove_trivial_raw_qp_objectives_2026_08_14.py` removes the same 790 objectives from a database populated before the importer
+  exclusion, after guarding their source groups, stable ID fingerprints, negative diagonals, benchmark flags, and dependent results.
+- `add_n_le_100_set_2026_08_14.sql` adds the generated, drift-free membership for every matrix with `dimension <= 100` and guards
+  the current 2,619-row selection.
+- `add_n_gt_100_solved_set_2026_08_14.sql` adds generated membership for every matrix above order 100 with a nonempty
+  `references_solved` claim array and guards the current 58-row selection.
+- `add_fastest_result_cache_2026_08_14.sql` adds and backfills the sortable fastest elapsed time and its exact composite result
+  reference, then installs the candidate view and synchronization triggers.
+- `deduplicate_literature_import_2026_08_14.py` merges the 333 redundant occurrences in the 256 positive-scale/permutation classes
+  touched by the literature import. It unions truth, family, bibliography, solved and unsolved references when present, and all five
+  benchmark flags. A sole
+  benchmarked representation survives its class so stored timing and preprocessing rows remain attached to their exact input.
+- `restore_permutation_variants_2026_08_14.py` records the recovery audit that reconstructed previously merged coordinate orderings.
+  `remove_old_fracessa_permutation_variants_2026_08_14.py` records the final policy: retain the 41 recovered literature matrices but
+  remove the 1,396 bulk FracESSA reduced-B extraction orderings and their dependent historical results.
+- `import_kuzmanovic_preprocessing_results_2026_08_14.py` stages the thesis's 100,000 exact random matrices and published
+  preprocessing labels in `kuzmanovic_test_matrices`. The labels are experimental outputs, not trusted truth for the maintained
+  `matrices` table. The staging table is intentionally absent after the completed screen; this script retains reproducibility.
+- `run_kuzmanovic_cbdd_zed_2026_08_14.py` records the ten-second ordinary-copositivity CBDD-Zed Dickinson result directly on every
+  Kuzmanovic staging row, including whether it agrees with the published label. `no_answer` is not treated as a truth claim. The
+  completed results and removal decision are preserved in `../../aidocs/KUZMANOVIC_100000_MATRIX_SCREEN.md`.
+- `generate_bpqy_julia185_matrices.jl` reproduces the 450 seeded Julia 1.8.5 numerical constructions from Bomze-Peng-Qiu-Yildirim;
+  `import_bpqy_julia185_matrices_2026_08_14.py` imports their exact primitive dyadic upper triangles. Their intended boundary
+  classification is recorded as provenance but is not assigned to the rounded numerical materializations.
 - The dated `.sql` files preserve applied schema, classification, result, and benchmark-set migrations.
 
 The maintained corpus is `../copos_testdata.sqlite3`; its current schema is `../schema.sql`, and externally stored matrices are under

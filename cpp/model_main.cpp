@@ -34,18 +34,6 @@ bool parse_switch(const std::string& name, const char* option)
     if (name == "off") return false;
     throw std::invalid_argument(std::string(option) + " must be 'on' or 'off'");
 }
-
-void set_pre_check(coposit::pre_check::options& selected, const std::string& name, bool enabled)
-{
-    if (name == "small-dimension") selected.small_dimension = enabled;
-    else if (name == "principal-submatrices") selected.principal_submatrices = enabled;
-    else if (name == "nonnegative-off-diagonal") selected.nonnegative_off_diagonal = enabled;
-    else if (name == "negative-part-diagonal-dominance") selected.negative_part_diagonal_dominance = enabled;
-    else if (name == "all-ones") selected.all_ones = enabled;
-    else if (name == "frank-wolfe") selected.frank_wolfe = enabled;
-    else if (name == "positive-definiteness") selected.positive_definiteness = enabled;
-    else throw std::invalid_argument("unknown pre-check: " + name);
-}
 #endif
 
 bool is_compact_matrix_argument(const std::string& argument) noexcept
@@ -106,24 +94,9 @@ int main(int argc, char* argv[])
                 mode = parse_mode(argv[next_argument]);
 #endif
 #ifdef COPOSIT_ANALYSIS_COMPANION
-            } else if (argument == "--connected-components") {
-                if (++next_argument == argc) throw std::invalid_argument("--connected-components requires a value");
-                preprocessing.connected_components = parse_switch(argv[next_argument], "--connected-components");
-            } else if (argument == "--pre-checks") {
-                if (++next_argument == argc) throw std::invalid_argument("--pre-checks requires a value");
-                preprocessing.pre_checks_enabled = parse_switch(argv[next_argument], "--pre-checks");
-            } else if (argument == "--pre-check") {
-                if (next_argument + 2 >= argc) throw std::invalid_argument("--pre-check requires NAME and on|off");
-                const std::string name = argv[++next_argument];
-                const bool enabled = parse_switch(argv[++next_argument], "--pre-check");
-                set_pre_check(preprocessing.pre_checks, name, enabled);
-            } else if (argument == "--principal-submatrices-up-to") {
-                if (++next_argument == argc) throw std::invalid_argument("--principal-submatrices-up-to requires a value");
-                const std::string cutoff = argv[next_argument];
-                if (cutoff.size() != 1 || cutoff[0] < '1' || cutoff[0] > '3') {
-                    throw std::invalid_argument("--principal-submatrices-up-to must be 1, 2, or 3");
-                }
-                preprocessing.pre_checks.principal_submatrices_up_to = static_cast<size_t>(cutoff[0] - '0');
+            } else if (argument == "--preprocessing") {
+                if (++next_argument == argc) throw std::invalid_argument("--preprocessing requires a value");
+                preprocessing.preprocessing_enabled = parse_switch(argv[next_argument], "--preprocessing");
 #endif
             } else if (argument == "--progress") {
                 if (show_progress) throw std::invalid_argument("--progress may be given only once");

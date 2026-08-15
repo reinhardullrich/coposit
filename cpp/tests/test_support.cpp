@@ -62,3 +62,25 @@ TEST(SupportTest, CombinesPackedSupportsAcrossWords)
     combined.clear();
     EXPECT_TRUE(combined.empty());
 }
+
+TEST(SupportTest, RotatesReflectsAndOrdersPackedSupports)
+{
+    support bits(70);
+    bits.set(0);
+    bits.set(64);
+    bits.rotate_one_right();
+    EXPECT_TRUE(bits.contains(63));
+    EXPECT_TRUE(bits.contains(69));
+
+    bits.reflect();
+    EXPECT_TRUE(bits.contains(0));
+    EXPECT_TRUE(bits.contains(6));
+
+    support larger(70);
+    larger.set(7);
+    EXPECT_LT(bits, larger);
+    EXPECT_NE(bits, larger);
+
+    bits.set_all();
+    for (size_t index = 0; index < bits.dimension(); ++index) EXPECT_TRUE(bits.contains(index));
+}

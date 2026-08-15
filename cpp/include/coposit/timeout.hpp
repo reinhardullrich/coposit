@@ -20,13 +20,19 @@ inline void reset_timeout() noexcept
     timeout_signal_received = 0;
 }
 
+inline bool timeout_pending() noexcept
+{
+    return timeout_signal_received != 0;
+}
+
 inline void timeout_checkpoint()
 {
-    if (timeout_signal_received != 0) throw timeout_requested{};
+    if (timeout_pending()) throw timeout_requested{};
 }
 
 #else
 
+inline bool timeout_pending() noexcept { return false; }
 inline void timeout_checkpoint() noexcept {}
 
 #endif
