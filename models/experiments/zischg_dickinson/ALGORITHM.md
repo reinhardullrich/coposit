@@ -127,6 +127,28 @@ induced negative graphs are connected and Dickinson signatures cover little.
 
 ## Known Difficult Inputs
 
+### Important: a correct Level 2 skip can suppress a useful Dickinson certificate
+
+The Level 2 theorem proves that a disconnected support need not be solved to preserve the final strict-copositivity decision. It
+does **not** prove that the support would be useless as a certificate generator. If ordinary Dickinson processed such a support
+$I$, its vector could cover the upward interval
+
+\[
+[\operatorname{supp}(u),N_A(u)].
+\]
+
+That interval can contain larger supports whose induced negative graph is connected. Adding a bridging vertex can connect the
+components of $G^-(A)[I]$, so connectivity of a later superset does not prevent it from being covered by a certificate generated on
+the earlier disconnected support. Level 2 skips $I$ before `process_subset`, creates no signature there, and may consequently have
+to solve many of those larger connected supersets. The skip is mathematically exact but can still make the traversal slower.
+
+This is the same general certificate-suppression mechanism seen when positive Zed downsets are inserted before a Dickinson
+traversal: a valid shortcut removes an early certificate generator whose upward coverage may be more valuable than the work saved
+at that support. The effect is weaker in this implementation because orders one through three are never skipped by Level 2; it can
+lose certificates only from disconnected supports of order four or greater. A one-time Level 1 split of the complete matrix does
+not have this problem, because it replaces the original decision by independent equivalent component decisions rather than
+skipping certificate generators inside one continuing support traversal.
+
 A complete or nearly complete negative graph gives Level 2 almost no opportunity. Dickinson remains expensive when generated
 vectors have $N_A(u)$ only slightly larger than their supports, so few later supports are covered. Many connected singular
 principal matrices require exact kernel work, and very large integers enlarge every factorization and matrix-vector product.

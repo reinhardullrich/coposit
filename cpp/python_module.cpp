@@ -2,6 +2,7 @@
 
 #include <chrono>
 #include <csignal>
+#include <iostream>
 #include <optional>
 #include <stdexcept>
 #include <string>
@@ -12,6 +13,7 @@
 #include <coposit/parsers/matrix_parser.hpp>
 #include <coposit/model.hpp>
 #include <coposit/open_node_limit.hpp>
+#include <coposit/progress.hpp>
 #include <coposit/timeout.hpp>
 
 namespace py = pybind11;
@@ -43,16 +45,8 @@ coposit::model::copositivity_mode parse_mode(const std::string& name)
 coposit::component_pipeline::options parse_preprocessing(const std::string& name)
 {
     coposit::component_pipeline::options selected;
-    if (name == "none") {
-        selected.pre_checks_enabled = false;
-        selected.connected_components = false;
-    } else if (name == "connected_components") {
-        selected.pre_checks_enabled = false;
-    } else if (name == "pre_checks") {
-        selected.connected_components = false;
-    } else if (name != "both") {
-        throw std::invalid_argument("preprocessing must be 'none', 'connected_components', 'pre_checks', or 'both'");
-    }
+    if (name == "none") selected.preprocessing_enabled = false;
+    else if (name != "both") throw std::invalid_argument("preprocessing must be 'none' or 'both'");
     return selected;
 }
 
@@ -127,7 +121,8 @@ void install_timeout_handler(int signal_number)
     if (sigaction(signal_number, &action, nullptr) != 0) throw std::runtime_error("Could not install the timeout signal handler");
 }
 
-py::dict python_result(const native_result& result)
+py::dict python_result(const native_result& result, const coposit::progress::snapshot* progress_snapshot,
+                       const std::string* diagnostics)
 {
     py::dict output;
     output["status"] = result.status;
@@ -135,23 +130,53 @@ py::dict python_result(const native_result& result)
     output["is_strictly_copositive"] = result.is_strictly_copositive ? py::cast(*result.is_strictly_copositive) : py::none();
     output["elapsed_ns"] = result.elapsed_ns;
     output["error_message"] = result.error_message;
+    if (progress_snapshot == nullptr) {
+        output["certificate_joint_distribution"] = py::none();
+    } else {
+        py::list distribution;
+        if (!progress_snapshot->certificate_cardinality_free_index_upper_size_counts.empty()) {
+            for (const auto& [key, count] : progress_snapshot->certificate_cardinality_free_index_upper_size_counts) {
+                const auto& [cardinality, free_indices, upper_size] = key;
+                distribution.append(py::make_tuple(cardinality, free_indices, upper_size, count));
+            }
+        } else {
+            for (const auto& [key, count] : progress_snapshot->certificate_cardinality_free_index_counts)
+                distribution.append(py::make_tuple(key.first, key.second, count));
+        }
+        output["certificate_joint_distribution"] = std::move(distribution);
+    }
+    output["diagnostics"] = diagnostics == nullptr ? py::none() : py::cast(*diagnostics);
     return output;
 }
 
-py::dict compute_matrix(const std::string& input, const std::string& mode_name, const std::string& preprocessing_name)
+py::dict compute_matrix(const std::string& input, const std::string& mode_name, const std::string& preprocessing_name,
+                        bool show_progress, bool collect_certificate_joint_distribution)
 {
+    coposit::progress::reporter reporter(show_progress, std::cerr, collect_certificate_joint_distribution,
+                                        collect_certificate_joint_distribution);
     native_result result;
     {
         py::gil_scoped_release release;
         result = compute_matrix_impl([&]() { return coposit::parsers::matrix_parser::parse(input); }, mode_name, preprocessing_name);
         coposit::reset_timeout();
     }
+    const coposit::progress::snapshot progress_snapshot = collect_certificate_joint_distribution
+        ? coposit::progress::detail::load()
+        : coposit::progress::snapshot{};
+    reporter.stop();
+    const std::string diagnostic_text = collect_certificate_joint_distribution
+        ? coposit::progress::detail::load_diagnostics()
+        : std::string{};
 
-    return python_result(result);
+    return python_result(result, collect_certificate_joint_distribution ? &progress_snapshot : nullptr,
+                         collect_certificate_joint_distribution ? &diagnostic_text : nullptr);
 }
 
-py::dict compute_matrix_file(const std::string& filename, const std::string& mode_name, const std::string& preprocessing_name)
+py::dict compute_matrix_file(const std::string& filename, const std::string& mode_name, const std::string& preprocessing_name,
+                             bool show_progress, bool collect_certificate_joint_distribution)
 {
+    coposit::progress::reporter reporter(show_progress, std::cerr, collect_certificate_joint_distribution,
+                                        collect_certificate_joint_distribution);
     native_result result;
     {
         py::gil_scoped_release release;
@@ -159,8 +184,35 @@ py::dict compute_matrix_file(const std::string& filename, const std::string& mod
                                      preprocessing_name);
         coposit::reset_timeout();
     }
+    const coposit::progress::snapshot progress_snapshot = collect_certificate_joint_distribution
+        ? coposit::progress::detail::load()
+        : coposit::progress::snapshot{};
+    reporter.stop();
+    const std::string diagnostic_text = collect_certificate_joint_distribution
+        ? coposit::progress::detail::load_diagnostics()
+        : std::string{};
 
-    return python_result(result);
+    return python_result(result, collect_certificate_joint_distribution ? &progress_snapshot : nullptr,
+                         collect_certificate_joint_distribution ? &diagnostic_text : nullptr);
+}
+
+py::dict diagnostics_snapshot()
+{
+    const coposit::progress::snapshot progress_snapshot = coposit::progress::detail::load();
+    py::list distribution;
+    if (!progress_snapshot.certificate_cardinality_free_index_upper_size_counts.empty()) {
+        for (const auto& [key, count] : progress_snapshot.certificate_cardinality_free_index_upper_size_counts) {
+            const auto& [cardinality, free_indices, upper_size] = key;
+            distribution.append(py::make_tuple(cardinality, free_indices, upper_size, count));
+        }
+    } else {
+        for (const auto& [key, count] : progress_snapshot.certificate_cardinality_free_index_counts)
+            distribution.append(py::make_tuple(key.first, key.second, count));
+    }
+    py::dict output;
+    output["diagnostics"] = coposit::progress::detail::load_diagnostics();
+    output["certificate_joint_distribution"] = std::move(distribution);
+    return output;
 }
 
 } // namespace
@@ -175,9 +227,12 @@ PYBIND11_MODULE(COPOSIT_PYTHON_MODULE, module)
     module.attr("STATUS_NODE_LIMIT") = kStatusNodeLimit;
     module.attr("STATUS_INTERNAL_ERROR") = kStatusInternalError;
     module.def("compute_matrix", &compute_matrix, py::arg("matrix"), py::arg("mode") = "strictly_copositive",
-               py::arg("preprocessing") = "none");
+               py::arg("preprocessing") = "both", py::arg("progress") = false,
+               py::arg("collect_certificate_joint_distribution") = false);
     module.def("compute_matrix_file", &compute_matrix_file, py::arg("filename"), py::arg("mode") = "strictly_copositive",
-               py::arg("preprocessing") = "none");
+               py::arg("preprocessing") = "both", py::arg("progress") = false,
+               py::arg("collect_certificate_joint_distribution") = false);
     module.def("_install_timeout_handler", &install_timeout_handler, py::arg("signal_number"));
     module.def("_reset_timeout", &coposit::reset_timeout);
+    module.def("_diagnostics_snapshot", &diagnostics_snapshot);
 }

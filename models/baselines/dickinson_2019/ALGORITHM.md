@@ -136,6 +136,11 @@ For every accepted $w$, the implementation calculates:
 
 The full vector is then discarded. Keeping only this signature saves memory without changing any later decision.
 
+Progress reporting distinguishes four counts. `visited` is every support reached by enumeration; `covered` is a support skipped by
+an existing signature; `processed` is an uncovered support sent to exact solve or nullspace work; and `certificates` increments only
+after a new signature has been retained. A terminating negative witness or strict zero is processed but not retained, so the final
+processed count can exceed the certificate count.
+
 ## Mode-Dependent Zero Termination
 
 The published algorithms decide non-strict copositivity. coposit must distinguish a strictly copositive matrix from a copositive
@@ -197,6 +202,38 @@ mode keeps the signature and finishes the copositivity certificate.
 Matrices with many singular principal submatrices are also unfavorable. They still require exact factorization and can produce
 kernel vectors with weak coverage, although recovering one vector from the retained partial factorization avoids a second
 elimination.
+
+### Motzkin–Straus graph matrices
+
+For a graph with adjacency matrix $B$ and all-ones matrix $E$, the exact Motzkin–Straus construction is
+
+\[
+Q_\lambda=\lambda(E-B)-E.
+\]
+
+On the standard simplex its minimum is $\lambda/\omega(G)-1$, where $\omega(G)$ is the graph's clique number. Consequently
+$Q_\lambda$ is not copositive, copositive but not strict, or strictly copositive according as $\lambda<\omega(G)$,
+$\lambda=\omega(G)$, or $\lambda>\omega(G)$. Its diagonal and non-edge entries are $\lambda-1$, while its edge entries are $-1$.
+
+This sign pattern has a direct effect on Dickinson coverage. The singleton certificate for vertex $i$ has lower endpoint $\{i\}$
+and upper endpoint
+
+\[
+\{i\}\cup\bigl(V\setminus N_G(i)\bigr).
+\]
+
+It therefore covers exactly those larger supports in which $i$ is isolated in the induced graph. Dense graphs give these singleton
+certificates small upper endpoints. Highly regular Hamming, Johnson, MANN, and related graphs also produce many signatures that are
+equivalent under graph symmetries but appear as different ordered index sets; ordinary Dickinson does not quotient by those
+symmetries. In a strictly copositive instance there is no negative or zero witness to stop the positive proof early, so weak
+coverage can leave a large part of the support lattice to enumerate.
+
+The negative-entry graph of $Q_\lambda$ is $G$ itself. A connected input therefore defeats the whole-matrix component split.
+Rejection-only maximal-$Z$ extensions face a second obstruction: their maximal $Z$-matrix blocks are precisely the maximal cliques
+of $G$. When $\lambda>\omega(G)$, every such block is positive definite, so a complete maximal-clique scan finds no rejection. If
+the extension discards positive blocks instead of retaining their downsets, the entire scan is overhead before Dickinson begins.
+Ordered BDD or ZDD variants can still fail when the resulting union of many permuted certificate intervals has little sharing under
+the selected variable order.
 
 ## Exact Arithmetic And Fidelity
 

@@ -1,6 +1,6 @@
 # C++ Analysis Interface
 
-`coposit-analyze` is the expert command for selecting one comparison model and controlling preprocessing. Its inventory is the
+`coposit-analyze` is the expert command for selecting one comparison model and enabling or bypassing preprocessing. Its inventory is the
 literature baselines, with `dickinson_final` replacing `dickinson_2019`, plus the selected `adaptive_sponsel_copomatrix`. Experimental
 variants remain in the Python and reference-run interfaces. The normal `coposit` command exposes only the fixed `fast` and `safe`
 methods.
@@ -32,43 +32,30 @@ strictly_copositive=false
 
 ## Preprocessing Controls
 
-Connected components, the pre-check stage, every individual pre-check, and principal submatrices through cardinality three are on by
-default. They can be changed independently:
+The complete fixed preprocessing pipeline is on by default. It has one switch:
 
 ```bash
 cpp/build/coposit-analyze \
   --model dickinson_final \
   --mode strict \
-  --connected-components off \
-  --pre-checks on \
-  --pre-check frank-wolfe off \
-  --pre-check positive-definiteness off \
-  --principal-submatrices-up-to 2 \
+  --preprocessing off \
   matrix.mtx
 ```
 
-The switches are:
-
 | Option | Values | Meaning |
 |---|---|---|
-| `--connected-components` | `on`, `off` | Enable or disable negative-entry connected-component decomposition |
-| `--pre-checks` | `on`, `off` | Enable or disable the complete pre-check stage |
-| `--pre-check NAME` | `on`, `off` | Enable or disable one named pre-check; the option may be repeated |
-| `--principal-submatrices-up-to` | `1`, `2`, `3` | Highest cardinality checked when principal-submatrix checking is enabled |
+| `--preprocessing` | `on`, `off` | Run the complete fixed pipeline or call the selected model directly |
 | `--timeout` | positive seconds | Terminate the complete command at the wall-clock deadline |
 
-The accepted pre-check names are:
-
-- `small-dimension`
-- `principal-submatrices`
-- `nonnegative-off-diagonal`
-- `negative-part-diagonal-dominance`
-- `all-ones`
-- `frank-wolfe`
-- `positive-definiteness`
-
-Turning the entire pre-check stage off leaves individual settings stored but inactive. Turning connected components off runs the
-selected pre-checks on the original matrix instead of component matrices.
+When enabled, the pipeline always performs its root checks, negative-entry component split, ordinary component checks, bounded
+Danninger reduction, and bounded COPOMATRIX reduction in that order. The `z-matrix` check examines maximal principal blocks
+with nonpositive off-diagonal entries. An indefinite block rejects both modes, while a singular positive-semidefinite block rejects
+only strict copositivity; Motzkin–Straus graph matrices bypass this check because maximal-clique enumeration is unproductive there.
+Danninger and COPOMATRIX each run only when the selected pivot creates at most two order-reduced children. Every child repeats scan,
+root checks, component splitting, and ordinary checks. Children may create grandchildren because the internal maximum reduction
+depth is two; nodes at that depth create no further descendants and call no model. This depth is not a CLI option. If preprocessing
+remains unresolved, the selected model receives the unchanged original matrix. See
+[`../aidocs/PREPROCESSING_PIPELINE_DESIGN.md`](../aidocs/PREPROCESSING_PIPELINE_DESIGN.md) for the complete flow.
 
 ## Model Capabilities
 

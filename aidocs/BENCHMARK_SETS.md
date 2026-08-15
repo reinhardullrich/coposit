@@ -2,20 +2,36 @@
 
 ## Purpose
 
-The maintained `matrices` table has five independent Boolean flags. They are intentionally overlapping: a matrix can serve several
+The maintained `matrices` table has seven independent Boolean flags. They are intentionally overlapping: a matrix can serve several
 benchmark roles without duplicating its matrix row or expected classification.
 
 | Flag | Rows | Orders | Strict | Boundary | Not copositive | Non-strict unknown | Intended use |
 |---|---:|---:|---:|---:|---:|---:|---|
 | `smoke_set` | 49 | 1–19 | 23 | 14 | 12 | 0 | Fast correctness and integration checks |
 | `representative_core` | 384 | 1–100 | 192 | 110 | 82 | 0 | Routine algorithm comparison on a balanced, diverse corpus |
-| `stress_test` | 240 | 5–3,361 | 131 | 96 | 13 | 0 | Branching, equality, exact-arithmetic, and timeout pressure |
-| `scale_set` | 364 | 51–3,361 | 88 | 192 | 84 | 0 | Growth with dimension, density, and storage size |
-| `timeout_5s_strict_set` | 129 | 16–3,361 | 66 | 40 | 23 | 0 | Common five-second strict timeouts of both final pre-checked algorithms |
+| `stress_test` | 234 | 5–3,361 | 129 | 94 | 11 | 0 | Branching, equality, exact-arithmetic, and timeout pressure |
+| `scale_set` | 334 | 43–3,361 | 78 | 182 | 74 | 0 | Growth with dimension, density, and storage size |
+| `timeout_5s_strict_set` | 109 | 16–3,361 | 46 | 40 | 23 | 0 | Common five-second strict timeouts of both final pre-checked algorithms |
+| `n_le_100` | 3,155 | 1–100 | 827 | 1,119 | 746 | 463 | Every matrix of order at most 100 |
+| `n_gt_100_solved` | 94 | 120–5,000 | 6 | 25 | 63 | 0 | Higher-order matrices with at least one literature-reported solve |
 
-The five flags cover 863 distinct rows. Overlap is deliberate: all 49 Smoke rows are in Representative Core; 100 Core rows are also
-Stress rows; and 19 Stress rows are also Scale rows. Every Timeout 5s Strict row is already in Stress or Scale: 46 are Stress rows,
-95 are Scale rows, and 12 occur in both; 12 are also Core rows. No Smoke row is in Scale or Timeout 5s Strict.
+The five curated flags cover 833 distinct rows; together with the two generated flags, all seven cover 3,533 rows. Overlap is deliberate:
+all 49 Smoke rows are in Representative Core; 100 Core rows are also
+Stress rows; and 13 Stress rows are also Scale rows. Every Timeout 5s Strict row is already in Stress or Scale: 45 are Stress rows,
+75 are Scale rows, and 11 occur in both; 12 are also Core rows. No Smoke row is in Scale or Timeout 5s Strict.
+
+## N ≤ 100
+
+`n_le_100` is the comprehensive dimension-bounded set rather than a sample. It contains all 3,155 current matrices with
+`dimension <= 100`, including 827 strict, 1,119 boundary, 746 non-copositive, and 463 unknown matrices. SQLite generates the Boolean
+membership directly from `dimension`, so it cannot become stale and future qualifying rows enter automatically.
+
+## N > 100 Solved in the Literature
+
+`n_gt_100_solved` contains all 94 current matrices above order 100 whose `references_solved` array identifies at least one paper that
+reports a completed copositivity, strict-copositivity, or equivalent global-StQP solve. It spans orders 120–5,000 and contains 6
+strict, 25 boundary, and 63 non-copositive matrices, with 148 claims from ten sources. The generated membership follows the evidence
+field automatically; it is not a project claim that the paper used the same algorithm or exact arithmetic.
 
 ## Smoke set
 
@@ -49,7 +65,8 @@ Stress is evidence-driven rather than outcome-balanced. The mandatory part conta
 - the two most difficult scored matrices from every named family represented in the canonical run; and
 - the maximum-order representative for each strict/non-strict outcome in every named family extending above order 100.
 
-Those rules produce 179 distinct mandatory rows. Difficulty-ranked family-capped filler brings the set to 240. Of its 221 matrices
+Those rules produced 179 distinct mandatory rows at the frozen assignment point. Difficulty-ranked family-capped filler brought the
+set to 240. The later removal of six generated order-2,997 rows reduced the current stored membership to 234. Of the original 221 matrices
 with all eight canonical results, 204 were unresolved by at least one baseline and 17 were solved by all eight but retained for family
 coverage. The other 19 are high-order anchors outside the original order-100 reference snapshot. All 42 named corpus families occur,
 and every row has established non-strict-copositivity truth.
@@ -59,20 +76,21 @@ with each unresolved run charged its timeout. It is not a new claim about mathem
 
 ## Scale set
 
-Scale contains all 358 corpus matrices above order 100. It also contains the six order-51 matrices from the controlled generated
-families, so both complete 90-row generated panels remain intact. Consequently it includes:
+At its frozen assignment point, Scale contained all 358 of the then-current corpus matrices above order 100. It also contained the six order-51 matrices from the controlled generated
+families. The later corpus reshape removed 120 generated rows above order 1,000 and added 90 generated rows from order 43 through 199;
+all additions retain Scale membership. The current set has 334 rows and includes:
 
 - every high-order literature construction already in the corpus; and
-- sparse and dense boundary, strict, and explicitly not-copositive triplets at the same 30 irregular dimensions from 51 through 2,997.
+- sparse and dense boundary, strict, and explicitly not-copositive triplets at the same 25 irregular dimensions from 43 through 952.
 
-No additional matrix was generated. These existing rows already cover the requested density, outcome, coefficient-size, and dimension
-strata without introducing another synthetic construction.
+These rows cover the requested density, outcome, coefficient-size, and dimension strata without introducing another mathematical
+construction.
 
 ## Timeout 5s Strict set
 
-Timeout 5s Strict contains the 129 matrices for which both pre-checked final algorithm paths remained unresolved at a five-second
+Timeout 5s Strict originally contained the 129 matrices for which both pre-checked final algorithm paths remained unresolved at a five-second
 strict-copositivity cutoff. If either Dickinson or Adaptive Sponsel–COPOMATRIX completed the matrix, it was not selected. Both paths
-used `preprocessing = 'both'`.
+used `preprocessing = 'both'`. Removing the generated rows above order 1,000 reduced the current stored membership to 109.
 
 The 524 Core/Stress rows reuse the runs reported in `research/RESEARCH_REPORT_COPOSIT.md`. Its Dickinson 2019 implementation is the
 solver from which `dickinson_final` was copied. Only the remaining 1,918 corpus rows were run afterward with `dickinson_final` and
@@ -84,7 +102,7 @@ binary. Exact hashes, cutoff, intersection rule, and assignment guards are retai
 
 ## Reproduction and use
 
-New matrix rows default all five flags to zero. The four original flags are reproduced with:
+New matrix rows default the five curated flags to zero. The four original flags are reproduced with:
 
 ```bash
 sqlite3 testdata/copos_testdata.sqlite3 < testdata/archive/assign_benchmark_sets_2026_08_10.sql
@@ -94,6 +112,18 @@ The timeout set is reproduced separately with:
 
 ```bash
 sqlite3 testdata/copos_testdata.sqlite3 < testdata/archive/assign_timeout_5s_strict_set_2026_08_12.sql
+```
+
+The generated order-at-most-100 flag was added with:
+
+```bash
+sqlite3 testdata/copos_testdata.sqlite3 < testdata/archive/add_n_le_100_set_2026_08_14.sql
+```
+
+The generated higher-order literature-solved flag was added with:
+
+```bash
+sqlite3 testdata/copos_testdata.sqlite3 < testdata/archive/add_n_gt_100_solved_set_2026_08_14.sql
 ```
 
 The script freezes the exact eight baseline identities and the pre-consensus sampling classes. It now aborts because non-strict truth
@@ -110,4 +140,5 @@ ORDER BY matrix_id;
 ```
 
 The current class counts derive directly from stored truth: strict means both flags are one, boundary means strict is zero and non-strict
-copositivity is one, and not-copositive means non-strict copositivity is zero. No current row is non-strict-unknown.
+copositivity is one, and not-copositive means non-strict copositivity is zero. The 463 non-strict-unknown rows have not yet received
+maintained corpus truth.

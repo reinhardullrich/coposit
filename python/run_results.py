@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 from datetime import datetime, timezone
 import hashlib
+import json
 import math
 from multiprocessing import get_context
 from multiprocessing.connection import Connection, wait as wait_for_connections
@@ -14,7 +15,7 @@ from pathlib import Path
 from queue import Empty, Full, Queue
 import signal
 import sqlite3
-from threading import Thread
+from threading import Event, Lock, Thread
 from time import monotonic
 
 from pycoposit import ALGORITHMS, COPOSITIVITY_MODES, PREPROCESSING_MODES, Matrix, StatusCode, compute_matrix
@@ -22,18 +23,23 @@ from pycoposit.core import load_native_module
 
 REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATABASE = REPOSITORY_ROOT / "testdata" / "copos_testdata.sqlite3"
+DEFAULT_RESULTS_DATABASE = REPOSITORY_ROOT / "experiments" / "diagnostics.sqlite3"
+DIAGNOSTICS_SCHEMA = REPOSITORY_ROOT / "testdata" / "diagnostics_schema.sql"
 STARTUP_TIMEOUT_SECONDS = 30.0
 TIMEOUT_GRACE_SECONDS = 1.0
 TIMEOUT_SIGNAL = signal.SIGUSR1
 DETAILED_PROGRESS_LIMIT = 100
 PROGRESS_INTERVAL_SECONDS = 1.0
 DATABASE_QUEUE_PER_WORKER = 2
-MATRIX_SETS = ("smoke_set", "representative_core", "stress_test", "scale_set", "timeout_5s_strict_set")
+MATRIX_SETS = (
+    "smoke_set", "representative_core", "stress_test", "scale_set", "timeout_5s_strict_set", "n_le_100", "n_gt_100_solved",
+    "references_unsolved",
+)
 
 RESULT_UPSERT_SQL = """INSERT INTO results (
        matrix_id, model_id, mode, preprocessing, binary_sha256, status, is_copositive,
-       is_strictly_copositive, elapsed_ns, timeout_ns, recorded_at, message
-   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+       is_strictly_copositive, elapsed_ns, timeout_ns, recorded_at, diagnostics, certificate_joint_distribution, message
+   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
    ON CONFLICT(matrix_id, model_id, mode, preprocessing, binary_sha256) DO UPDATE SET
        status = excluded.status,
        is_copositive = excluded.is_copositive,
@@ -41,7 +47,16 @@ RESULT_UPSERT_SQL = """INSERT INTO results (
        elapsed_ns = excluded.elapsed_ns,
        timeout_ns = excluded.timeout_ns,
        recorded_at = excluded.recorded_at,
+       diagnostics = excluded.diagnostics,
+       certificate_joint_distribution = excluded.certificate_joint_distribution,
        message = excluded.message"""
+
+
+def _initialize_results_database(database: Path) -> None:
+    database.parent.mkdir(parents=True, exist_ok=True)
+    with sqlite3.connect(database) as connection:
+        if not connection.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'results'").fetchone():
+            connection.executescript(DIAGNOSTICS_SCHEMA.read_text())
 
 
 def _sha256(path: Path) -> str:
@@ -52,13 +67,20 @@ def _sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def _database_writer(database: Path, parent_cpu: int, writes: Queue, errors: list[BaseException]) -> None:
+def _database_writer(results_database: Path, corpus_database: Path, parent_cpu: int, writes: Queue, errors: list[BaseException]) -> None:
     connection = None
     try:
         os.sched_setaffinity(0, {parent_cpu})
-        connection = sqlite3.connect(database)
+        connection = sqlite3.connect(results_database)
         connection.execute("PRAGMA foreign_keys = ON")
         connection.execute("PRAGMA busy_timeout = 5000")
+        separate_databases = results_database != corpus_database
+        if separate_databases:
+            connection.execute("ATTACH DATABASE ? AS corpus", (str(corpus_database),))
+        matrix_schema = "corpus" if separate_databases else "main"
+        matrix_table = f"{matrix_schema}.matrices"
+        matrix_columns = {row[1] for row in connection.execute(f"PRAGMA {matrix_schema}.table_info(matrices)")}
+        cache_enabled = {"fastest_elapsed_ns", "fastest_result_ref"} <= matrix_columns
         while True:
             values = writes.get()
             if values is None:
@@ -75,6 +97,28 @@ def _database_writer(database: Path, parent_cpu: int, writes: Queue, errors: lis
                     break
                 batch.append(values)
             connection.executemany(RESULT_UPSERT_SQL, batch)
+            if cache_enabled:
+                matrix_ids = sorted({values[0] for values in batch})
+                placeholders = ",".join("?" for _ in matrix_ids)
+                connection.execute(
+                    f"""UPDATE {matrix_table} AS m
+                        SET (fastest_elapsed_ns, fastest_result_ref) = (
+                            SELECT r.elapsed_ns, json_object(
+                                'model_id', r.model_id, 'mode', r.mode, 'preprocessing', r.preprocessing,
+                                'binary_sha256', r.binary_sha256
+                            )
+                            FROM main.results AS r
+                            WHERE r.matrix_id = m.matrix_id
+                              AND r.status = 'ok'
+                              AND (r.is_copositive IS NULL OR m.is_copositive IS NULL OR r.is_copositive = m.is_copositive)
+                              AND (r.is_strictly_copositive IS NULL OR m.is_strictly_copositive IS NULL
+                                   OR r.is_strictly_copositive = m.is_strictly_copositive)
+                            ORDER BY r.elapsed_ns, r.model_id, r.mode, r.preprocessing, r.binary_sha256
+                            LIMIT 1
+                        )
+                        WHERE m.matrix_id IN ({placeholders})""",
+                    matrix_ids,
+                )
             connection.commit()
             if stop_after_commit:
                 return
@@ -85,13 +129,26 @@ def _database_writer(database: Path, parent_cpu: int, writes: Queue, errors: lis
             connection.close()
 
 
-def _compute_worker(model_id: str, mode: str, preprocessing: str, cpu_id: int, messages: Connection) -> None:
+def _compute_worker(
+    model_id: str,
+    mode: str,
+    preprocessing: str,
+    collect_certificate_joint_distribution: bool,
+    cpu_id: int,
+    messages: Connection,
+) -> None:
     try:
+        send_lock = Lock()
+
+        def send(message) -> None:
+            with send_lock:
+                messages.send(message)
+
         signal.signal(signal.SIGINT, signal.SIG_IGN)
         os.sched_setaffinity(0, {cpu_id})
         native_module = load_native_module(model_id)
         native_module._install_timeout_handler(TIMEOUT_SIGNAL)
-        messages.send(("ready", os.getpid()))
+        send(("ready", os.getpid()))
 
         while True:
             try:
@@ -102,13 +159,35 @@ def _compute_worker(model_id: str, mode: str, preprocessing: str, cpu_id: int, m
                 return
 
             native_module._reset_timeout()
-            messages.send(("started", matrix.matrix_id))
+            send(("started", matrix.matrix_id))
+            monitor_stop = Event()
+            monitor = None
+            if collect_certificate_joint_distribution:
+                def publish_diagnostics() -> None:
+                    while not monitor_stop.wait(PROGRESS_INTERVAL_SECONDS):
+                        try:
+                            send(("diagnostics", matrix.matrix_id, native_module._diagnostics_snapshot()))
+                        except BaseException:
+                            return
+
+                monitor = Thread(target=publish_diagnostics, name="diagnostics", daemon=True)
+                monitor.start()
             try:
-                result = compute_matrix(model_id, matrix, mode, preprocessing)
+                result = compute_matrix(
+                    model_id,
+                    matrix,
+                    mode,
+                    preprocessing,
+                    collect_certificate_joint_distribution=collect_certificate_joint_distribution,
+                )
             except BaseException as error:
-                messages.send(("error", f"{type(error).__name__}: {error}"))
+                send(("error", f"{type(error).__name__}: {error}"))
                 return
-            messages.send(("result", result))
+            finally:
+                monitor_stop.set()
+                if monitor is not None:
+                    monitor.join()
+            send(("result", result))
     except BaseException as error:  # the parent must see setup and worker failures
         try:
             messages.send(("error", f"{type(error).__name__}: {error}"))
@@ -118,9 +197,14 @@ def _compute_worker(model_id: str, mode: str, preprocessing: str, cpu_id: int, m
         messages.close()
 
 
-def _spawn_worker(context, model_id: str, mode: str, preprocessing: str, cpu_id: int):
+def _spawn_worker(
+    context, model_id: str, mode: str, preprocessing: str, collect_certificate_joint_distribution: bool, cpu_id: int
+):
     parent_messages, child_messages = context.Pipe()
-    process = context.Process(target=_compute_worker, args=(model_id, mode, preprocessing, cpu_id, child_messages))
+    process = context.Process(
+        target=_compute_worker,
+        args=(model_id, mode, preprocessing, collect_certificate_joint_distribution, cpu_id, child_messages),
+    )
     try:
         process.start()
     except BaseException:
@@ -134,6 +218,9 @@ def _spawn_worker(context, model_id: str, mode: str, preprocessing: str, cpu_id:
         "messages": parent_messages,
         "state": "starting",
         "deadline": monotonic() + STARTUP_TIMEOUT_SECONDS,
+        "started_at": None,
+        "last_diagnostics": None,
+        "last_distribution": None,
         "row": None,
     }
 
@@ -178,19 +265,33 @@ def _decode_result(
     result,
     mode: str,
     timeout_seconds: float,
-) -> tuple[str, int | None, int | None, int | None, str | None]:
+    collect_certificate_joint_distribution: bool,
+) -> tuple[str, int | None, int | None, int | None, str | None, str | None, str | None]:
+    distribution = None
+    diagnostics = None
+    if collect_certificate_joint_distribution:
+        try:
+            diagnostics, distribution = _encode_diagnostics(result)
+        except ValueError as error:
+            return "error", None, None, None, None, None, str(error)
+
     status = int(result["status"])
     if status == int(StatusCode.PARSE_ERROR):
-        return "parse_error", None, None, None, result["error_message"] or "invalid matrix input"
+        return "parse_error", None, None, None, diagnostics, distribution, result["error_message"] or "invalid matrix input"
     if status == int(StatusCode.TIMEOUT):
-        return "timeout", None, None, None, f"exceeded {timeout_seconds:g} seconds"
+        elapsed_ns = int(result["elapsed_ns"]) if collect_certificate_joint_distribution else None
+        return "timeout", None, None, elapsed_ns, diagnostics, distribution, f"exceeded {timeout_seconds:g} seconds"
     if status == int(StatusCode.NODE_LIMIT):
-        return "node_limit", None, None, None, result["error_message"] or "open-node limit reached"
+        elapsed_ns = int(result["elapsed_ns"]) if collect_certificate_joint_distribution else None
+        return "node_limit", None, None, elapsed_ns, diagnostics, distribution, result["error_message"] or "open-node limit reached"
     if status != int(StatusCode.OK):
-        return "error", None, None, None, result["error_message"] or f"native status {status}"
+        return "error", None, None, None, diagnostics, distribution, result["error_message"] or f"native status {status}"
 
     if result["mode"] != mode:
-        return "error", None, None, None, f"native result mode {result['mode']!r} does not match requested mode {mode!r}"
+        return (
+            "error", None, None, None, diagnostics, distribution,
+            f"native result mode {result['mode']!r} does not match requested mode {mode!r}",
+        )
     copositive = result["is_copositive"]
     strictly_copositive = result["is_strictly_copositive"]
     elapsed_ns = int(result["elapsed_ns"])
@@ -200,14 +301,34 @@ def _decode_result(
         or (mode == "both" and type(copositive) is bool and type(strictly_copositive) is bool)
     )
     if not valid_payload or elapsed_ns < 0:
-        return "error", None, None, None, "native result has an invalid classification or elapsed time"
+        return "error", None, None, None, diagnostics, distribution, "native result has an invalid classification or elapsed time"
     return (
         "ok",
         int(copositive) if copositive is not None else None,
         int(strictly_copositive) if strictly_copositive is not None else None,
         elapsed_ns,
+        diagnostics,
+        distribution,
         None,
     )
+
+
+def _encode_diagnostics(result) -> tuple[str, str]:
+    values = result.get("certificate_joint_distribution")
+    valid = type(values) is list and all(
+        type(entry) in (list, tuple)
+        and len(entry) in (3, 4)
+        and all(type(value) is int and value >= 0 for value in entry)
+        and entry[-1] > 0
+        and (len(entry) == 3 or entry[1] <= entry[2])
+        for entry in values
+    )
+    if not valid:
+        raise ValueError("native result has an invalid certificate joint distribution")
+    diagnostics = result.get("diagnostics")
+    if type(diagnostics) is not str:
+        raise ValueError("native result has invalid diagnostics")
+    return diagnostics, json.dumps(values, separators=(",", ":"))
 
 
 def _validate_arguments(arguments) -> None:
@@ -215,6 +336,27 @@ def _validate_arguments(arguments) -> None:
         raise ValueError(f"mode must be one of: {', '.join(COPOSITIVITY_MODES)}")
     if arguments.preprocessing not in PREPROCESSING_MODES:
         raise ValueError(f"preprocessing must be one of: {', '.join(PREPROCESSING_MODES)}")
+    if arguments.certificate_joint_distribution and arguments.model not in (
+        "cbdd_zed_dickinson",
+        "czdd_zed_dickinson",
+        "wide_certificate_cbdd_zed_dickinson",
+        "wide_75_certificate_cbdd_zed_dickinson",
+        "wide_90_certificate_cbdd_zed_dickinson",
+        "wide_95_certificate_cbdd_zed_dickinson",
+        "ceiling_pruned_dickinson",
+        "sat_zed_dickinson",
+        "clingo_sat_zed_dickinson",
+    ):
+        raise ValueError("certificate joint distributions are available only for supported serial Dickinson experiments")
+    if arguments.certificate_joint_distribution and arguments.preprocessing != "none":
+        raise ValueError("certificate joint distributions require preprocessing=none")
+    dense_limit_selected = arguments.dense_bitset_max_n is not None or arguments.dense_bitset_max_gib is not None
+    if dense_limit_selected and arguments.model != "dense_bitset_dickinson":
+        raise ValueError("dense-bitset limits apply only to dense_bitset_dickinson")
+    if arguments.dense_bitset_max_n is not None and arguments.dense_bitset_max_n < 1:
+        raise ValueError("dense-bitset-max-n must be positive")
+    if arguments.dense_bitset_max_gib is not None and arguments.dense_bitset_max_gib < 1:
+        raise ValueError("dense-bitset-max-gib must be positive")
     if not math.isfinite(arguments.timeout_seconds) or arguments.timeout_seconds <= 0:
         raise ValueError("timeout must be a finite positive number")
     if round(arguments.timeout_seconds * 1_000_000_000) < 1:
@@ -227,6 +369,8 @@ def _validate_arguments(arguments) -> None:
         raise ValueError("matrix-id-from must be positive")
     if arguments.matrix_id_to is not None and arguments.matrix_id_to < arguments.matrix_id_from:
         raise ValueError("matrix-id-to must be at least matrix-id-from")
+    if arguments.matrix_ids is not None and any(matrix_id < 1 for matrix_id in arguments.matrix_ids):
+        raise ValueError("matrix-ids must be positive")
     if len(arguments.cpus) != len(set(arguments.cpus)):
         raise ValueError("CPU IDs must not contain duplicates")
     if arguments.parent_cpu in arguments.cpus:
@@ -238,12 +382,21 @@ def _validate_arguments(arguments) -> None:
         raise ValueError(f"CPUs {unavailable} are unavailable; choose from {sorted(os.sched_getaffinity(0))}")
     if not arguments.database.is_file():
         raise ValueError(f"database does not exist: {arguments.database}")
+    if not arguments.results_database.is_file():
+        raise ValueError(f"results database does not exist: {arguments.results_database}")
 
 
 def run(arguments) -> bool:
     """Run selected rows and return whether Ctrl-C requested an orderly drain."""
 
+    _initialize_results_database(arguments.results_database)
     _validate_arguments(arguments)
+    if arguments.dense_bitset_max_n is not None:
+        os.environ["COPOSIT_DENSE_BITSET_MAX_N"] = str(arguments.dense_bitset_max_n)
+        os.environ.pop("COPOSIT_DENSE_BITSET_MAX_GIB", None)
+    elif arguments.dense_bitset_max_gib is not None:
+        os.environ["COPOSIT_DENSE_BITSET_MAX_GIB"] = str(arguments.dense_bitset_max_gib)
+        os.environ.pop("COPOSIT_DENSE_BITSET_MAX_N", None)
     os.sched_setaffinity(0, {arguments.parent_cpu})
     native_module = load_native_module(arguments.model)
     binary = Path(native_module.__file__).resolve()
@@ -254,8 +407,10 @@ def run(arguments) -> bool:
     connection.execute("PRAGMA foreign_keys = ON")
     connection.execute("PRAGMA busy_timeout = 5000")
     try:
-        if not connection.execute("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'results'").fetchone():
-            raise RuntimeError("database has no results table")
+        separate_results_database = arguments.results_database != arguments.database
+        if separate_results_database:
+            connection.execute("ATTACH DATABASE ? AS diagnostics", (str(arguments.results_database),))
+        result_table = "diagnostics.results" if separate_results_database else "results"
 
         where = "m.dimension >= ? AND (? IS NULL OR m.dimension <= ?) AND m.matrix_id >= ? AND (? IS NULL OR m.matrix_id <= ?)"
         query_values: list[object] = [
@@ -267,20 +422,30 @@ def run(arguments) -> bool:
             arguments.matrix_id_to,
         ]
         if arguments.matrix_set:
-            where += " AND (" + " OR ".join(f"m.{matrix_set} = 1" for matrix_set in arguments.matrix_set) + ")"
+            selections = (
+                "json_array_length(m.references_unsolved) > 0" if matrix_set == "references_unsolved" else f"m.{matrix_set} = 1"
+                for matrix_set in arguments.matrix_set
+            )
+            where += " AND (" + " OR ".join(selections) + ")"
+        if arguments.matrix_ids:
+            matrix_ids = sorted(set(arguments.matrix_ids))
+            where += f" AND m.matrix_id IN ({','.join('?' for _ in matrix_ids)})"
+            query_values.extend(matrix_ids)
+        if arguments.without_results:
+            where += f" AND NOT EXISTS (SELECT 1 FROM {result_table} r WHERE r.matrix_id = m.matrix_id)"
 
         database_directory = arguments.database.resolve().parent
 
         if arguments.retry_timeouts:
             where += (
-                " AND EXISTS (SELECT 1 FROM results r WHERE r.matrix_id = m.matrix_id AND r.model_id = ? "
+                f" AND EXISTS (SELECT 1 FROM {result_table} r WHERE r.matrix_id = m.matrix_id AND r.model_id = ? "
                 "AND r.mode = ? AND r.preprocessing = ? AND r.binary_sha256 = ? AND r.status = 'timeout')"
             )
             query_values.extend((arguments.model, arguments.mode, arguments.preprocessing, binary_sha256))
         elif not arguments.rerun:
             where += (
-                " AND NOT EXISTS (SELECT 1 FROM results r WHERE r.matrix_id = m.matrix_id AND r.model_id = ? "
-                "AND r.mode = ? AND r.preprocessing = ? AND r.binary_sha256 = ?)"
+                f" AND NOT EXISTS (SELECT 1 FROM {result_table} r WHERE r.matrix_id = m.matrix_id AND r.model_id = ? "
+                "AND r.mode = ? AND r.preprocessing = ? AND r.binary_sha256 = ? AND r.status <> 'running')"
             )
             query_values.extend((arguments.model, arguments.mode, arguments.preprocessing, binary_sha256))
 
@@ -294,7 +459,13 @@ def run(arguments) -> bool:
             f"timeout_seconds={arguments.timeout_seconds:g} "
             f"dimensions={arguments.dimension_from}..{arguments.dimension_to or 'max'} parent_cpu={arguments.parent_cpu} "
             f"matrix_ids={arguments.matrix_id_from}..{arguments.matrix_id_to or 'max'} "
+            f"explicit_matrix_ids={len(set(arguments.matrix_ids)) if arguments.matrix_ids else 'all'} "
             f"matrix_sets={','.join(arguments.matrix_set) if arguments.matrix_set else 'all'} "
+            f"without_results={'yes' if arguments.without_results else 'no'} "
+            f"certificate_joint_distribution={'yes' if arguments.certificate_joint_distribution else 'no'} "
+            f"dense_bitset_max_n={arguments.dense_bitset_max_n or 'default'} "
+            f"dense_bitset_max_gib={arguments.dense_bitset_max_gib or 'default'} "
+            f"results_database={arguments.results_database} "
             f"cpus={','.join(map(str, arguments.cpus))}",
             flush=True,
         )
@@ -321,13 +492,20 @@ def run(arguments) -> bool:
         database_errors: list[BaseException] = []
         database_writer = Thread(
             target=_database_writer,
-            args=(arguments.database, arguments.parent_cpu, database_writes, database_errors),
+            args=(arguments.results_database, arguments.database, arguments.parent_cpu, database_writes, database_errors),
             name="sqlite-writer",
             daemon=True,
         )
         database_writer.start()
         workers = {
-            cpu_id: _spawn_worker(context, arguments.model, arguments.mode, arguments.preprocessing, cpu_id)
+            cpu_id: _spawn_worker(
+                context,
+                arguments.model,
+                arguments.mode,
+                arguments.preprocessing,
+                arguments.certificate_joint_distribution,
+                cpu_id,
+            )
             for cpu_id in arguments.cpus[:worker_count]
         }
         completed_count = 0
@@ -349,15 +527,43 @@ def run(arguments) -> bool:
                 except Full:
                     continue
 
+        def record_progress(worker, payload) -> None:
+            if worker["row"] is None or worker["started_at"] is None:
+                return
+            diagnostics, distribution = _encode_diagnostics(payload)
+            worker["last_diagnostics"] = diagnostics
+            worker["last_distribution"] = distribution
+            matrix_id = worker["row"][0]
+            queue_database_write((
+                matrix_id,
+                arguments.model,
+                arguments.mode,
+                arguments.preprocessing,
+                binary_sha256,
+                "running",
+                None,
+                None,
+                round((monotonic() - worker["started_at"]) * 1_000_000_000),
+                timeout_ns,
+                datetime.now(tz=timezone.utc).isoformat(timespec="seconds"),
+                diagnostics,
+                distribution,
+                None,
+            ))
+
         def record(
             worker,
             status: str,
             copositive: int | None,
             strictly_copositive: int | None,
             elapsed_ns: int | None,
+            diagnostics: str | None,
+            certificate_joint_distribution: str | None,
             message: str | None,
         ) -> None:
             nonlocal completed_count, last_progress_at
+            if status == "error" and elapsed_ns is None and worker["started_at"] is not None:
+                elapsed_ns = round((monotonic() - worker["started_at"]) * 1_000_000_000)
             matrix_id, dimension, expected_copositive, expected_strictly_copositive = worker["row"]
             recorded_at = datetime.now(tz=timezone.utc).isoformat(timespec="seconds")
             queue_database_write((
@@ -372,6 +578,8 @@ def run(arguments) -> bool:
                 elapsed_ns,
                 timeout_ns,
                 recorded_at,
+                diagnostics,
+                certificate_joint_distribution,
                 message,
             ))
             completed_count += 1
@@ -381,25 +589,44 @@ def run(arguments) -> bool:
                 "both": (expected_copositive, expected_strictly_copositive),
             }[arguments.mode]
             actual = (copositive, strictly_copositive)
-            comparison = "match" if status == "ok" and actual == expected else ("MISMATCH" if status == "ok" else status)
+            requested = {"copositive": (0,), "strictly_copositive": (1,), "both": (0, 1)}[arguments.mode]
+            if status != "ok":
+                comparison = status
+            elif any(expected[index] is not None and actual[index] != expected[index] for index in requested):
+                comparison = "MISMATCH"
+            else:
+                comparison = "match" if all(expected[index] is not None for index in requested) else "unverified"
             now = monotonic()
             if (total <= DETAILED_PROGRESS_LIMIT or completed_count == total or comparison == "MISMATCH"
+                    or comparison == "unverified"
                     or status in ("parse_error", "error")
                     or now - last_progress_at >= PROGRESS_INTERVAL_SECONDS):
                 print(
                     f"[{completed_count}/{total}] matrix={matrix_id} dimension={dimension} cpu={worker['cpu_id']} "
                     f"pid={worker['process'].pid} status={status} result={actual} expected={expected} "
-                    f"comparison={comparison} elapsed_ns={elapsed_ns}",
+                    f"comparison={comparison} elapsed_ns={elapsed_ns} certificate_bins="
+                    f"{len(json.loads(certificate_joint_distribution)) if certificate_joint_distribution is not None else 'none'} "
+                    f"diagnostics_bytes={len(diagnostics.encode()) if diagnostics is not None else 'none'}",
                     flush=True,
                 )
                 last_progress_at = now
             worker["row"] = None
+            worker["started_at"] = None
+            worker["last_diagnostics"] = None
+            worker["last_distribution"] = None
 
         def remove_worker(cpu_id: int, restart: bool) -> None:
             worker = workers.pop(cpu_id)
             _discard_worker(worker)
             if restart and not interrupted and next_row is not None:
-                workers[cpu_id] = _spawn_worker(context, arguments.model, arguments.mode, arguments.preprocessing, cpu_id)
+                workers[cpu_id] = _spawn_worker(
+                    context,
+                    arguments.model,
+                    arguments.mode,
+                    arguments.preprocessing,
+                    arguments.certificate_joint_distribution,
+                    cpu_id,
+                )
 
         previous_interrupt_handler = signal.signal(signal.SIGINT, request_interrupt)
         try:
@@ -436,18 +663,39 @@ def run(arguments) -> bool:
                         if int(message[1]) != worker["row"][0]:
                             raise RuntimeError(f"worker on CPU {cpu_id} started the wrong matrix")
                         worker["state"] = "running"
+                        worker["started_at"] = monotonic()
+                        worker["last_diagnostics"] = None
+                        worker["last_distribution"] = None
                         worker["deadline"] = monotonic() + arguments.timeout_seconds
                         continue
 
+                    if state in ("running", "stopping") and message[0] == "diagnostics":
+                        if int(message[1]) != worker["row"][0]:
+                            raise RuntimeError(f"worker on CPU {cpu_id} reported diagnostics for the wrong matrix")
+                        record_progress(worker, message[2])
+                        continue
+
                     if state in ("running", "stopping") and message[0] == "result":
-                        record(worker, *_decode_result(message[1], arguments.mode, arguments.timeout_seconds))
-                        worker["state"] = "idle"
-                        worker["deadline"] = None
+                        decoded = _decode_result(
+                            message[1],
+                            arguments.mode,
+                            arguments.timeout_seconds,
+                            arguments.certificate_joint_distribution,
+                        )
+                        record(worker, *decoded)
+                        if decoded[0] == "error":
+                            remove_worker(cpu_id, restart=True)
+                        else:
+                            worker["state"] = "idle"
+                            worker["deadline"] = None
                         continue
 
                     error_message = str(message[1]) if message[0] == "error" else f"unexpected worker message {message[0]!r}"
                     if worker["row"] is not None:
-                        record(worker, "error", None, None, None, error_message)
+                        record(
+                            worker, "error", None, None, None,
+                            worker["last_diagnostics"], worker["last_distribution"], error_message,
+                        )
                     remove_worker(cpu_id, restart=True)
 
                 now = monotonic()
@@ -459,7 +707,11 @@ def run(arguments) -> bool:
                         try:
                             os.kill(worker["process"].pid, TIMEOUT_SIGNAL)
                         except ProcessLookupError:
-                            record(worker, "error", None, None, None, "worker exited before the timeout signal")
+                            record(
+                                worker, "error", None, None, None,
+                                worker["last_diagnostics"], worker["last_distribution"],
+                                "worker exited before the timeout signal",
+                            )
                             remove_worker(cpu_id, restart=True)
                         else:
                             worker["state"] = "stopping"
@@ -471,7 +723,9 @@ def run(arguments) -> bool:
                             "timeout",
                             None,
                             None,
-                            None,
+                            round((monotonic() - worker["started_at"]) * 1_000_000_000),
+                            worker["last_diagnostics"],
+                            worker["last_distribution"],
                             f"exceeded {arguments.timeout_seconds:g} seconds and did not stop within {TIMEOUT_GRACE_SECONDS:g} second",
                         )
                         remove_worker(cpu_id, restart=True)
@@ -479,7 +733,11 @@ def run(arguments) -> bool:
                     if worker["state"] == "starting":
                         raise RuntimeError(f"worker on CPU {cpu_id} startup exceeded {STARTUP_TIMEOUT_SECONDS:g} seconds")
 
-                    record(worker, "error", None, None, None, "worker did not acknowledge the matrix within 30 seconds")
+                    record(
+                        worker, "error", None, None, None,
+                        worker["last_diagnostics"], worker["last_distribution"],
+                        "worker did not acknowledge the matrix within 30 seconds",
+                    )
                     remove_worker(cpu_id, restart=True)
 
                 for cpu_id, worker in list(workers.items()):
@@ -531,11 +789,26 @@ def main() -> None:
     parser.add_argument("--dimension-to", type=int)
     parser.add_argument("--matrix-id-from", type=int, default=1)
     parser.add_argument("--matrix-id-to", type=int)
-    parser.add_argument("--matrix-set", choices=MATRIX_SETS, nargs="+", help="run the union of the selected database flags")
+    parser.add_argument("--matrix-ids", type=int, nargs="+", metavar="ID")
+    parser.add_argument("--matrix-set", choices=MATRIX_SETS, nargs="+", help="run the union of the selected corpus selectors")
+    parser.add_argument("--without-results", action="store_true", help="select only matrices with no result rows")
     parser.add_argument("--parent-cpu", type=int, required=True, metavar="ID")
     parser.add_argument("--cpus", type=int, nargs="+", required=True, metavar="ID")
-    parser.add_argument("--database", type=Path, default=DEFAULT_DATABASE)
-    parser.add_argument("--preprocessing", choices=PREPROCESSING_MODES, default="none")
+    parser.add_argument("--database", type=Path, default=DEFAULT_DATABASE, help="matrix corpus database")
+    parser.add_argument(
+        "--results-database",
+        type=Path,
+        help="benchmark/diagnostics database (defaults to the ignored experiments database for the maintained corpus)",
+    )
+    parser.add_argument("--preprocessing", choices=PREPROCESSING_MODES, default="both")
+    parser.add_argument(
+        "--certificate-joint-distribution",
+        action="store_true",
+        help="store the sparse certificate distribution; CBDD/CZDD use (support cardinality, free indices, upper size, count) quadruples",
+    )
+    dense_limit = parser.add_mutually_exclusive_group()
+    dense_limit.add_argument("--dense-bitset-max-n", type=int, metavar="N")
+    dense_limit.add_argument("--dense-bitset-max-gib", type=int, metavar="GIB")
     selection = parser.add_mutually_exclusive_group()
     selection.add_argument("--rerun", action="store_true", help="replace every selected row for this model, preprocessing, and binary")
     selection.add_argument(
@@ -545,6 +818,11 @@ def main() -> None:
     )
     arguments = parser.parse_args()
     arguments.database = arguments.database.resolve()
+    arguments.results_database = (
+        arguments.results_database.resolve()
+        if arguments.results_database is not None
+        else (DEFAULT_RESULTS_DATABASE if arguments.database == DEFAULT_DATABASE else arguments.database).resolve()
+    )
     try:
         interrupted = run(arguments)
     except (RuntimeError, ValueError) as error:

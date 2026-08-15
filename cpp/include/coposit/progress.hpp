@@ -9,18 +9,24 @@
 #include <cstdint>
 #include <iomanip>
 #include <limits>
+#include <map>
 #include <mutex>
 #include <ostream>
 #include <sstream>
+#include <string>
 #include <thread>
+#include <tuple>
 
 namespace coposit::progress {
 
 constexpr auto report_interval = std::chrono::seconds(1);
 constexpr uint64_t publish_mask = 4095;
+constexpr uint64_t bracelet_publish_mask = 255;
+constexpr uint64_t decision_diagram_publish_interval = 200;
 constexpr uint64_t coverage_scale = 1'000'000'000'000ULL;
 
-enum class metric { none, preprocessing, support, simplex, proof, traversal, adaptive };
+enum class metric { none, preprocessing, support, decision_diagram, bracelet, simplex, proof, traversal, adaptive };
+enum class decision_diagram_phase { none, zed_scan, cardinality_build, support_solve, certificate_union, certificate_subtract };
 enum class adaptive_engine { none, routing, sponsel, copomatrix };
 enum class adaptive_phase {
     none,
@@ -39,12 +45,18 @@ enum class adaptive_route { none, sponsel, narrow_copomatrix, forced_copomatrix 
 enum class preprocessing_phase {
     none,
     matrix_scan,
+    root_checks,
     cheap_certificates,
     principal_submatrices,
+    negative_part_diagonal_dominance,
+    all_ones,
     connected_components,
     component_scan,
+    z_matrix,
     frank_wolfe,
     exact_factorization,
+    danninger,
+    copomatrix,
     model_delegation,
 };
 
@@ -74,6 +86,10 @@ struct snapshot {
     size_t pivot = 0;
     size_t work_current = 0;
     size_t work_maximum = 0;
+    decision_diagram_phase diagram_phase = decision_diagram_phase::none;
+    int64_t cardinality_started_ns = 0;
+    std::map<std::pair<size_t, size_t>, uint64_t> certificate_cardinality_free_index_counts;
+    std::map<std::tuple<size_t, size_t, size_t>, uint64_t> certificate_cardinality_free_index_upper_size_counts;
 };
 
 namespace detail {
@@ -105,6 +121,13 @@ struct shared_state {
     std::atomic<size_t> pivot{0};
     std::atomic<size_t> work_current{0};
     std::atomic<size_t> work_maximum{0};
+    std::atomic<decision_diagram_phase> diagram_phase{decision_diagram_phase::none};
+    std::atomic<int64_t> cardinality_started_ns{0};
+    std::mutex certificate_histogram_mutex;
+    std::map<std::pair<size_t, size_t>, uint64_t> certificate_cardinality_free_index_counts;
+    std::map<std::tuple<size_t, size_t, size_t>, uint64_t> certificate_cardinality_free_index_upper_size_counts;
+    std::mutex diagnostics_mutex;
+    std::string diagnostics;
 };
 
 inline shared_state state;
@@ -136,11 +159,18 @@ inline void reset() noexcept
     state.pivot.store(0, std::memory_order_relaxed);
     state.work_current.store(0, std::memory_order_relaxed);
     state.work_maximum.store(0, std::memory_order_relaxed);
+    state.diagram_phase.store(decision_diagram_phase::none, std::memory_order_relaxed);
+    state.cardinality_started_ns.store(0, std::memory_order_relaxed);
+    std::lock_guard<std::mutex> lock(state.certificate_histogram_mutex);
+    state.certificate_cardinality_free_index_counts.clear();
+    state.certificate_cardinality_free_index_upper_size_counts.clear();
+    std::lock_guard<std::mutex> diagnostics_lock(state.diagnostics_mutex);
+    state.diagnostics.clear();
 }
 
 inline snapshot load() noexcept
 {
-    return {
+    snapshot result{
         state.kind.load(std::memory_order_relaxed),
         state.phase.load(std::memory_order_relaxed),
         state.nodes.load(std::memory_order_relaxed),
@@ -166,7 +196,34 @@ inline snapshot load() noexcept
         state.pivot.load(std::memory_order_relaxed),
         state.work_current.load(std::memory_order_relaxed),
         state.work_maximum.load(std::memory_order_relaxed),
+        state.diagram_phase.load(std::memory_order_relaxed),
+        state.cardinality_started_ns.load(std::memory_order_relaxed),
     };
+    {
+        std::lock_guard<std::mutex> lock(state.certificate_histogram_mutex);
+        result.certificate_cardinality_free_index_counts = state.certificate_cardinality_free_index_counts;
+        result.certificate_cardinality_free_index_upper_size_counts = state.certificate_cardinality_free_index_upper_size_counts;
+    }
+    return result;
+}
+
+inline std::string load_diagnostics()
+{
+    std::lock_guard<std::mutex> lock(state.diagnostics_mutex);
+    return state.diagnostics;
+}
+
+inline const char* diagram_phase_text(decision_diagram_phase phase) noexcept
+{
+    switch (phase) {
+        case decision_diagram_phase::zed_scan: return "Zed scan";
+        case decision_diagram_phase::cardinality_build: return "cardinality build";
+        case decision_diagram_phase::support_solve: return "support solve";
+        case decision_diagram_phase::certificate_union: return "certificate union";
+        case decision_diagram_phase::certificate_subtract: return "certificate subtract";
+        case decision_diagram_phase::none: return "starting";
+    }
+    return "starting";
 }
 
 inline const char* engine_text(adaptive_engine engine) noexcept
@@ -214,18 +271,30 @@ inline const char* phase_text(preprocessing_phase phase) noexcept
     switch (phase) {
         case preprocessing_phase::matrix_scan:
             return "matrix scan";
+        case preprocessing_phase::root_checks:
+            return "root checks";
         case preprocessing_phase::cheap_certificates:
             return "cheap certificates";
         case preprocessing_phase::principal_submatrices:
             return "principal submatrices";
+        case preprocessing_phase::negative_part_diagonal_dominance:
+            return "negative-part diagonal dominance";
+        case preprocessing_phase::all_ones:
+            return "all-ones";
         case preprocessing_phase::connected_components:
             return "connected components";
         case preprocessing_phase::component_scan:
             return "component scan";
+        case preprocessing_phase::z_matrix:
+            return "Z-matrix";
         case preprocessing_phase::frank_wolfe:
             return "Frank-Wolfe";
         case preprocessing_phase::exact_factorization:
             return "exact factorization";
+        case preprocessing_phase::danninger:
+            return "Danninger";
+        case preprocessing_phase::copomatrix:
+            return "COPOMATRIX";
         case preprocessing_phase::model_delegation:
             return "model delegation";
         case preprocessing_phase::none:
@@ -259,7 +328,8 @@ inline std::string elapsed_text(std::chrono::seconds elapsed)
     return text.str();
 }
 
-inline std::string format(const snapshot& value, std::chrono::seconds elapsed, double rate)
+inline std::string format(const snapshot& value, std::chrono::seconds elapsed, double rate,
+                          std::chrono::seconds cardinality_elapsed = std::chrono::seconds(0))
 {
     std::ostringstream output;
     output << '[' << elapsed_text(elapsed) << "] ";
@@ -275,7 +345,63 @@ inline std::string format(const snapshot& value, std::chrono::seconds elapsed, d
             output << "stage=model  metric=support  coverage=" << std::setprecision(6)
                    << support_percent(value.nodes, value.maximum) << "%"
                    << "  cardinality=" << value.current << '/' << value.maximum << "  visited=" << value.nodes
-                   << "  covered=" << value.resolved << "  processed=" << value.secondary;
+                   << "  covered=" << value.resolved << "  processed=" << value.secondary
+                   << "  certificates=" << value.splits << "  zed_blocks_tested=" << value.open;
+            if (!value.certificate_cardinality_free_index_upper_size_counts.empty()) {
+                output << "  certificate_k_d_u_counts=[";
+                bool first = true;
+                for (const auto& [key, count] : value.certificate_cardinality_free_index_upper_size_counts) {
+                    if (!first) output << ',';
+                    const auto& [cardinality, free_indices, upper_size] = key;
+                    output << '(' << cardinality << ',' << free_indices << ',' << upper_size << ',' << count << ')';
+                    first = false;
+                }
+                output << ']';
+            } else if (!value.certificate_cardinality_free_index_counts.empty()) {
+                output << "  certificate_k_d_counts=[";
+                bool first = true;
+                for (const auto& [key, count] : value.certificate_cardinality_free_index_counts) {
+                    if (!first) output << ',';
+                    output << '(' << key.first << ',' << key.second << ',' << count << ')';
+                    first = false;
+                }
+                output << ']';
+            }
+            break;
+        case metric::decision_diagram:
+            output << "stage=model  metric=decision-diagram  phase=" << diagram_phase_text(value.diagram_phase)
+                   << "  cardinality=" << value.current << '/' << value.maximum << "  ";
+            if (value.current == 0) output << "phase_elapsed=";
+            else output << "cardinality_elapsed=";
+            output << elapsed_text(cardinality_elapsed)
+                   << "  emitted_supports=" << value.nodes << "  certificates=" << value.resolved
+                   << "  zed_blocks_tested=" << value.open << "  dd_nodes_allocated=" << value.secondary
+                   << "  dd_operations=" << value.splits;
+            if (!value.certificate_cardinality_free_index_upper_size_counts.empty()) {
+                output << "  certificate_k_d_u_counts=[";
+                bool first = true;
+                for (const auto& [key, count] : value.certificate_cardinality_free_index_upper_size_counts) {
+                    if (!first) output << ',';
+                    const auto& [cardinality, free_indices, upper_size] = key;
+                    output << '(' << cardinality << ',' << free_indices << ',' << upper_size << ',' << count << ')';
+                    first = false;
+                }
+                output << ']';
+            } else if (!value.certificate_cardinality_free_index_counts.empty()) {
+                output << "  certificate_k_d_counts=[";
+                bool first = true;
+                for (const auto& [key, count] : value.certificate_cardinality_free_index_counts) {
+                    if (!first) output << ',';
+                    output << '(' << key.first << ',' << key.second << ',' << count << ')';
+                    first = false;
+                }
+                output << ']';
+            }
+            break;
+        case metric::bracelet:
+            output << "stage=model  metric=bracelet  cardinality=" << value.current << '/' << value.maximum
+                   << "  bracelets=" << value.nodes << "  affine_skipped=" << value.resolved
+                   << "  exact_systems=" << value.secondary << "  candidates=" << value.splits;
             break;
         case metric::simplex:
             output << "stage=model  metric=simplex  coverage=" << std::setprecision(3)
@@ -371,6 +497,13 @@ public:
         publish();
     }
 
+    void support_cardinality(size_t cardinality) noexcept
+    {
+        if (!active_) return;
+        current_ = cardinality;
+        publish();
+    }
+
     void visit(size_t current, size_t depth, size_t open = 0) noexcept
     {
         if (!active_) return;
@@ -385,12 +518,32 @@ public:
     {
         if (!active_) return;
         detail::increment(nodes_);
-        if (nodes_ == 1 || (nodes_ & publish_mask) == 0) publish();
+        detail::state.nodes.store(nodes_, std::memory_order_relaxed);
+    }
+
+    void visit_bracelet() noexcept
+    {
+        if (!active_) return;
+        detail::increment(nodes_);
+        if (nodes_ == 1 || (nodes_ & bracelet_publish_mask) == 0) publish();
     }
 
     void covered_support() noexcept
     {
-        if (active_) detail::increment(resolved_);
+        if (!active_) return;
+        detail::increment(resolved_);
+        if (kind_ == metric::support) detail::state.resolved.store(resolved_, std::memory_order_relaxed);
+    }
+
+    void skip_supports(uint64_t count) noexcept
+    {
+        if (!active_) return;
+        nodes_ = count > std::numeric_limits<uint64_t>::max() - nodes_ ? std::numeric_limits<uint64_t>::max() : nodes_ + count;
+        resolved_ = count > std::numeric_limits<uint64_t>::max() - resolved_
+            ? std::numeric_limits<uint64_t>::max()
+            : resolved_ + count;
+        detail::state.nodes.store(nodes_, std::memory_order_relaxed);
+        detail::state.resolved.store(resolved_, std::memory_order_relaxed);
     }
 
     void resolved(long double weight = 0.0L) noexcept
@@ -402,12 +555,114 @@ public:
 
     void secondary() noexcept
     {
-        if (active_) detail::increment(secondary_);
+        if (!active_) return;
+        detail::increment(secondary_);
+        if (kind_ == metric::support) detail::state.secondary.store(secondary_, std::memory_order_relaxed);
     }
 
     void split() noexcept
     {
         if (active_) detail::increment(splits_);
+    }
+
+    void certificate() noexcept
+    {
+        if (!active_) return;
+        detail::increment(splits_);
+        if (kind_ == metric::support) detail::state.splits.store(splits_, std::memory_order_relaxed);
+    }
+
+    void certificate(size_t free_indices) noexcept
+    {
+        certificate();
+        if (!active_ || free_indices > maximum_) return;
+        std::lock_guard<std::mutex> lock(detail::state.certificate_histogram_mutex);
+        ++detail::state.certificate_cardinality_free_index_counts[{current_, free_indices}];
+    }
+
+    void certificate(size_t free_indices, size_t upper_size) noexcept
+    {
+        certificate();
+        if (!active_ || free_indices > upper_size || upper_size > maximum_) return;
+        std::lock_guard<std::mutex> lock(detail::state.certificate_histogram_mutex);
+        ++detail::state.certificate_cardinality_free_index_upper_size_counts[{current_, free_indices, upper_size}];
+    }
+
+    void decision_diagram_cardinality(size_t cardinality, decision_diagram_phase phase) noexcept
+    {
+        if (!active_) return;
+        current_ = cardinality;
+        diagram_phase_ = phase;
+        cardinality_started_ns_ = std::chrono::duration_cast<std::chrono::nanoseconds>(
+            std::chrono::steady_clock::now().time_since_epoch()).count();
+        publish();
+    }
+
+    void decision_diagram_phase_change(decision_diagram_phase phase) noexcept
+    {
+        if (!active_) return;
+        diagram_phase_ = phase;
+        detail::state.diagram_phase.store(phase, std::memory_order_relaxed);
+    }
+
+    void decision_diagram_support() noexcept
+    {
+        if (!active_) return;
+        detail::increment(nodes_);
+        detail::state.nodes.store(nodes_, std::memory_order_relaxed);
+    }
+
+    void decision_diagram_certificate(size_t free_indices = std::numeric_limits<size_t>::max()) noexcept
+    {
+        if (!active_) return;
+        detail::increment(resolved_);
+        detail::state.resolved.store(resolved_, std::memory_order_relaxed);
+        if (free_indices <= maximum_) {
+            std::lock_guard<std::mutex> lock(detail::state.certificate_histogram_mutex);
+            ++detail::state.certificate_cardinality_free_index_counts[{current_, free_indices}];
+        }
+    }
+
+    void decision_diagram_certificate(size_t free_indices, size_t upper_size) noexcept
+    {
+        if (!active_) return;
+        detail::increment(resolved_);
+        detail::state.resolved.store(resolved_, std::memory_order_relaxed);
+        if (free_indices <= upper_size && upper_size <= maximum_) {
+            std::lock_guard<std::mutex> lock(detail::state.certificate_histogram_mutex);
+            ++detail::state.certificate_cardinality_free_index_upper_size_counts[{current_, free_indices, upper_size}];
+        }
+    }
+
+    void decision_diagram_zed_block() noexcept
+    {
+        zed_blocks(1);
+    }
+
+    void decision_diagram_zed_blocks(uint64_t count) noexcept
+    {
+        zed_blocks(count);
+    }
+
+    void zed_block() noexcept
+    {
+        zed_blocks(1);
+    }
+
+    void zed_blocks(uint64_t count) noexcept
+    {
+        if (!active_) return;
+        open_ = count > std::numeric_limits<uint64_t>::max() - open_ ? std::numeric_limits<uint64_t>::max() : open_ + count;
+        detail::state.open.store(open_, std::memory_order_relaxed);
+    }
+
+    void decision_diagram_work(size_t allocated_nodes, uint64_t operations) noexcept
+    {
+        if (!active_) return;
+        secondary_ = allocated_nodes;
+        splits_ = operations;
+        detail::state.secondary.store(secondary_, std::memory_order_relaxed);
+        detail::state.splits.store(splits_, std::memory_order_relaxed);
     }
 
     void finish() noexcept
@@ -522,6 +777,8 @@ private:
         detail::state.pivot.store(pivot_, std::memory_order_relaxed);
         detail::state.work_current.store(work_current_, std::memory_order_relaxed);
         detail::state.work_maximum.store(work_maximum_, std::memory_order_relaxed);
+        detail::state.diagram_phase.store(diagram_phase_, std::memory_order_relaxed);
+        detail::state.cardinality_started_ns.store(cardinality_started_ns_, std::memory_order_relaxed);
     }
 
     const bool active_;
@@ -533,7 +790,7 @@ private:
     uint64_t splits_ = 0;
     size_t current_;
     size_t depth_ = 0;
-    size_t open_ = 0;
+    uint64_t open_ = 0;
     long double coverage_ = 0.0L;
     adaptive_engine engine_ = adaptive_engine::none;
     adaptive_phase model_phase_ = adaptive_phase::none;
@@ -549,17 +806,24 @@ private:
     size_t pivot_ = 0;
     size_t work_current_ = 0;
     size_t work_maximum_ = 0;
+    decision_diagram_phase diagram_phase_ = decision_diagram_phase::none;
+    int64_t cardinality_started_ns_ = 0;
 };
 
 class reporter {
 public:
-    reporter(bool active, std::ostream& output) : active_(active), output_(output)
+    reporter(bool show_output, std::ostream& output, bool collect = false, bool capture_output = false)
+        : active_(show_output || collect || capture_output)
+        , show_output_(show_output)
+        , capture_output_(capture_output)
+        , write_output_(show_output || capture_output)
+        , output_(output)
     {
         if (!active_) return;
         detail::reset();
         detail::state.enabled.store(true, std::memory_order_relaxed);
         started_ = std::chrono::steady_clock::now();
-        thread_ = std::thread([this] { run(); });
+        if (write_output_) thread_ = std::thread([this] { run(); });
     }
 
     ~reporter() { stop(); }
@@ -571,16 +835,50 @@ public:
     {
         if (!active_) return;
         detail::state.enabled.store(false, std::memory_order_relaxed);
-        {
-            std::lock_guard<std::mutex> lock(mutex_);
-            stopped_ = true;
+        if (write_output_) {
+            {
+                std::lock_guard<std::mutex> lock(mutex_);
+                stopped_ = true;
+            }
+            condition_.notify_one();
+            if (thread_.joinable()) thread_.join();
+            try {
+                const auto now = std::chrono::steady_clock::now();
+                const snapshot current = detail::load();
+                if (current.kind != metric::none) {
+                    const double seconds = std::chrono::duration<double>(now - last_report_).count();
+                    const double rate = current.nodes >= last_nodes_ && seconds > 0.0
+                        ? static_cast<double>(current.nodes - last_nodes_) / seconds
+                        : 0.0;
+                    write(detail::format(current, std::chrono::duration_cast<std::chrono::seconds>(now - started_), rate,
+                                         current_elapsed(current, now)));
+                }
+            } catch (...) {
+                // Progress must never turn a completed exact decision into a failure.
+            }
         }
-        condition_.notify_one();
-        if (thread_.joinable()) thread_.join();
         active_ = false;
     }
 
 private:
+    void write(const std::string& line)
+    {
+        if (show_output_) output_ << line << '\n' << std::flush;
+        if (capture_output_) {
+            std::lock_guard<std::mutex> lock(detail::state.diagnostics_mutex);
+            detail::state.diagnostics.append(line).push_back('\n');
+        }
+    }
+
+    static std::chrono::seconds current_elapsed(const snapshot& current,
+                                                std::chrono::steady_clock::time_point now) noexcept
+    {
+        if (current.cardinality_started_ns <= 0) return std::chrono::seconds(0);
+        const auto started = std::chrono::steady_clock::time_point(std::chrono::nanoseconds(current.cardinality_started_ns));
+        if (started > now) return std::chrono::seconds(0);
+        return std::chrono::duration_cast<std::chrono::seconds>(now - started);
+    }
+
     void run()
     {
         std::unique_lock<std::mutex> lock(mutex_);
@@ -592,8 +890,8 @@ private:
             const double rate = current.nodes >= last_nodes_ && seconds > 0.0
                 ? static_cast<double>(current.nodes - last_nodes_) / seconds
                 : 0.0;
-            output_ << detail::format(current, std::chrono::duration_cast<std::chrono::seconds>(now - started_), rate) << '\n'
-                    << std::flush;
+            write(detail::format(current, std::chrono::duration_cast<std::chrono::seconds>(now - started_), rate,
+                                 current_elapsed(current, now)));
             last_report_ = now;
             last_nodes_ = current.nodes;
             lock.lock();
@@ -601,6 +899,9 @@ private:
     }
 
     bool active_;
+    const bool show_output_;
+    const bool capture_output_;
+    const bool write_output_;
     std::ostream& output_;
     std::chrono::steady_clock::time_point started_{};
     std::chrono::steady_clock::time_point last_report_ = std::chrono::steady_clock::now();

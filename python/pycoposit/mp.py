@@ -170,7 +170,7 @@ def run_multiprocessing(
     matrices: Matrix | Iterable[Matrix],
     mp_config: MPConfig | None = None,
     mode: CopositivityMode = "strictly_copositive",
-    preprocessing: Preprocessing = "none",
+    preprocessing: Preprocessing = "both",
 ) -> dict | Iterator[dict]:
     """Run one matrix or an iterable across worker processes in completion order."""
 

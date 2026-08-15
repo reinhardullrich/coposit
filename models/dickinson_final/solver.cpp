@@ -151,6 +151,7 @@ private:
         }
 
         add_certificate(matrix, indices, solution_);
+        progress_.certificate();
         return true;
     }
 

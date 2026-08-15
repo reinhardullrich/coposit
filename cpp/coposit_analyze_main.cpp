@@ -26,15 +26,10 @@ void print_usage(const char* program)
 {
     std::cout << "Usage: " << program << " --model MODEL --mode strict|non-strict|both [OPTIONS] [MATRIX|FILE|-]\n"
                  "Options:\n"
-                 "  --connected-components on|off\n"
-                 "  --pre-checks on|off\n"
-                 "  --pre-check NAME on|off\n"
-                 "  --principal-submatrices-up-to 1|2|3\n"
+                 "  --preprocessing on|off\n"
                  "  --progress\n"
                  "  --timeout SECONDS\n"
-                 "Pre-check names: small-dimension, principal-submatrices, nonnegative-off-diagonal,\n"
-                 "  negative-part-diagonal-dominance, all-ones, frank-wolfe, positive-definiteness.\n"
-                 "All preprocessing is on by default. Combined mode is available only for models that implement it.\n"
+                 "The fixed preprocessing pipeline is on by default. Combined mode is available only for models that implement it.\n"
                  "Models:\n";
     for (const char* model : models) std::cout << "  " << model << '\n';
 }

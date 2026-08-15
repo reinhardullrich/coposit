@@ -2,6 +2,726 @@
 
 This append-only file records meaningful decisions, results, and evidence that are not clear from Git. Do not log routine edits here.
 
+## 2026-08-15 — Generated stress corpus shifted below order 1,000
+
+- Removed the 120 project-generated sparse/dense stress matrices above order 1,000, their 120 external payloads, and 1,973 dependent
+  diagnostic rows. The retained two-family panel now ends at order 952.
+- Added 90 matrices at 15 new irregular dimensions from 43 through 199, using the same sparse/dense constructions and the same three
+  exact truth classes at every dimension. Each family now contains 75 matrices at 25 shared dimensions.
+- The corpus now contains 3,669 matrices. The generated rows retain Scale membership; generated `N <= 100` membership follows their
+  dimensions automatically. SQLite integrity checks passed for both corpus and diagnostics databases.
+
+## 2026-08-15 — Preprocessing child-versus-grandchild comparison
+
+- Ran the combined preprocessing-only pipeline on all 3,669 matrices with a five-second cutoff and seven workers on CPUs 3–9.
+  Depth 1 took 114.439 seconds wall time and completed 2,229 classifications; depth 2 took 116.397 seconds and completed 2,249.
+- Grandchildren added 21 exact facts without a conflict, all at orders 5–25. One order-331 generated strict matrix completed just
+  below the cutoff at depth 1 and timed out at depth 2, leaving a net gain of 20 classifications and one extra timeout.
+- Full outcomes, timings, method, binary hash, and per-matrix CSVs are retained in
+  `experiments/preprocessing_depth_2026-08-15/`.
+
+## 2026-08-15 — Fixed single-switch preprocessing workflow implemented
+
+- Replaced the independently configurable component/pre-check flow with one fixed pipeline and one master on/off switch. The order
+  is scan, root checks, negative-entry components, ordinary checks, bounded Danninger, then bounded COPOMATRIX.
+- Reduction descendants repeat scan, root, split, and ordinary checks. Danninger and COPOMATRIX may create children while the
+  current reduction depth is below one internal maximum, now two; grandchildren stop before further reductions and never call a
+  model. Unresolved preprocessing delegates only the unchanged original matrix to the selected model.
+- The shared scan now collects both sign graphs, pair facts, row aggregates, reduction pivot counts, and Motzkin–Straus pattern data
+  in one pass. Public and analysis companions and every Python native module were relinked against this shared implementation.
+
+## 2026-08-15 — Fastest-result cache restored across the split databases
+
+- Restored `matrices.fastest_elapsed_ns` and `matrices.fastest_result_ref` while keeping the full mutable result rows in the ignored
+  diagnostics database. The cache uses every eligible completed diagnostic run and retains the existing exact composite-key JSON.
+- The existing serialized batch writer now refreshes only affected matrix rows after result upserts. Eligibility remains `ok` status
+  plus agreement with every known corpus truth value; deterministic ties use model, mode, preprocessing, and binary hash.
+- The all-history backfill populated 3,463 of 3,699 matrices; 236 have no eligible completed diagnostic row. Both databases passed
+  integrity checks, the corpus passed its foreign-key check, and every populated cache row equals the deterministic minimum candidate.
+
+## 2026-08-15 — Dense Boolean-lattice bitmap Dickinson experiment
+
+- Added `dense_bitset_dickinson`, an isolated Dickinson Final copy that represents all $2^n$ supports with one packed bit each,
+  scans surviving bits in cardinality order, and explicitly clears every support in each exact Dickinson interval.
+- The bitmap has either a user-authorized maximum matrix order or maximum binary-GiB allocation; the default limit is one GiB.
+  Python reference runs expose the same mutually exclusive limit choices.
+- Added exact interval/layout tests, CP/SCP/combined classification support, cooperative timeouts, and exact support-coverage progress.
+
+## 2026-08-15 — Incremental SAT representation of Dickinson intervals
+
+### Clingo/clasp backtracking comparison
+
+- Added the isolated `clingo_sat_zed_dickinson` experiment. It retains the exact Dickinson and rejection-only maximal-Zed
+  mathematics while using clingo 5.8.2 and clasp 3.4.1 for native exact-cardinality answer-set enumeration.
+- Completed supports are handled through clingo's model callback, where one exact interval clause is added directly to the running
+  clasp enumeration. Disabling the enumeration assumption retains those clauses across later cardinalities without an external
+  clause replay list.
+- Added CP, SCP, combined classification, cooperative timeout handling, sparse certificate diagnostics, and a focused persistence
+  test proving that singleton clauses continue to cover later cardinalities.
+
+- Added the isolated `sat_zed_dickinson` experiment. It keeps the exact Dickinson and rejection-only maximal-Zed mathematics of
+  CBDD-Zed Dickinson, but stores each covered Boolean-lattice interval as one incremental SAT blocking clause.
+- A single Batcher sorting network supplies exact-cardinality assumptions for every support layer. One persistent CaDiCaL 2.2.1
+  instance retains all interval clauses and learned clauses across the complete traversal. CaDiCaL's satisfiable-instance profile
+  and incremental lazy backtracking retain the compatible part of the previous trail between supports.
+- Added CP, SCP, combined classification, cooperative timeout, sparse $(k,d,|U|)$ diagnostics, exhaustive interval-encoding tests,
+  and Python/reference-run integration.
+- The 49-matrix smoke set matched all known combined CP/SCP classifications. On the 28 copositive order-25 BPQY matrices with no
+  shared preprocessing and a 30-second cutoff, SAT and CBDD each completed 27. In the final run, SAT completed 19 of their 26 common
+  finishes faster, with an 8.476-second completed median versus 10.866 seconds for CBDD. Their single timeouts differed: SAT timed
+  out on 12625, while CBDD timed out on 12582 and SAT completed that matrix in 23.758 seconds on an isolated repeat.
+- On all 75 order-50 BPQY COP materializations, non-strict copositivity without shared preprocessing and a 30-second cutoff, every SAT
+  run timed out at cardinality five. The mean processed-support counts were 93,055 for designated support size $\rho_0=12$, 82,614
+  for $\rho_0=25$, and 81,511 for $\rho_0=38$; the seven-worker campaign took 330.424 seconds wall time. Complete per-matrix progress
+  and $(k,d,|U|)$ certificate distributions remain in `experiments/diagnostics.sqlite3`.
+- On the standard 524-matrix representative-core/stress union, strict mode, both preprocessing stages, and a five-second cutoff,
+  SAT-Zed completed 488 matrices correctly and timed out on 36. It completed all 379 Interval-Recursive successes plus 109 more;
+  cutoff-substituted work fell from 738.007 to 189.238 seconds, and four-worker wall time fell from 187.387 to 48.202 seconds.
+- Retrying each model's own five-second timeout cohort for 60 seconds rescued the same five order-16/17 Hildebrand matrices for
+  SAT-Zed and CBDD-Zed. The combined two-stage results are 493/31 for SAT and 498/26 for CBDD; CBDD has six unique completions and
+  SAT one. Counting both attempts, substituted work is 2,109.312 seconds for SAT and 1,775.753 seconds for CBDD.
+
+## 2026-08-15 — CBDD-Zed and CZDD-Zed diagnostics record upper-endpoint cardinality
+
+- Serial `cbdd_zed_dickinson` and `czdd_zed_dickinson` certificate diagnostics now store sparse
+  `(generating cardinality, free indices, upper-set cardinality, count)` quadruples. The added $|U|$ value distinguishes how high an
+  interval reaches from its width $d=|U|-|L|$.
+- Existing diagnostic JSON and historical triples remain valid; no database migration or result rewrite was performed. The Python
+  runner accepts both shapes, while new runs of these two models emit the quadruple form.
+- The complete Release build and all 82 CTest checks passed, including direct native/Python checks for both models and a persisted
+  timeout-distribution check.
+
+## 2026-08-15 — Ceiling-only Dickinson pruning without a decision diagram
+
+- Added the isolated `ceiling_pruned_dickinson` experiment. It preserves the rejection-only maximal-Zed precheck and exact Dickinson
+  principal systems, replaces CBDD storage with FracESSA's cardinality-first forbidden-support generator, and retains a certificate
+  only when its upper endpoint is the full index set. The retained lower endpoint then forbids every future support containing it;
+  bounded Dickinson intervals are discarded.
+- Added exact support progress and standard diagnostics capture. `visited` includes emitted supports and exact binomial counts for
+  skipped recursive branches, `covered` is the skipped part, `processed` counts exact principal systems, `certificates` counts only
+  retained ceiling certificates, and `certificate_k_d_counts` stores their sparse generating-cardinality/free-index distribution.
+  The preceding maximal-Zed scan reports its completed-block count on the same progress line.
+- The focused seven-test model suite and shared progress tests pass. A final combined, no-preprocessing smoke campaign completed all
+  49 matrices, matched every known CP/SCP result, and stored diagnostics plus a valid certificate distribution for every row. The
+  native module SHA-256 was `264826cb35978f3773342e247ea3c88b676ef9f447f8acc9a12b088084ef01c5`.
+
+## 2026-08-15 — Wide-certificate CBDD experiment exposes larger future cuts
+
+- Added the isolated `wide_certificate_cbdd_zed_dickinson` experiment. It keeps a Dickinson interval only when its free-index count
+  $d=|U|-|L|$ exceeds half the full matrix order. A narrower certificate removes only the exact support already processed; removing
+  nothing would make the read-only CBDD `take_first()` operation return that support forever.
+- Ran strict matrix 9630 ($n=70$, Johnson/Motzkin–Straus) for 60 seconds with preprocessing disabled. The model timed out at
+  cardinality two after emitting 224 supports and retaining 223 certificates. Their distribution was $(1,16)$: 70, $(2,28)$: 72,
+  $(2,32)$: 9, and $(2,59)$: 72. The original traversal had never exposed the $d=59$ family because its narrower certificates had
+  already covered those supports, so the experiment confirms that early valid pruning can hide much wider later certificates.
+- The wider certificates did not cure the decision-diagram bottleneck. At the cutoff, the model had allocated 55,765,075 CBDD nodes
+  and performed 118,288,200 CBDD operations, remained at cardinality two, and did not return during the one-second cooperative grace.
+  The threshold therefore trades one poorly shared interval union for another rather than supplying a practical improvement on this
+  matrix.
+- A parallel 60-second CP comparison on order-50 BPQY COP instance 12649 ($\rho_0=12$, seed 0), again without shared preprocessing,
+  also timed out in both models at cardinality three. Normal CBDD emitted 1,020 supports, retained 1,019 certificates, allocated
+  49,969,809 nodes, and performed 182,055,800 diagram operations. The half-order experiment emitted 1,185 supports, retained 1,184
+  certificates, allocated 49,969,753 nodes, and performed 178,690,400 operations. Singleton and pair counts were identical; the
+  experiment exposed 720 rather than 555 cardinality-three certificates, including a net 14 additional certificates with $d>25$,
+  but still supplied no classification. Both diagnostic rows and their complete distributions remain in the local results database.
+- Three further exact-integer threshold copies compare $d>75\%(n-k)$, $d>90\%(n-k)$, and $d>95\%(n-k)$ on the same matrix and
+  60-second CP setup. All timed out. The 75% copy reached cardinality four with 12,584 certificates, of which 327 inserted full
+  intervals. The 90% copy reached cardinality five with 370,428 certificates and 1,527 full intervals. The 95% copy reached
+  cardinality five with 843,669 certificates but inserted only seven full intervals. Their final allocated-node counts were
+  49,969,782, 36,382,795, and 40,086,111 respectively. A failed threshold was logged but inserted only the exact processed support;
+  the complete $(k,d,count)$ distributions remain with the three result rows in `experiments/diagnostics.sqlite3` and are preserved
+  in `aidocs/WIDE_CERTIFICATE_THRESHOLD_EXPERIMENT.md`.
+
+## 2026-08-15 — Benchmark and diagnostics data separated from the public corpus
+
+- Rebuilt `testdata/copos_testdata.sqlite3` as a corpus-only database containing 98 sources and 3,699 matrices. Mutable benchmark
+  rows, preprocessing experiments, timing caches, and their triggers are no longer part of the tracked corpus. The compacted corpus
+  changed from 119 MiB to 60 MiB.
+- Created the ignored local `experiments/diagnostics.sqlite3` from the tracked `testdata/diagnostics_schema.sql`. Before removing the
+  old tables, copied all 187,570 result rows and all 9,761 preprocessing rows; row counts and aggregate elapsed, cutoff, delegate,
+  message, and stored-distribution data matched exactly, and both databases passed `PRAGMA integrity_check`.
+- The reference runner now reads matrices from the corpus and writes results to the separate diagnostics database. A custom
+  `--results-database` remains available; disposable custom corpus databases retain the old single-file convenience by default.
+- CBDD diagnostic campaigns store two independent fields: the complete one-second progress history and the sparse
+  `(support cardinality, free indices, count)` certificate distribution. Each active row is updated once per second. The first full
+  run exposed native operations that could exceed the one-second cooperative grace; the parent now finalizes such hard timeouts with
+  the latest stored diagnostics and distribution instead of losing them.
+- Completed the full strict, no-preprocessing CBDD-Zed diagnostic campaign with a 60-second cutoff, CPUs 2–9 for eight workers,
+  CPU 1 for dispatch, and a 4 GiB virtual-memory limit per worker. Native SHA-256
+  `15504711ea82a7e42e5170d0115ae7338f99f02e9a5e076a05856ce92044f11f` produced one final row for every one of the 3,699 matrices:
+  3,237 completed, 280 timed out, and 182 ended with `std::bad_alloc`; every row retained diagnostics and its certificate
+  distribution. The 2,977 completed rows with known strict truth had zero mismatches. Summed native/resource elapsed time was
+  28,226.594 seconds.
+
+## 2026-08-15 — Dickinson progress reports joint certificate distributions
+
+- Serial `cbdd_zed_dickinson` progress now reports sparse `(k,d,count)` entries, where $k$ is the support cardinality that generated
+  a certificate and $d=|U|-|L|$ is its number of free indices, including the possible $d=0$ case. Collection is compiled out of the
+  ordinary no-progress path. The existing explicit CBDD Zed switch is also available in this serial model so an experiment can
+  isolate the complete Dickinson traversal without changing its later tests.
+- With Zed and preprocessing disabled, strictly copositive matrix 11672 ($n=50$) completed in 1.159 ms with 50 certificates, all at
+  $(k,d)=(1,49)$. Strictly copositive matrix 11694 ($n=100$) completed in 8.672 ms with 100 certificates, all at $(1,99)$.
+- Under the same isolation, hard strictly copositive Motzkin–Straus matrix 9630 ($n=70$) timed out after the requested 30-second
+  window while still at support cardinality two. Its 750 certificates had the distribution $(k,d)=(1,16)$: 70, $(2,28)$: 492, and
+  $(2,32)$: 188. It had emitted 751 supports and allocated 25,064,613 CBDD nodes, showing that many comparatively narrow, poorly
+  shared certificate intervals—not exact system solving or the Zed scan—dominated this run.
+
+## 2026-08-15 — CBDD-Zed bypasses Motzkin–Straus maximal-clique scans
+
+- `cbdd_zed_dickinson` now recognizes the exact two-value Motzkin–Straus graph-matrix pattern: one common nonnegative value on
+  every diagonal and graph non-edge, and one common negative value on every graph edge. Matching matrices bypass only the optional
+  rejection-only maximal-Zed scan; the complete CBDD Dickinson classification remains unchanged.
+- Added focused checks that a matching graph matrix reaches no Zed event and that a superficially similar matrix with two different
+  negative edge values retains the Zed stage.
+- Re-ran all 70 currently unresolved Motzkin–Straus matrices in combined mode with both preprocessing stages, a 60-second cutoff,
+  CPU 2 for dispatch, and CPUs 3–9 for seven persistent single-core workers. All 70 matrices, of orders 45 through 3,361, still
+  timed out; no error or resource-limit result occurred. Wall time was 608.934 seconds and the native SHA-256 was
+  `0c48440858ff5ad977faf21b79daf56fecfb508ddfd76782c91e38adeea73406`.
+
+## 2026-08-15 — Matrix 9651 exposes both Zed-scan and CBDD set explosion
+
+- Matrix 9651 is the order-378 Motzkin–Straus matrix $Q_{125}$ derived from the MANN_a27 Steiner-triple-system graph, whose clique
+  number is 126. On a clique support of size $k$, the principal matrix is $125I-J$: size 125 supplies a nonnegative zero that
+  disproves SCP, and size 126 supplies a negative vector that disproves CP. The shared whole-matrix pre-checks do not decide this
+  connected indefinite input.
+- This is the only one of the current 270 matrices without an eligible completed local result for which the literature audit records
+  a completed external solve. Brás–Eichfelder–Júdice (source 35) report an LCP-based copositivity-test result, and
+  Júdice–Sessa–Fukushima (source 49) report an equivalent completed global standard-quadratic-program solve. Every stored local
+  attempt on matrix 9651 has timed out; the literature claims are recorded evidence, not local reproductions.
+- The optional rejection-only Zed stage is itself pathological here. Its nonpositive-entry graph is the MANN graph, so its maximal
+  Zed blocks are the graph's maximal cliques. An interrupted seven-thread scan had already tested 201,301 maximal Zed blocks after
+  15:22 without reaching Dickinson or finding a decisive size-125 singular or size-126 indefinite block. This is why the
+  multithreaded experiment now permits `COPOSIT_CBDD_ZED_SCAN=off`; the switch bypasses only this model-local stage, not the shared
+  pre-checks.
+- Turning the Zed scan off revealed a second, independent explosion in the support-set representation. The strict run was stopped
+  manually after 6:49, in the support-solve phase at cardinality 3 of 378; cardinality 3 alone had consumed 6:13. It had emitted and
+  certified 484,839 supports, was emitting about 1,889.8 supports per second in the final reporting interval, had allocated
+  385,642,726 CBDD nodes, and had performed 645,855,000 CBDD operations. No Zed blocks were tested and no final classification or
+  resumable checkpoint was produced.
+- One CBDD node contains four 64-bit `size_t` fields, so the node vector alone occupied 12,340,567,232 bytes (about 11.49 GiB).
+  Unique-table and operation-cache hash tables, support and certificate storage, exact-arithmetic scratch space, allocator overhead,
+  and thread state raised the real memory use substantially above that lower bound. The process exited by interrupt with status 130,
+  released its memory, and wrote no result row.
+- The cardinality-three exact systems are cheap. Runtime and memory were instead dominated by the coordinator-owned CBDD union,
+  difference, canonicalization, and hashing. The 484,839 certificate intervals shared poorly under the fixed variable order and
+  expanded to roughly 795 CBDD nodes per emitted support. Consequently the seven exact-solve workers could not remain fully occupied:
+  multithreading the factorizations does not address this serial decision-diagram/set explosion. The full mechanism and its
+  implications are documented in the model's `ALGORITHM.md`.
+
+## 2026-08-14 — First result for every corpus matrix
+
+- Added the exact `--without-results` runner selector, which requires the complete absence of a `results` row regardless of model or
+  status. This avoids a temporary corpus flag or hand-maintained matrix-ID list.
+- Ran strict CBDD-Zed Dickinson with both preprocessing stages and a 30-second cutoff on all 212 previously unmeasured matrices,
+  using CPU 2 for dispatch and CPUs 3–9 for seven persistent workers. The run completed 198 matrices, timed out on 14, produced no
+  known-truth mismatch, and took 70.464 seconds wall time. Native SHA-256 was
+  `73a11c9c5a045136a3364541558ec2ee7b65396dc7affadcdb880f3affaf3dd6`.
+- Every matrix now has at least one result row. The fastest-result cache is populated on 3,429 matrices; the remaining 270 have only
+  unresolved results. SQLite integrity passes.
+
+## 2026-08-14 — Literature permutations retained; bulk FracESSA orderings excluded
+
+- Changed the maintained corpus identity rule to collapse only direct positive whole-matrix scalings in the same coordinate order.
+  Nontrivial simultaneous row-and-column permutations remain separate literature inputs because traversal and runtime can depend on
+  coordinate order.
+- Restored 41 literature matrices previously merged through a permutation: Dickinson-de Zeeuw matrix 10132 and 40 rows from the
+  literature-catalog audit. The 293 catalog rows that are only direct positive scalings remain merged.
+- Removed the temporary recovery of 1,396 old FracESSA reduced-B coordinate orderings and their 1,320 dependent historical result
+  rows. These are bulk extraction occurrences rather than useful literature test inputs. The guarded removal reruns with zero pending
+  rows and confirms all 41 literature matrices remain.
+- The final corpus has 3,699 matrices, 187,288 result rows, and 9,761 preprocessing rows. Truth constraints, foreign keys, and SQLite
+  integrity pass; no curated benchmark membership changed.
+
+## 2026-08-14 — Multithreaded CBDD-Zed support batches
+
+- Added the isolated `multithreaded_cbdd_zed_dickinson` experiment. It enumerates at most the largest complete worker wave below
+  `5n` supports from one unchanged CBDD root, evaluates the exact Dickinson systems through persistent dynamically scheduled C++
+  workers, unions the valid certificates, and performs one coordinator-owned CBDD subtraction per batch. The serial
+  `cbdd_zed_dickinson` source remains unchanged.
+- Parallelized the model's formerly serial maximal-Zed stage. The coordinator expands the exact Bron–Kerbosch root until it has at
+  least one independent subtree per worker, then the same persistent workers enumerate and exactly check those subtrees. On matrix
+  9651, `/proc` showed all seven pinned worker threads at approximately 98–100% CPU during the Zed scan; the live progress counter
+  advanced to 6,585 completed maximal blocks after 14 seconds in the model phase.
+- Added the model-local `COPOSIT_CBDD_ZED_SCAN=on|off` switch, defaulting to `on`. `off` bypasses only the rejection-only maximal-Zed
+  stage and goes directly to the complete parallel Dickinson traversal. This is intended for Motzkin–Straus graph matrices such as
+  MANN_a27-derived matrix 9651, whose interrupted scan had tested 201,301 maximal Zed blocks after 15:22 without reaching Dickinson.
+- The machine default is seven internal workers pinned to CPUs 3–9. `COPOSIT_CBDD_WORKERS` and `COPOSIT_CBDD_FIRST_CPU` are validated
+  count and first-CPU overrides. The focused 17-test model suite passes, including exhaustive four-variable interval checks and
+  every five-vertex nonpositive-entry graph under three partition targets, and 960
+  deterministic random comparisons against serial CBDD agree in CP, SCP, and combined mode. The 49-matrix smoke set also agrees in
+  all three modes with the seven-worker default. `/proc` reported the seven live worker affinity masks as exactly `3`, `4`, …, `9`.
+- On one no-precheck CP run of support-heavy order-25 matrix 12580, native times were 10.130 s for serial CBDD, 4.244 s for one
+  batched worker, and 2.981 s for the final seven-worker CPU-3–9 default. This single case shows that the larger gain came from batching
+  CBDD updates; parallel exact solves supplied a further gain. These exploratory timings were not inserted into the reference tables.
+
+## 2026-08-14 — Fastest completed result cache
+
+- Added nullable `matrices.fastest_elapsed_ns` and `matrices.fastest_result_ref`. The sortable integer stores the shortest eligible
+  completed native time; the JSON object stores the exact `model_id`, `mode`, `preprocessing`, and `binary_sha256` that complete the
+  owning matrix's composite result key. No unstable SQLite row ID or redundant result ID was introduced.
+- Eligibility requires `status='ok'` and agreement with every matrix truth value that is already known. Unknown truth remains
+  eligible, while timeout, resource-limit, parse, execution, and known contradictory results do not. A view centralizes this rule;
+  four SQLite triggers refresh the cache after result insertion, update, deletion, or truth changes.
+- Immediately after the permutation cleanup, the cache was populated on 3,231 of 3,699 matrices from 187,288 result rows; the other
+  468 had no eligible completion and retained two
+  `NULL` cache fields. There are no known contradictory `ok` rows. Integrity and foreign-key checks passed, every cached reference
+  matches the deterministic fastest candidate, and all pre-migration matrix payloads, sources, results, and preprocessing rows are
+  unchanged.
+
+## 2026-08-14 — New-import combined CBDD-Zed classification
+
+- Extended `cbdd_zed_dickinson` with Dickinson's one-traversal combined classification: a nonnegative nullspace witness or singular
+  positive-semidefinite Z-block clears only strict copositivity, while a negative witness clears both predicates. Focused C++ and
+  Python checks cover strict, boundary, and non-copositive outcomes.
+- The generated corpus selectors automatically incorporated the imported rows. `n_le_100` now contains 3,125 matrices,
+  `n_gt_100_solved` contains 94, and the derived `references_unsolved` selector contains 175.
+- Ran combined mode with both preprocessing stages and a 30-second cutoff on the 465 newly imported order-at-most-100 matrices,
+  using CPU 2 for dispatch and CPUs 3–9 for seven workers. CBDD-Zed classified 306 matrices (97 strict and 209 non-copositive) and
+  timed out on 159; no boundary case completed. All 15 rows with existing truth matched, and the other completions classify 291 of
+  the 450 truth-unknown imports. Native SHA-256 is
+  `73a11c9c5a045136a3364541558ec2ee7b65396dc7affadcdb880f3affaf3dd6`; wall time was 804.119 seconds.
+
+## 2026-08-14 — Complete Kuzmanović preprocessing-archive screen
+
+- Reconstructed all 100,000 exact order-5–20 matrices from Kuzmanović's unseeded preprocessing-study archive and ran exact ordinary
+  CBDD-Zed Dickinson without preprocessing. Four persistent workers classified every matrix in 8.255 seconds wall time with no
+  timeout, node limit, parse failure, or execution error.
+- The exact model resolved all 2,850 published `no_answer` rows and disagreed with 36 of the remaining 97,150 preprocessing labels.
+  Exact Dickinson Final independently reproduced all 36 disagreements, confirming that the published outputs must not be treated as
+  maintained truth.
+- Removed the separate 100,000-row staging table because the low-order, predominantly cheap-negative archive adds no unresolved case
+  or substantially different benchmark structure. The six printed exact examples and source record remain in the main corpus, and
+  `aidocs/KUZMANOVIC_100000_MATRIX_SCREEN.md` preserves the complete evidence and timing summary.
+
+## 2026-08-14 — Literature-reported failures and higher-order retry
+
+- Added `matrices.references_unsolved`, a required JSON array of source-linked objects whose comments name an explicit timeout,
+  memory exhaustion, numerical failure, inconclusive result, or wrong answer. The conservative audit records 232 claims from 11
+  papers on 173 matrices; 149 also have a solved claim because different methods in one paper can have different outcomes.
+- No failure was inferred from absence. Unidentified partial-group failures and unseeded random instances remain unassigned, and
+  failure claims are not propagated to other retained scalar multiples because numerical behavior can depend on scaling.
+- The guarded migration reruns with zero pending rows. Object shape, source existence, duplicate pairs, foreign keys, and SQLite
+  integrity pass. `aidocs/LITERATURE_UNSOLVED_REFERENCES.md` records the evidence boundary.
+- Retried the two ten-second CBDD-Zed timeouts with a 600-second cutoff. Matrix 9575 completed correctly as not strictly copositive in
+  14.207 seconds; matrix 9651 timed out again at 600 seconds. Both results remain keyed by the rebuilt native-module hash.
+- Added the derived `--matrix-set references_unsolved` runner selector and ran strict ZDD-Zed, CBDD-Zed, and CZDD-Zed with both
+  preprocessing stages and a ten-second cutoff on all 173 claimed failures. Every model solved the same 154 matrices and timed out on
+  the same 19 DIMACS clique encodings; all completed classifications match stored truth. The dedicated reference report records
+  hashes, timings, and the common timeout families.
+
+## 2026-08-14 — Higher-order literature-solved decision-diagram campaign
+
+- Added generated Boolean membership `n_gt_100_solved = (dimension > 100 AND json_array_length(references_solved) > 0)`. It selects
+  all 58 current order-120–1,000 matrices for which at least one literature source reports a completed solve and automatically includes
+  future qualifying rows.
+- Ran strict ZDD-Zed, CBDD-Zed, and CZDD-Zed Dickinson with both preprocessing stages, a ten-second cutoff, CPU 2 for dispatch and
+  database writes, and CPUs 3–9 for seven persistent native workers. Every model solved 56 matrices and timed out on the same two
+  known non-strict cases, matrix 9575 (order 200) and matrix 9651 (order 378), with no mismatch, node limit, parse error, or execution
+  error.
+- ZDD, CBDD, and CZDD used 39.059, 39.048, and 39.586 seconds of cutoff-substituted work. Their coverage is identical at this cutoff;
+  `aidocs/REFERENCE_RESULTS_N_GT_100_SOLVED.md` records the hashes, exact settings, medians, and wall times.
+
+## 2026-08-14 — Complete N ≤ 100 decision-diagram campaign
+
+- Added generated Boolean membership `n_le_100 = (dimension <= 100)`, which selects all 2,619 current order-at-most-100 matrices and
+  automatically includes future qualifying rows. The standard runner accepts it alongside the five curated matrix flags.
+- Ran strict ZDD-Zed, CBDD-Zed, and CZDD-Zed Dickinson with both preprocessing stages, a ten-second cutoff, CPU 2 for dispatch and
+  database writes, and CPUs 3–9 for seven persistent native workers. Every model completed all 2,619 calls in 44.0–44.7 seconds wall
+  time, solved 2,599, and timed out on the same 20 matrices with no known-truth mismatch, node limit, parse error, or execution error.
+- ZDD, CBDD, and CZDD used 245.407, 245.768, and 248.222 seconds of cutoff-substituted work. Chain reduction rescued no matrix at this
+  cutoff. All three agreed on nine completed truth-unknown cases and timed out on four; those truth fields remain unchanged because
+  three models do not meet the earlier four-model consensus threshold.
+- `aidocs/REFERENCE_RESULTS_N_LE_100.md` records the hashes, full aggregate table, timeout composition, and unknown-case outcomes.
+
+## 2026-08-14 — Deduplicated literature matrix occurrences without losing evidence
+
+- Compared every literature-imported matrix against the complete corpus under exact positive whole-matrix scaling and one
+  simultaneous row/column permutation. The guarded migration merged 333 redundant rows in 256 equivalence classes, leaving 3,157
+  matrices while retaining all 1,048 catalog occurrence identifiers on their survivors.
+- Each survivor receives the earliest primary source, the union of secondary sources and literature-solved claim objects, compatible
+  truth values, all family labels, and the logical OR of all five benchmark-set memberships. The current corpus has 509 matrices with
+  833 secondary links and 407 matrices with 619 unique solved-reference claims from 23 sources.
+- Five classes contained one previously benchmarked permutation. Those exact measured representations were selected as survivors, so
+  all 178,799 solver results and all 9,761 preprocessing/calibration results remain attached to the exact matrix ordering that was
+  run. No timing was transferred or relabeled.
+- Exact backup-to-current checks verified all 256 metadata unions and 333 removals. The retained importer and both provenance
+  migrations rerun with no pending work; foreign keys and SQLite integrity pass.
+
+## 2026-08-14 — Chain-reduced Dickinson decision diagrams
+
+- Added the isolated strict-only experiments `cbdd_zed_dickinson` and `czdd_zed_dickinson` as copies of BDD Negative-Zed and ZDD
+  Negative-Zed Dickinson. The Zed prepass and every Dickinson matrix calculation remain unchanged; only the support-family
+  representation and its union/difference traversal change.
+- Implemented Bryant's 2017 chain nodes with top and bottom variable levels. CBDD compresses adjacent OR chains, including forced-zero
+  runs; CZDD compresses adjacent don't-care chains. Both APPLY implementations split whole chain ranges and preserve exact Boolean or
+  set-family semantics without adding a decision-diagram dependency.
+- Exhaustive four-variable interval-pair tests match brute-force uncovered-support counts. Both focused model suites and all 49
+  truth-labeled smoke matrices passed for both models.
+- On the standard 524-matrix strict campaign with both preprocessing stages and a five-second cutoff, CBDD completed 493 matrices
+  and CZDD completed 492, with no error or mismatch. Ordinary BDD and ZDD each complete 492. CBDD uniquely completed order-28
+  Johnson matrix 9627 and was 9.150% faster at the median over common completions; CZDD had the same completion set as ZDD and was
+  3.438% slower at the paired median.
+
+## 2026-08-14 — Literature-reported solution provenance
+
+- Added `matrices.references_solved` as a required JSON array of objects with a required source ID and optional qualification comment.
+  It is separate from origin and mention provenance: it records that a paper claims to have completed a copositivity,
+  strict-copositivity, or equivalent global-StQP decision for the identified matrix.
+- Audited the available papers and result tables and populated 569 matrices with 968 claims from 23 sources. Numerical tolerance,
+  heuristic-positive, screening-only, and equivalent-global-optimization claims are retained with explicit comments rather than
+  silently promoted to exact certificates.
+- Excluded timeouts, question marks, nonexact bounds, unrelated complete-positivity tests, unseeded random campaigns, and ambiguous
+  aggregate success counts. Positive scaling inherits claims; mere permutation does not.
+- The guarded migration is idempotent and validates object shape and source existence. JSON shape, duplicate pairs, foreign keys, the
+  retained importer, and SQLite integrity passed verification. `aidocs/LITERATURE_SOLVED_REFERENCES.md` preserves the audit rules.
+- An independent selector-to-table recheck corrected the Hou order-21 matrix selector and added the previously omitted Sponsel
+  portfolio rows and Gondzio–Yıldırım DIMACS1 rows; the unresolved DIMACS2 aggregate remains deliberately unassigned.
+
+## 2026-08-14 — Earliest primary and additional matrix sources
+
+- Added `matrices.additional_source_ids` as a required JSON array. `source_id` now holds the earliest located source by publication
+  year, with source ID breaking same-year ties; 138 matrices moved from their immediate import paper to an earlier primary source.
+  The free-form `source` text remains the provenance of the stored occurrence.
+- Populated 641 matrices with 1,076 secondary source links. Evidence comes from explicit catalog projective matches, each imported
+  occurrence's own source, exact positive-scale duplicate groups, and audited named or family-level reuse statements already recorded
+  in the literature catalog—for example Horn, Hoffman-Pereira, Bomze-de Klerk, Badenbroek-de Klerk, BSU, BLST/ST, and Dobre-Vera.
+- Secondary IDs exclude the primary and are ordered by publication year and source ID. Family-level links are deliberately
+  best-effort: they record that a paper discusses or solves the identified class without claiming that it prints every member's
+  coefficients.
+- The guarded migration reran idempotently. All arrays are valid JSON containing existing integer source IDs with no repeated primary;
+  chronological ordering, foreign keys, and SQLite integrity passed verification.
+
+## 2026-08-14 — Removed trivial raw QP objectives from the solver corpus
+
+- Removed 790 undeduplicated raw quadratic-program objective matrices whose negative diagonal gives an immediate coordinate-vector
+  non-copositivity witness: 180 Bomze-Locatelli-Tardella StQP objectives, 12 Vandenbussche-Nemhauser BoxQP objectives, and 598
+  Chen-Burer archive objectives. They had no benchmark flags, external payloads, saved solver results, or preprocessing results.
+- Kept their occurrence records and source files in the exhaustive 3,290-record literature catalog, and changed the importer to leave
+  their original ID slots empty. The 20 other negative-diagonal literature examples remain in the database as individual examples.
+- The maintained corpus now has 3,490 matrices: 1,010 strict, 1,448 boundary, 1,009 non-copositive, and 23 with both truth fields
+  unknown. The retained catalog import has 1,048 rows: 336 strict, 269 boundary, 420 non-copositive, and 23 unknown.
+- The guarded removal migration, retained import dry-run, source-backed and exact-certificate replays, foreign-key check, and SQLite
+  integrity check all passed.
+
+## 2026-08-14 — Exact self-classification of literature-catalog matrices
+
+- Added exact project-side classifications only where the stored matrix or its stated construction supplies a short checkable proof.
+  The passes updated 1,552 rows: 1,489 by negative witnesses, entrywise nonnegativity, or negative-part diagonal dominance; 55 by
+  Horn/cycle and clique-threshold constructions, positive definiteness, or explicit three-coordinate witnesses; and eight matrices
+  of order at most five by exact enumeration of every simplex face.
+- Every affected row now carries its own `truth_evidence=...` comment. The migrations reconstruct the witness, leading principal
+  minors, graph transform and clique relation, or rational simplex minimum before accepting the stored truth; no floating-point
+  guess or project solver result is used.
+- The 1,838 imported rows now contain 336 strict, 269 boundary, and 1,210 non-copositive matrices. Both truth fields remain `NULL`
+  for only 23 rows: five rounded Nowak instances, two Lund Matrix Market matrices, and sixteen Chen-Burer quadratic-program archive
+  occurrences. No one-sided truth value remains.
+- Corrected catalog rows 10709, 10772, and 10773 after the exact pass exposed a negative diagonal in the supposedly copositive
+  portfolio case. The initial catalog builder had used an unrelated portfolio matrix; it now uses Bomze-de Klerk Example 5.4's
+  printed `Q4`, from which the two later shifted test matrices are reconstructed exactly.
+- All five truth/correction migrations rerun idempotently. Foreign-key checking returned no rows and SQLite integrity returned `ok`.
+
+## 2026-08-14 — Source-backed truth for literature-catalog matrices
+
+- Populated truth for 318 of the 1,838 newly imported literature-catalog occurrences using only classifications stated by the paper
+  or repository and exact consequences of those statements. The batch contains 91 strictly copositive, 89 copositive-boundary, 90
+  non-copositive, and 48 copositive rows whose strict status remains `NULL`.
+- Evidence includes Ferreira et al.'s repository labels; exact clique- or stability-threshold constructions; stated zero generators,
+  strict perturbations, and named copositive/non-copositive test sets; and explicit membership in PSD, DNN, SPN, completely-positive,
+  or nonnegative cones. No project solver result or numerical guess was used as truth.
+- Left both truth fields `NULL` on the other 1,520 imported rows. The guarded migration is
+  `testdata/archive/classify_literature_catalog_truth_2026_08_14.py`; its idempotent rerun, foreign-key check, and SQLite integrity
+  check all passed.
+
+## 2026-08-14 — Undeduplicated literature-catalog matrix import
+
+- Imported all 1,838 directly materializable new symmetric matrix occurrences from the 3,290-record literature catalog as IDs
+  10685–12522. The corpus now has 4,280 rows of orders 1–4,000. Occurrences remain separate across papers and file formats because
+  deduplication is explicitly deferred.
+- Converted every exact rational, decimal, or binary floating-point source to a primitive integer representative by clearing positive
+  denominators and the common integer factor. For the 12 nonsymmetric BoxQP objective arrays, stored the exact symmetric part
+  `(Q+Q^T)/2`, which defines the same quadratic form. Sixty-nine new large matrices use hashed external Matrix Market files.
+- Linked every new row to its normalized source and retained its catalog instance ID, paper locator, usage, source path, and notes.
+  Both copositivity columns are `NULL` and all benchmark flags are off until later classification and set-selection work.
+- The remaining 1,452 catalog records comprise 938 occurrences already matched to existing corpus matrices and 514 records without a
+  directly materializable eligible symmetric numeric payload. The latter retain Julia or other generator recipes and source artifacts,
+  symbolic irrational or nonsymmetric inputs, and two unrecoverable archive members in the catalog rather than inventing matrices.
+- The committed database, all 69 new external hashes, source links, foreign keys, and idempotent rerun passed verification; SQLite
+  `PRAGMA integrity_check` returned `ok`.
+
+## 2026-08-14 — Direct Danninger and COPOMATRIX gates on the BDD/ZDD timeout cohort
+
+- Directly tested one minimum-child Danninger reduction and one minimum-child COPOMATRIX reduction on the shared 32 strict
+  five-second BDD Negative-Zed and ZDD Negative-Zed timeouts. Root preprocessing was bypassed; generated children would still have
+  received the normal earlier prechecks. Each method had a 30-second ceiling per matrix.
+- Neither method found a pivot producing at most two children on any matrix. Both returned 32 unresolved results without a timeout
+  and generated zero children. Danninger used 77.889 ms of summed stage time and COPOMATRIX used 78.056 ms; median per-matrix costs
+  were 1.979 us and 1.938 us respectively.
+- This confirms that the two one-step gates are cheap but provide no rescue on this large timeout cohort. The order-3,361 maximum
+  required about 22.85 ms for either sign scan.
+
+## 2026-08-14 — Publication years for normalized matrix sources
+
+- Added a required `publication_year` to all 94 source records. It records the earliest documented public appearance, so an explicit
+  preprint, public archive, or repository year may precede the final journal year retained in `reference`.
+- Rebuilt the small `sources` table atomically to enforce a four-digit year and preserved every source ID and matrix foreign-key link.
+
+## 2026-08-14 — Complete source linkage for the maintained corpus
+
+- Added 16 normalized collection, repository, and reproducible local-generator records after the initial 78-paper source migration.
+  They cover SuiteSparse, QAPLIB, House of Graphs, Anymatrix, TypedMatrices.jl, SDPLIB, Network Data Repository, MATLAB's matrix
+  gallery, KONECT, the Magma Hadamard database, SciPy, OR-Library, MinCOP_LDLT, and the FracESSA/coposit local generators.
+- Resolved all 910 inherited `FracESSA:<id>` pointers against FracESSA's retained provenance metadata and copied the exact origin and
+  URL into each maintained matrix's free-form source text. Linked the remaining repository, DIMACS, C5, and high-order generated rows
+  to their normalized sources.
+- All 2,442 current matrices now have a valid `source_id`; none remains unlinked. The database contains 94 source records and passed
+  both `PRAGMA foreign_key_check` and `PRAGMA integrity_check` after the atomic migration.
+
+## 2026-08-14 — Literature matrix catalog and normalized sources
+
+- Completed a paper-by-paper copositivity and copositive-optimization matrix audit without an order or instance-count ceiling. The
+  ignored local catalog retains 3,290 exact matrices, archive members, family recipes, or seeded generator invocations from 78 sources
+  and separately records 40 reported campaigns whose realized matrices cannot be reconstructed.
+- Generic public archives qualify only where an audited paper explicitly selects the instances. All 80 DIMACS graphs qualify because
+  Zischg uses all 80; other DIMACS, Matrix Market, and QPLIB entries remain limited to paper-selected files.
+- Recovered Deng-Fang-Jin-Xing's former companion ZIP through the Internet Archive. It preserves 19 MATLAB `Q` arrays and the authors'
+  code, but not the thousands of other random realizations or RNG states. Six stored `result_3_*` arrays are nonsymmetric and remain
+  cataloged verbatim rather than silently symmetrized.
+- Added the exact Hoffman-Pereira graph enumeration reused by Peng, ten exact Horn-pattern inputs and seven seeded Julia recipes from
+  Keys-Zhou-Lange, five deterministic Bomze-Eichfelder graph cases, and additional finite matrices printed by Burer-Anstreicher-Dür.
+- The second audit added the 28 Manainen et al. COP-irreducible graph matrices, the Dobre-Vera `G_k` and new Vargas-Vera-Dickinson
+  `L_k` families, Gökmen-Yıldırım's finite examples, four stored order-75 graphs, all 693 Chen-Burer archive files, and the later
+  Liuzzi paper's 64 exact archive occurrences. De Zeeuw's unavailable 25,124-graph file and Muramatsu et al.'s 180 unseeded matrices
+  remain explicit unrecoverable campaigns.
+- Added the minimal `sources` table with authors, title, reference, and comment, plus nullable `matrices.source_id`. It contains all 78
+  audited sources and links 901 current matrices to the earliest located source. The existing free-form `source` text remains intact.
+  New catalog matrix payloads are staged for a later requested import and were not inserted by this migration.
+
+## 2026-08-14 — One-level Sponsel on the large BDD/ZDD timeout cohort
+
+- Directly tested the shared 32 strict five-second timeouts from BDD Negative-Zed and ZDD Negative-Zed. Root preprocessing was
+  bypassed to isolate Sponsel itself; each matrix received at most one split and a generous 30-second ceiling, six times the
+  reference cutoff. A single worker avoided simultaneous large exact factorizations.
+- Sponsel decided zero matrices. Twenty-two bounded checks completed but remained unresolved, and ten timed out. The stage used
+  349.551 CPU-seconds and 349.945 seconds wall time. The largest completion was order-496 Johnson matrix 9637, which used 28.510
+  seconds, generated both children, and remained unresolved.
+- The second order-496 case timed out after reaching both children. Every matrix of order 776 or greater timed out in the root `H`
+  inspection before its single permitted split. The experiment therefore found no large-order rescue and shows that exact root
+  factorization, not subdivision depth, makes this fallback impractical.
+- Repeating the same cohort at maximum split depth two also decided zero matrices, completed 21 unresolved cases, and timed out on
+  11. It used 383.112 CPU-seconds, 9.60% more than depth one; order-496 matrix 9637 changed from an unresolved completion to a
+  timeout. On the 21 common completions, depth two was 163.25% slower at the median. More subdivision therefore worsened this cohort
+  without adding a decision.
+
+## 2026-08-14 — Corrected no-timeout one-split Sponsel experiment
+
+- Clarified that the requested bound was structural, not temporal: every matrix may use zero or one Sponsel split and must finish
+  without a timeout. The corrected run completed all 216 matrices. Five were accepted by the root `H` certificate; the remaining
+  211 reached one split and generated 414 of 422 possible children because eight first-child rejections skipped their siblings.
+- The bounded stage resolved 25 matrices (17 positive and 8 negative), left 191 unresolved, used 21.378 seconds of summed Sponsel
+  work and 25.858 seconds including reconstruction of the current preprocessing state, and took 11.365 seconds wall time on four
+  workers. Every decision matched truth.
+- Median Sponsel time was 0.831 ms. Hildebrand IDs 10301–10304 nevertheless used 15.544 seconds, 72.7% of the entire stage; order-25
+  ID 10304 alone used 7.153 seconds. The expensive total therefore comes from exact child prechecks and `H` factorizations on their
+  large integers, not from accidentally traversing beyond one split.
+- BDD Negative-Zed Dickinson is the fastest saved complete reference model. It completed 195 of the 216 cohort matrices and timed
+  out on 21. Across the common completions, the median per-matrix shallow-Sponsel time difference was -44.46%, meaning the stage
+  took 55.54% as long as the complete solve. It took only 16.53% on the 25 matrices it decided, but 91.12% on the 170 it left
+  unresolved. This makes it unattractive as an unconditional precheck despite its fast successful cases.
+- On the 152 common strictly copositive completions, the median stage cost was 48.01% of the complete BDD-Zed time. It was 12.49%
+  on the 17 positive decisions and 82.96% on the 135 strictly copositive unresolved cases. BDD-Zed timed out on the other five
+  strictly copositive matrices.
+- On the 181 common ordinary-copositive completions, including strict and boundary cases, the median stage cost was 45.10% of the
+  complete BDD-Zed time. It was 14.03% on the 21 copositive decisions and 83.31% on the 160 copositive unresolved cases. The complete
+  copositive cohort contains 202 matrices; BDD-Zed timed out on 21 of them, which have no completed solve time for a paired ratio.
+- Every one of the 25 shallow-Sponsel decisions is also among BDD-Zed's 195 completions. BDD-Zed has 170 additional completions, and
+  neither solves the same remaining 21 within the saved BDD-Zed cutoff. The largest shallow-Sponsel decision is order-64 boundary
+  Hamming matrix 9613, which BDD-Zed also solves; the largest positive strict acceptance is order-18 `krcgg` matrix 9185. The
+  experiment therefore shows no unique large-order benefit and remains too expensive for unconditional integration.
+
+## 2026-08-14 — Shallow Sponsel precheck experiment
+
+- Tested the exact Sponsel root certificate plus maximum split depths one and two on the 216 strict matrices left unresolved by the
+  saved ordinary-precheck, Danninger, and COPOMATRIX experiments. Generated Gram children received the ordinary exact prechecks and
+  component decomposition, but did not recursively repeat Danninger or COPOMATRIX. No database rows were changed.
+- The root `H` certificate alone accepted five matrices. Maximum depth one resolved 25/216 matrices (17 positive and 8 negative),
+  including 20 decisions that required a split; it used 17.793 seconds of Sponsel-stage CPU time and 7.756 seconds observed wall
+  time, with one timeout. Maximum depth two resolved 37/216 (23 positive and 14 negative), adding 12 decisions and losing none; it
+  used 33.179 seconds of stage CPU time and 10.985 seconds wall time, with four timeouts. Every completed decision matched truth.
+- The timeouts were large-digit Hildebrand boundary matrices: ID 10304 at depth one and IDs 10301–10304 at depth two. Excluding
+  timeouts, median stage cost was 0.784 ms and 2.147 ms per row, but the unresolved arithmetic tail dominated total cost. The
+  experiment therefore remains isolated rather than becoming a maintained precheck.
+
+## 2026-08-14 — One-level Danninger and COPOMATRIX final pre-checks
+
+- Added one exact Danninger reduction before one exact COPOMATRIX reduction as the last shared pre-checks. Each selects the first
+  pivot attaining the fewest immediate children and runs only when that minimum is at most two. The earlier pre-checks inspect the
+  order-reduced children without another dimension reduction; an unresolved Danninger step passes the original component to
+  COPOMATRIX, and an unresolved COPOMATRIX step delegates it unchanged to the selected model.
+- The isolated 524-matrix strict experiment found 268 matrices unresolved after the former preprocessing. Seventy-four were eligible
+  for the narrow reduction, which added three positive decisions (matrix IDs 9454, 9509, and 10306), no negative decisions, and no
+  wrong classifications. The other 265 remained unresolved.
+- The isolated stage used 14.791 ms across all 268 matrices. On the 265 matrices still delegated, its median saved-runtime overhead
+  was 0.0159% relative to Cardinality BDD and 0.0170% relative to Cardinality ZDD.
+- A matching non-recursive Danninger experiment gated at two immediate children was eligible on 55 of the same 268 matrices and
+  accepted 51, all positive and all through its one-child case. It overlapped COPOMATRIX on IDs 9454 and 10306, added 49 unique
+  decisions, missed COPOMATRIX-only ID 9509, and used 3.732 ms of isolated reduction time. Together the two reductions decide 52
+  former-precheck leftovers and leave 216 unresolved. As an independent check, all 51 matrices were permuted to put the selected
+  pivot first and were accepted by the complete exact Danninger baseline with preprocessing disabled.
+
+## 2026-08-14 — Rejection-only Zed decision-diagram revision
+
+- Changed `bdd_zed_dickinson` and `zdd_zed_dickinson` in place. Their maximal-Zed stage still rejects immediately when an exact
+  component LDLT proves that a maximal Zed block is not PD, but a PD block is now discarded instead of inserting
+  $[\varnothing,J]$ into the decision diagram. The flat `dickinson_zed` model deliberately retains its positive downsets: a packed
+  subset lookup does not deform its flat certificate representation and can avoid an exact principal solve.
+- All three focused model suites pass. The positive-identity tests prove that BDD/ZDD Negative-Zed continue into ordinary
+  cardinality-one Dickinson processing after the Zed check; the singular-PSD tests still prove immediate negative rejection.
+- The replacement BDD hash `5fca72a61045c628b2db6c14e79392e0cfeef2676d2bd263d95895301069f3d1` and ZDD hash
+  `ab7350362cff899f8ee5b5d311f94b6f4bcd4640f3bde462b5d34d4a796abe89` each completed 492/524 matrices in the standard strict,
+  both-preprocessing, five-second campaign. Every completed result matches corpus truth; all 32 unresolved results in each model
+  are timeouts. Observed four-worker wall times were 43.219 and 43.390 seconds.
+- A second isolated campaign disabled all preprocessing and compared identical matrix IDs. BDD Negative-Zed changed median time by
+  -1.129% over 466 common completions, -90.150% on non-SCP matrices, and +1.035% on SCP matrices; its median SCP absolute overhead
+  was 0.002646 ms. ZDD Negative-Zed changed it by -0.955% overall, -89.081% on non-SCP matrices, and +1.952% on SCP matrices; its
+  median SCP absolute overhead was 0.004605 ms. The positive SCP medians confirm that the rejection-only scan is extra work when it
+  cannot reject; the overall medians become negative only because negative Zed rejection avoids most traversal on non-SCP inputs.
+  BDD gained 22 negative completions and lost strict matrix 9627, for net +21; ZDD gained the same 22 negative completions and lost
+  none.
+- Relative to their superseded positive-downset binaries, the rejection-only BDD and ZDD retained the same 492 completion sets while
+  reducing median time by 18.30% and 18.00% overall and by 73.76% and 69.30% on SCP matrices.
+- In the isolated no-preprocessing campaign, plain `dickinson_final` completed 376/524 and `dickinson_zed` completed 380/524. Across
+  373 common completions, retained Zed downsets changed median time by +22.167% overall, -46.975% on non-SCP matrices, and +85.763%
+  on SCP matrices; the SCP median absolute increase was 0.021104 ms. These runs predate and disable the shared COPOMATRIX precheck.
+  Restricting the SCP comparison to the 33 common completions above order 15 raises the median slowdown to 288.360%, with a
+  23.241 ms median paired absolute increase.
+- **Important cause identified:** positive Zed downsets can make flat cardinality-ordered Dickinson slower by suppressing the small
+  supports that would have generated stronger upward certificates. On order-20 matrix 10322, 19 maximal size-two Zed blocks cover
+  every singleton before it can be solved. Plain Dickinson processes 20 singletons and 19 pairs, then covers the remainder; the Zed
+  variant instead processes 171 pairs and 18 triples, increasing ordinary exact solves from 39 to 189. Its valid downward cuts have
+  therefore removed the opportunity to construct much wider upward Dickinson intervals. This is a certificate-generation effect,
+  not primarily Zed lookup overhead and not a correctness failure.
+- This suppression is frequent and not limited to Stress Test matrices or the star structure of matrix 10322. Among 33 common SCP
+  completions above order 15, Zed is slower on 31 and at least twice as slow on 30; the median change is +288.360%. Fourteen are
+  Representative-Core-only matrices, of which 13 are at least twice as slow. Across the 29 high-order SCP matrices whose nontrivial
+  Zed blocks suppress every singleton, all 29 are at least twice as slow and the median change is +304.786%. Core-only matrices
+  10427 and 10330 complete in plain Dickinson but time out with Zed, so the common-completion medians omit these additional losses.
+- The same certificate-suppression mechanism applies to the existing Zischg–Dickinson Level 2 experiment. Its disconnected-support
+  skip is exact for classification, but a skipped support could have generated an upward Dickinson interval covering later connected
+  supersets. The current order-one-to-100 comparison is consistent with this mechanism: Zischg–Dickinson gains no completion, loses
+  strict matrices 10330, 10427, and 10428, and has +77.16% median time on matrices completed by both models. Unlike positive Zed
+  downsets, this implementation retains all supports through order three, so it cannot suppress singleton, pair, or triple
+  generators; the analogous performance loss begins at order four.
+
+## 2026-08-14 — Cardinality-local BDD and ZDD Dickinson experiments
+
+- Added strict-only BDD and ZDD experiments whose active decision diagram contains only one support cardinality. Certificate
+  endpoints remain packed sets, and the complete manager is discarded between cardinalities; no global covered-union diagram is
+  retained.
+- Replaced the original per-certificate $O(nk)$ exact-cardinality slice builder with an $O(n)$ compact unrestricted interval. This is
+  exact because the active remainder $R_k$ is already a subset of $K_k$, so
+  $R_k\setminus[L,U]=R_k\setminus([L,U]\cap K_k)$. Exhaustive four-dimensional interval tests and all 74 Release tests pass.
+- The standard 524-matrix strict run used both preprocessing stages, a five-second cutoff, CPU 3 for the parent, and workers on CPUs
+  4–7. Cardinality-BDD hash `fd1b398793d2fcfe8d55f4a72a3a2fe67efd1c55c3821cafcee4d4fcdc1726eb` completed 475 matrices,
+  timed out on 49, used 359.111 seconds of cutoff-substituted work, and took 92.578 seconds wall time. Cardinality-ZDD hash
+  `f7ed518402403e11d62894578c7d828df7742baac6f900bd0753fcc4da0e7665` completed 474, timed out on 50, used 364.684 seconds of
+  substituted work, and took 94.629 seconds wall time. All completed classifications match corpus truth; there were no node limits,
+  parse errors, or execution errors.
+- Without preprocessing, both patched models completed hard order-100 matrix 10500 inside ten seconds: BDD in 6.237 seconds with
+  70,976 KiB peak RSS and ZDD in 6.932 seconds with 66,880 KiB. On dense order-331 matrix 10605, both reached the ten-second cutoff;
+  peak RSS was 315,248 KiB for BDD and 366,080 KiB for ZDD.
+
+## 2026-08-14 — Dickinson Zed certificate experiments
+
+- Added the isolated strict-only `dickinson_zed`, `bdd_zed_dickinson`, and `zdd_zed_dickinson` experiments. They realize Dickinson's
+  Section 6 maximal principal $Z$-matrix construction before the unchanged flat, BDD, or ZDD Dickinson traversal.
+- The models enumerate maximal nonpositive-entry cliques with Bron–Kerbosch. For each maximal block they apply Dickinson Algorithm
+  3's strictly negative connected-component split, factor every component with exact fraction-free LDLT, reject any non-PD block,
+  and otherwise add the complete downset $[\varnothing,J]$ to their respective coverage representation.
+- Focused tests exhaustively matched maximal-clique enumeration against brute force for all 1,024 sign graphs on five vertices,
+  verified zero-linked component splitting, conflicting maximal blocks, singular PSD rejection, arbitrary-precision scaling, and
+  packed supports beyond 64 indices. All three models also matched stored strict truth on all 49 smoke matrices without preprocessing.
+- The standard strict Representative Core/Stress campaign used both preprocessing stages, a five-second cutoff, CPU 3 for the parent,
+  and workers on CPUs 4–7. Flat Dickinson Zed completed 384/524 matrices; BDD-Zed and ZDD-Zed each completed 492/524 with identical
+  completion sets. Their substituted work was 718.592, 180.254, and 192.463 seconds, and observed wall time was 181.675, 47.866, and
+  50.718 seconds. Every completed result matched truth; all unresolved results were timeouts.
+- A targeted 30-second retry of the 32 common BDD-Zed/ZDD-Zed five-second timeouts rescued the same seven matrices in both models:
+  five Hildebrand boundary matrices of orders 16–17, strict Johnson matrix 9627, and boundary Johnson matrix 9637 of order 496.
+  Each staged campaign therefore completes 499/524 matrices. The 64 longer-cutoff rows and exact selection are preserved under
+  `experiments/zed_decision_diagrams_30s_2026-08-14/`; the maintained five-second rows were not replaced.
+- The performance interpretation is representation-dependent. Flat Dickinson Zed still enumerates every support and merely avoids
+  the principal solve after recognizing a certified Zed-block subset. Small principal solves are cheap relative to the block prepass;
+  at large orders, support enumeration rather than solving is the bottleneck. BDD-Zed and ZDD-Zed insert the complete Zed downset as
+  one symbolic family and never generate its covered supports, turning the same theorem into genuine search-space pruning. The full
+  five-second median relative time change `(model - Dickinson) / Dickinson`, grouped by all 111 represented orders, is preserved with
+  the experiment results.
+
+## 2026-08-14 — Ordinary-BDD Dickinson experiment
+
+- Added the independent strict-only `interval_bdd_dickinson` experiment. It retains Dickinson Final's exact principal calculation
+  and replaces only support enumeration: the accumulated certificate union and each exact-cardinality remainder are reduced ordered
+  binary decision diagrams with ordinary `low == high` reduction.
+- Exhaustive focused tests matched brute force for every pair of valid four-dimensional certificate intervals. Strict decisions,
+  non-strict rejection, cooperative timeout escape, identity-certificate pruning, and a 65-dimensional packed-support case also
+  passed; all 69 maintained Release tests passed.
+- The standard 524-matrix strict run used both preprocessing stages, a five-second cutoff, CPU 3 for the parent, and workers on CPUs
+  4–7. Hash `e69cde8969e1337e7e7e430b882f230b881dcf818726f13973b38373bfaa9fbd` completed 486 matrices and timed out on 38, with zero
+  mismatch, node limit, parse error, or execution error. It completed the 484 ZDD completions plus Johnson matrices 9627 and 9628;
+  its cutoff-substituted work was 205.396942 seconds and observed wall time was 55.071 seconds.
+- A user-stopped 30-second follow-up retained the first 87 committed matrices from the frozen 129-matrix timeout set, then ran ZDD
+  on exactly the same IDs. BDD and ZDD each completed the same 23 matrices: all eight Dickinson Final completions plus the fifteen
+  order-90–104 Dannenberg–Schürmann lifts. Adaptive completed 18: the same fifteen lifts, the two shared high-order positive-definite
+  precheck cases, and one unique order-256 Hamming case. All four timed out on 63 common matrices. The exact partial selection and
+  decision-diagram rows are preserved under `experiments/interval_decision_diagrams_30s_2026-08-14/`.
+
+## 2026-08-14 — Dickinson interval-aware support enumeration experiments
+
+- Added two independent strict-only copies of Dickinson Final. `interval_recursive_dickinson` prunes recursive fixed-cardinality
+  branches when one retained certificate interval contains the complete branch. `interval_zdd_dickinson` represents the union of
+  retained intervals with a private zero-suppressed decision diagram and enumerates the exact set difference from each cardinality
+  family. Both retain Dickinson Final's exact principal solve, nullspace choice, sign decisions, and certificate construction.
+- Both generators matched brute-force enumeration for every pair of valid four-dimensional intervals. Their classifications matched
+  Dickinson Final on all 49 smoke matrices without preprocessing and on 600 deterministic symmetric integer matrices of orders one
+  through seven. All focused C++, Python wrapper, and dimension-above-64 checks passed.
+- On strict Hildebrand matrix 10293 without preprocessing, Dickinson Final took 14.036 seconds, interval-recursive took 14.617
+  seconds, and interval-ZDD took 14.150 seconds. The exact principal work dominates this input, so neither alternative improved it.
+  On a 22-by-22 identity matrix, where singleton certificates cover almost the entire power set, the respective times were 39.294
+  milliseconds, 0.020 milliseconds, and 0.297 milliseconds. This confirms that both representations can skip covered supports,
+  while also showing that the benefit depends on certificate shape and exact-arithmetic cost.
+- The strict five-second Representative Core/Stress campaign with both preprocessing stages completed 379/524 matrices with the
+  recursive generator and 484/524 with the ZDD; substituted one-core work was 738.007 and 206.816 seconds. The ZDD uniquely completed
+  108 matrices versus 3 unique recursive completions. All completed results matched truth and all unresolved results were timeouts.
+- The first ZDD campaign exposed that its internal cooperative-timeout checkpoint was incorrectly `noexcept`; a timeout thrown from
+  within diagram set algebra therefore terminated the worker. Removed `noexcept`, added a focused regression test, deleted only the
+  481 partial rows under the faulty hash, and reran all 524 matrices cleanly under hash
+  `94804e744aa2807ca331801fc74250bd661b5d1bca3e35a1a95d881984ae3693`.
+
+## 2026-08-13 — Dickinson progress distinguishes retained certificates
+
+- Added `certificates` to Dickinson support progress. It increments only after a signature is stored, while `processed` increments
+  when an uncovered support enters exact solve or nullspace work. The reporter now prints a final snapshot on completion.
+- A fresh strict run of Hildebrand matrix 10293 (order 17) terminated after visiting 130,918 of 131,071 supports. Existing
+  certificates covered 124,457 visited supports; 6,461 supports were processed exactly; 6,460 certificates were retained; and the
+  remaining processed support was the terminating nonnegative zero. Processed principal problems had mean order 6.903885 and median
+  order 7.
+
+## 2026-08-13 — FracESSA circular global-minimum experiment
+
+- Added the independent `fracessa_circular` model. It assumes a symmetric circulant input, permits an arbitrary common diagonal,
+  and classifies the global simplex minimum as negative, zero, or positive through combined CP/SCP output.
+- Adapted current FracESSA revision `3dafe81335b816feffdca47ef24b693054f40af5` without adding a circulant scan: direct
+  fixed-density bracelet generation, complete rotation/reflection orbit installation for superset pruning, and exact
+  matrix-preserving affine-multiplier filtering. Packed support rotation and reflection retain unrestricted dimensions.
+- The focused generator tests reproduced all 29 nonempty bracelets at order eight, the affine test retained the expected 23 exact
+  representatives, and combined classification matched Hadeler on 400 deterministic circular matrices of orders four through eight.
+- With the normal combined preprocessing profile and a 30-second cutoff, module hash
+  `c6eee0a6bca47848c31466905850895d8ca2566a3fbae876a32c1c9e9ff016c1` classified 37 of the 47 Hildebrand circulants at orders
+  7–25, timed out on 10, and produced no mismatch or error. It completed every instance through order 17 and one of three at order
+  18; the four-worker wall time was 95.305 seconds and the cutoff-substituted one-core total was 345.297 seconds.
+- Added truthful bracelet progress for the circular model and captured 30-second traces for the ten timeouts. Their observed prefixes
+  reached 93.3% and 87.6% of the order-18 bracelet targets but only 1.0% at order 25. No prefix used an extra affine skip or accepted
+  a KKT candidate. Constant observed-rate projections range from 32 seconds to 49 minutes; an explicit $k^3$ exact-solve-work
+  scenario ranges from 37 seconds to about eight hours. These are documented scenarios rather than claimed bounds.
+
 ## 2026-08-13 — Project name is always lowercase
 
 - Standardized the project and program name as `coposit` everywhere, including human documentation, CMake project metadata, public

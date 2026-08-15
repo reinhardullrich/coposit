@@ -1,5 +1,14 @@
 PRAGMA auto_vacuum = FULL;
 
+CREATE TABLE sources (
+    source_id INTEGER PRIMARY KEY,
+    authors TEXT NOT NULL CHECK(length(authors) > 0),
+    title TEXT NOT NULL CHECK(length(title) > 0),
+    publication_year INTEGER NOT NULL CHECK(publication_year BETWEEN 1000 AND 9999),
+    reference TEXT NOT NULL CHECK(length(reference) > 0),
+    comment TEXT
+) STRICT;
+
 CREATE TABLE matrices (
     matrix_id INTEGER PRIMARY KEY,
     dimension INTEGER NOT NULL CHECK(dimension > 0),
@@ -9,60 +18,43 @@ CREATE TABLE matrices (
         OR (matrix LIKE 'file:%' AND file_sha256 IS NOT NULL
             AND length(file_sha256) = 64 AND file_sha256 NOT GLOB '*[^0-9a-f]*')
     ),
-    is_strictly_copositive INTEGER NOT NULL CHECK(is_strictly_copositive IN (0, 1)),
+    is_strictly_copositive INTEGER CHECK(is_strictly_copositive IS NULL OR is_strictly_copositive IN (0, 1)),
     is_copositive INTEGER CHECK(is_copositive IS NULL OR is_copositive IN (0, 1)),
     source TEXT,
+    source_id INTEGER REFERENCES sources(source_id),
     family TEXT,
     smoke_set INTEGER NOT NULL DEFAULT 0 CHECK(smoke_set IN (0, 1)),
     representative_core INTEGER NOT NULL DEFAULT 0 CHECK(representative_core IN (0, 1)),
     stress_test INTEGER NOT NULL DEFAULT 0 CHECK(stress_test IN (0, 1)),
     scale_set INTEGER NOT NULL DEFAULT 0 CHECK(scale_set IN (0, 1)),
     timeout_5s_strict_set INTEGER NOT NULL DEFAULT 0 CHECK(timeout_5s_strict_set IN (0, 1)),
-    CHECK(is_strictly_copositive = 0 OR is_copositive IS 1)
-) STRICT;
-
-CREATE TABLE results (
-    matrix_id INTEGER NOT NULL REFERENCES matrices(matrix_id) ON DELETE CASCADE,
-    model_id TEXT NOT NULL CHECK(length(model_id) > 0 AND model_id = lower(model_id)),
-    mode TEXT NOT NULL CHECK(mode IN ('copositive', 'strictly_copositive', 'both')),
-    preprocessing TEXT NOT NULL CHECK(preprocessing IN ('none', 'connected_components', 'pre_checks', 'both')),
-    binary_sha256 TEXT NOT NULL CHECK(
-        (model_id = 'hadeler_1983' AND binary_sha256 = '')
-        OR (length(binary_sha256) = 64 AND binary_sha256 NOT GLOB '*[^0-9a-f]*')
-    ),
-    status TEXT NOT NULL CHECK(status IN ('ok', 'parse_error', 'timeout', 'node_limit', 'error')),
-    is_copositive INTEGER CHECK(is_copositive IN (0, 1)),
-    is_strictly_copositive INTEGER CHECK(is_strictly_copositive IN (0, 1)),
-    elapsed_ns INTEGER CHECK(elapsed_ns IS NULL OR elapsed_ns >= 0),
-    timeout_ns INTEGER NOT NULL CHECK(timeout_ns > 0),
-    recorded_at TEXT NOT NULL CHECK(length(recorded_at) > 0),
-    message TEXT,
-    PRIMARY KEY (matrix_id, model_id, mode, preprocessing, binary_sha256),
-    CHECK (
-        (status = 'ok' AND elapsed_ns IS NOT NULL AND (
-            (mode = 'copositive' AND is_copositive IS NOT NULL AND is_strictly_copositive IS NULL)
-            OR (mode = 'strictly_copositive' AND is_copositive IS NULL AND is_strictly_copositive IS NOT NULL)
-            OR (mode = 'both' AND is_copositive IS NOT NULL AND is_strictly_copositive IS NOT NULL)
-        ))
-        OR (status IN ('parse_error', 'timeout', 'node_limit', 'error')
-            AND is_copositive IS NULL AND is_strictly_copositive IS NULL AND elapsed_ns IS NULL)
-    ),
-    CHECK(status <> 'ok' OR mode <> 'both' OR is_strictly_copositive = 0 OR is_copositive = 1)
-) STRICT;
-
-CREATE TABLE preprocessing_results (
-    run_id TEXT NOT NULL CHECK(length(run_id) > 0),
-    matrix_id INTEGER NOT NULL REFERENCES matrices(matrix_id) ON DELETE CASCADE,
-    mode TEXT NOT NULL CHECK(mode IN ('copositive', 'strictly_copositive')),
-    preprocessing TEXT NOT NULL CHECK(preprocessing IN ('connected_components', 'pre_checks', 'both')),
-    status TEXT NOT NULL CHECK(status IN ('ok', 'timeout', 'hard_timeout', 'error')),
-    elapsed_ns INTEGER CHECK(elapsed_ns IS NULL OR elapsed_ns >= 0),
-    delegate_calls INTEGER CHECK(delegate_calls IS NULL OR delegate_calls >= 0),
-    outcome TEXT CHECK(outcome IS NULL OR outcome IN ('positive', 'negative', 'unresolved')),
-    message TEXT,
-    PRIMARY KEY (run_id, matrix_id, mode, preprocessing),
-    CHECK (
-        (status = 'ok' AND elapsed_ns IS NOT NULL AND delegate_calls IS NOT NULL AND outcome IS NOT NULL)
-        OR (status <> 'ok' AND outcome IS NULL)
-    )
+    n_le_100 INTEGER GENERATED ALWAYS AS (dimension <= 100) VIRTUAL,
+    additional_source_ids TEXT NOT NULL DEFAULT '[]'
+        CHECK(json_valid(additional_source_ids) AND json_type(additional_source_ids) = 'array'),
+    references_solved TEXT NOT NULL DEFAULT '[]'
+        CHECK(json_valid(references_solved) AND json_type(references_solved) = 'array'),
+    references_unsolved TEXT NOT NULL DEFAULT '[]'
+        CHECK(json_valid(references_unsolved) AND json_type(references_unsolved) = 'array'),
+    n_gt_100_solved INTEGER GENERATED ALWAYS AS (
+        dimension > 100 AND json_array_length(references_solved) > 0
+    ) VIRTUAL,
+    fastest_elapsed_ns INTEGER CHECK(fastest_elapsed_ns IS NULL OR fastest_elapsed_ns >= 0),
+    fastest_result_ref TEXT CHECK(CASE
+        WHEN fastest_elapsed_ns IS NULL THEN fastest_result_ref IS NULL
+        WHEN fastest_result_ref IS NULL OR NOT json_valid(fastest_result_ref) THEN 0
+        ELSE json_type(fastest_result_ref) = 'object'
+            AND json_type(fastest_result_ref, '$.model_id') = 'text'
+            AND length(json_extract(fastest_result_ref, '$.model_id')) > 0
+            AND json_extract(fastest_result_ref, '$.model_id') = lower(json_extract(fastest_result_ref, '$.model_id'))
+            AND json_extract(fastest_result_ref, '$.mode') IN ('copositive', 'strictly_copositive', 'both')
+            AND json_extract(fastest_result_ref, '$.preprocessing') IN ('none', 'connected_components', 'pre_checks', 'both')
+            AND json_type(fastest_result_ref, '$.binary_sha256') = 'text'
+            AND (
+                (json_extract(fastest_result_ref, '$.model_id') = 'hadeler_1983'
+                 AND json_extract(fastest_result_ref, '$.binary_sha256') = '')
+                OR (length(json_extract(fastest_result_ref, '$.binary_sha256')) = 64
+                    AND json_extract(fastest_result_ref, '$.binary_sha256') NOT GLOB '*[^0-9a-f]*')
+            )
+        END),
+    CHECK(is_strictly_copositive IS NULL OR is_strictly_copositive = 0 OR is_copositive IS 1)
 ) STRICT;

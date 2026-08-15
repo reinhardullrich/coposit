@@ -69,7 +69,7 @@
    companion and `safe` executes a `dickinson_final` companion, both with connected-component splitting and pre-checks enabled. Each
    companion and every internal `coposit-analyze` model companion or Python native module links exactly one model; both launchers link
    none. `coposit-analyze --model MODEL --mode strict|non-strict|both` is the only user-facing C++ model-selection interface and owns
-   the independent connected-component and pre-check controls. Its model inventory is the literature baselines except
+   the single complete-preprocessing on/off control. Its model inventory is the literature baselines except
    `dickinson_2019`, plus `dickinson_final` and `adaptive_sponsel_copomatrix`; experimental variants remain Python/reference-run only.
    Do not add public model-named executables, link model implementations together, or add C++ runtime factories, registries, or
    inheritance.
@@ -110,7 +110,7 @@
 
 ## Matrix Test Sets
 
-Use the five overlapping Boolean flags in the `matrices` table instead of inventing an ad hoc matrix list. See
+Use the seven overlapping Boolean flags in the `matrices` table instead of inventing an ad hoc matrix list. See
 `aidocs/BENCHMARK_SETS.md` for their composition and selection evidence.
 
 1. Use `smoke_set` first for fast correctness, build, wrapper, runner, and integration checks after an implementation change.
@@ -118,7 +118,9 @@ Use the five overlapping Boolean flags in the `matrices` table instead of invent
 3. Use `stress_test` when testing difficult branching, equality and boundary cases, exact-arithmetic growth, timeouts, or node limits.
 4. Use `scale_set` for large matrices and questions about dimension growth, density, storage, memory use, and scalability.
 5. Use `timeout_5s_strict_set` for matrices on which both final pre-checked algorithms timed out in the frozen five-second strict run.
-6. A matrix may belong to several sets. Run the smallest applicable set first; use the complete corpus only for final reference results
+6. Use `n_le_100` for comprehensive comparisons over every current and future matrix of order at most 100.
+7. Use `n_gt_100_solved` for higher-order matrices with at least one paper-reported completed solve in `references_solved`.
+8. A matrix may belong to several sets. Run the smallest applicable set first; use the complete corpus only for final reference results
    or when the question explicitly requires exhaustive coverage.
 
 ## Style
@@ -142,3 +144,8 @@ ctest --test-dir cpp/build --output-on-failure
    stress matrices.
 3. Bound parallel corpus runs by memory as well as CPU count, and serialize SQLite writes.
 4. Check the copied corpus with `sqlite3 testdata/copos_testdata.sqlite3 'PRAGMA integrity_check;'`.
+5. After any change to shared preprocessing or any other shared code executed before model delegation, rebuild and relink every model
+   native module, every CLI companion, and every test target before running or comparing results. This includes parsing and input
+   preparation, matrix scans, pre-checks, reductions, connected components, and preprocessing routing. Never mix benchmark rows from
+   binaries built against different versions of that pre-model pipeline; run the complete build and test commands above rather than
+   building only the model currently under investigation.
