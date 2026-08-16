@@ -23,15 +23,15 @@ separately selected CP and SCP.
 Hadeler 1983, Dickinson 2019, Dense-Bitset Dickinson, Danninger 1990, all CBDD Dickinson variants,
 Ceiling-Pruned Dickinson, Kernel-Cone Dickinson, Layered Singular-Lift Dickinson, SAT Dickinson, Wide-Certificate SAT Dickinson,
 Affine-Companion Dickinson, and Clingo-SAT Dickinson can additionally classify both predicates in one traversal.
-Other coposit-created models reject CP and combined mode explicitly, except the circular-only `fracessa_circular` experiment, which
-classifies both predicates from the exact global simplex minimum.
+Other coposit-created models reject CP and combined mode explicitly.
 
 ## Repository Structure
 
 - `cpp/` — CMake project, experiment launcher, native Python boundary, shared tests, and model-independent headers.
 - `cpp/include/coposit/` — exact integers and matrices, parsers, packed supports, exact factorization, preprocessing, timeout state,
   open-node limit, and the model call contract.
-- `models/hadeler-based/<model>/` — all Hadeler-, Dickinson-, and FracESSA-derived models; the local `README.md` groups all 34.
+- `models/hadeler-based/<model>/` — maintained Hadeler-, Dickinson-, and FracESSA-derived models; the local `README.md` groups them.
+- `models/zzz-old-do-not-use/<model>/` — preserved superseded or inapplicable models excluded from builds and benchmarks.
 - `models/baselines/<model>/` — other literature or source baselines.
 - `models/experiments/<model>/` — other coposit-created models and comparisons, including `adaptive_sponsel_copomatrix`.
 - `python/pycoposit/` — thin native adapter, sequential runner, and bounded multiprocessing runner.
@@ -186,8 +186,6 @@ Their canonical source directories and compact lineage inventory are under
 | `interval_recursive_dickinson` | Dickinson intervals used to prune a recursive support generator; [`ALGORITHM.md`](../models/hadeler-based/interval_recursive_dickinson/ALGORITHM.md). |
 | `bdd_dickinson` | Dickinson interval union represented by an ordinary binary decision diagram; [`ALGORITHM.md`](../models/hadeler-based/bdd_dickinson/ALGORITHM.md). |
 | `zdd_dickinson` | Dickinson interval union represented by a zero-suppressed decision diagram; [`ALGORITHM.md`](../models/hadeler-based/zdd_dickinson/ALGORITHM.md). |
-| `cardinality_bdd_dickinson` | Cardinality-local BDD subtraction of Dickinson intervals; [`ALGORITHM.md`](../models/hadeler-based/cardinality_bdd_dickinson/ALGORITHM.md). |
-| `cardinality_zdd_dickinson` | Cardinality-local ZDD subtraction of Dickinson intervals; [`ALGORITHM.md`](../models/hadeler-based/cardinality_zdd_dickinson/ALGORITHM.md). |
 | `cbdd_dickinson` | Bryant chain-reduced BDD interval algebra for Dickinson certificates; [`ALGORITHM.md`](../models/hadeler-based/cbdd_dickinson/ALGORITHM.md). |
 | `upper_endpoint_cbdd_dickinson` | CBDD Dickinson with one nonrecursive nonsingular solve at each distinct larger certificate upper endpoint before activation; [`ALGORITHM.md`](../models/hadeler-based/upper_endpoint_cbdd_dickinson/ALGORITHM.md). |
 | `cbdd_dickinson_improved_1` | CBDD Dickinson with batched affine and homogeneous singular certificates, including the complete nullity-two stacked-line family; [`ALGORITHM.md`](../models/hadeler-based/cbdd_dickinson_improved_1/ALGORITHM.md). |
@@ -211,7 +209,6 @@ Their canonical source directories and compact lineage inventory are under
 | `support_polished_frank_wolfe_dickinson` | Exact active-support polish before Dickinson; [`ALGORITHM.md`](../models/hadeler-based/support_polished_frank_wolfe_dickinson/ALGORITHM.md). |
 | `frank_wolfe_sponsel` | One exact Frank-Wolfe segment before Sponsel; [`ALGORITHM.md`](../models/experiments/frank_wolfe_sponsel/ALGORITHM.md). |
 | `fracessa` | First-order global-simplex-minimum adaptation of FracESSA; [`ALGORITHM.md`](../models/hadeler-based/fracessa/ALGORITHM.md). |
-| `fracessa_circular` | FracESSA global-minimum adaptation with exact circular support-orbit reductions; [`ALGORITHM.md`](../models/hadeler-based/fracessa_circular/ALGORITHM.md). |
 | `zischg_hadeler` | Zischg Level 2 inside Hadeler supports; [`ALGORITHM.md`](../models/hadeler-based/zischg_hadeler/ALGORITHM.md). |
 | `zischg_dickinson` | Zischg Level 2 inside Dickinson supports; [`ALGORITHM.md`](../models/hadeler-based/zischg_dickinson/ALGORITHM.md). |
 | `zischg_fracessa` | Zischg Level 2 inside FracESSA supports; [`ALGORITHM.md`](../models/hadeler-based/zischg_fracessa/ALGORITHM.md). |

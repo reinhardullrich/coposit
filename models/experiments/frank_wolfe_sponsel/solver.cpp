@@ -45,8 +45,13 @@ int compare(const positive_ratio& left, const positive_ratio& right)
     return cross_left.compare(cross_right);
 }
 
-bool passes_strict_h_certificate(const matrix_integer& gram,
-                                 fraction_free_ldlt_factorization& factorization)
+bool fails_mode(integer::const_reference value, copositivity_mode mode) noexcept
+{
+    return value.sign() < (mode == copositivity_mode::copositive ? 0 : 1);
+}
+
+bool passes_h_certificate(const matrix_integer& gram, fraction_free_ldlt_factorization& factorization,
+                          copositivity_mode mode)
 {
     const size_t dimension = gram.rows();
     matrix_integer stripped(dimension, dimension);
@@ -62,10 +67,12 @@ bool passes_strict_h_certificate(const matrix_integer& gram,
     }
 
     factorization.factorize_inplace(stripped);
-    return factorization.is_positive_definite();
+    return mode == copositivity_mode::copositive
+        ? factorization.is_positive_semidefinite()
+        : factorization.is_positive_definite();
 }
 
-bool has_exact_one_step_frank_wolfe_witness(const matrix_integer& gram)
+bool has_exact_one_step_frank_wolfe_witness(const matrix_integer& gram, copositivity_mode mode)
 {
     const size_t dimension = gram.rows();
     const unsigned long dimension_value = static_cast<unsigned long>(dimension);
@@ -84,7 +91,7 @@ bool has_exact_one_step_frank_wolfe_witness(const matrix_integer& gram)
         }
     }
 
-    if (total.sign() <= 0) {
+    if (fails_mode(total, mode)) {
 #ifdef COPOSIT_FRANK_WOLFE_SPONSEL_TESTING
         last_frank_wolfe_witness = true;
 #endif
@@ -114,7 +121,7 @@ bool has_exact_one_step_frank_wolfe_witness(const matrix_integer& gram)
     curvature_numerator -= work;
     curvature_numerator += total;
 
-    // A nonpositive curvature has its minimum at an endpoint. The centre and every vertex are already strictly positive here.
+    // A nonpositive curvature has its minimum at an endpoint. The centre and every vertex have already passed the selected mode.
     // The same is true when the unconstrained minimizer lies at or beyond the toward vertex.
     if (curvature_numerator.sign() <= 0 || descent_numerator.compare(curvature_numerator) >= 0) return false;
 
@@ -139,18 +146,18 @@ bool has_exact_one_step_frank_wolfe_witness(const matrix_integer& gram)
     coefficient.set_product(selected_weight, selected_weight);
     value.addmul(coefficient, gram(toward, toward));
 
-    if (value.sign() > 0) return false;
+    if (!fails_mode(value, mode)) return false;
 #ifdef COPOSIT_FRANK_WOLFE_SPONSEL_TESTING
     last_frank_wolfe_witness = true;
 #endif
     return true;
 }
 
-evaluation inspect(const matrix_integer& gram, fraction_free_ldlt_factorization& factorization)
+evaluation inspect(const matrix_integer& gram, fraction_free_ldlt_factorization& factorization, copositivity_mode mode)
 {
     const size_t dimension = gram.rows();
     for (size_t i = 0; i < dimension; ++i) {
-        if (gram(i, i).sign() <= 0) return {state::reject, dimension, dimension};
+        if (fails_mode(gram(i, i), mode)) return {state::reject, dimension, dimension};
     }
 
     size_t split_i = dimension;
@@ -172,10 +179,13 @@ evaluation inspect(const matrix_integer& gram, fraction_free_ldlt_factorization&
     integer edge_squared;
     diagonal_product.set_product(gram(split_i, split_i), gram(split_j, split_j));
     edge_squared.set_product(gram(split_i, split_j), gram(split_i, split_j));
-    if (edge_squared.compare(diagonal_product) >= 0) return {state::reject, dimension, dimension};
+    const int edge_comparison = edge_squared.compare(diagonal_product);
+    if (edge_comparison > 0 || (edge_comparison == 0 && mode == copositivity_mode::strictly_copositive)) {
+        return {state::reject, dimension, dimension};
+    }
 
-    if (passes_strict_h_certificate(gram, factorization)) return {state::accept, dimension, dimension};
-    if (has_exact_one_step_frank_wolfe_witness(gram)) return {state::reject, dimension, dimension};
+    if (passes_h_certificate(gram, factorization, mode)) return {state::accept, dimension, dimension};
+    if (has_exact_one_step_frank_wolfe_witness(gram, mode)) return {state::reject, dimension, dimension};
     return {state::split, split_i, split_j};
 }
 
@@ -279,10 +289,10 @@ std::pair<matrix_integer, matrix_integer> split(const matrix_integer& gram, size
     return {std::move(first_child), std::move(second_child)};
 }
 
-bool test_strict_copositivity(const matrix_integer& matrix)
+bool test_copositivity(const matrix_integer& matrix, copositivity_mode mode)
 {
     fraction_free_ldlt_factorization h_factorization(matrix.rows());
-    const evaluation initial = inspect(matrix, h_factorization);
+    const evaluation initial = inspect(matrix, h_factorization, mode);
     if (initial.result == state::reject) return false;
     if (initial.result == state::accept) return true;
 
@@ -297,13 +307,13 @@ bool test_strict_copositivity(const matrix_integer& matrix)
         enforce_open_node_limit(pending.size() + 2);
         auto children = split(current.gram, current.split_i, current.split_j);
 
-        evaluation child = inspect(children.first, h_factorization);
+        evaluation child = inspect(children.first, h_factorization, mode);
         if (child.result == state::reject) return false;
         if (child.result == state::split) {
             pending.push_back({std::move(children.first), child.split_i, child.split_j});
         }
 
-        child = inspect(children.second, h_factorization);
+        child = inspect(children.second, h_factorization, mode);
         if (child.result == state::reject) return false;
         if (child.result == state::split) {
             pending.push_back({std::move(children.second), child.split_i, child.split_j});
@@ -317,14 +327,12 @@ bool test_strict_copositivity(const matrix_integer& matrix)
 
 bool solve(const matrix_integer& matrix, copositivity_mode mode)
 {
-    require_strict_mode(mode);
 #ifdef COPOSIT_FRANK_WOLFE_SPONSEL_TESTING
     last_frank_wolfe_witness = false;
     last_frank_wolfe_line_step = false;
 #endif
     timeout_checkpoint();
-    const size_t dimension = matrix.rows();
-    return test_strict_copositivity(matrix);
+    return test_copositivity(matrix, mode);
 }
 
 #ifdef COPOSIT_FRANK_WOLFE_SPONSEL_TESTING

@@ -39,7 +39,11 @@ COPOSITIVE_BASELINES = (
     "sponsel_2012",
 )
 COPOSITIVE_MODE_ALGORITHMS = tuple(dict.fromkeys(COPOSITIVE_BASELINES + (
+    "adaptive_dutour_danninger",
+    "adaptive_dutour_copomatrix",
     "adaptive_sponsel_copomatrix",
+    "adaptive_zischg_sponsel_copomatrix",
+    "frank_wolfe_sponsel",
     *COMBINED_CLASSIFICATION_ALGORITHMS,
 )))
 STRICT_ONLY_ALGORITHMS = tuple(algorithm for algorithm in ALGORITHMS if algorithm not in COPOSITIVE_MODE_ALGORITHMS)

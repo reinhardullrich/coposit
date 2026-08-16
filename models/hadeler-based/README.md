@@ -9,7 +9,7 @@ Each model owns its implementation, focused test, and authoritative `ALGORITHM.m
 | Lineage | Models |
 |---|---|
 | Literature roots and direct support traversal | `hadeler_1983`, `dickinson_2019`, `dense_bitset_dickinson`, `interval_recursive_dickinson`, `support_pruned_dickinson`, `nullity_support_pruned_dickinson`, `rhs_dickinson` |
-| Boolean-lattice representations | `bdd_dickinson`, `zdd_dickinson`, `cardinality_bdd_dickinson`, `cardinality_zdd_dickinson`, `cbdd_dickinson`, `upper_endpoint_cbdd_dickinson`, `cbdd_dickinson_improved_1`, `wide_certificate_cbdd_dickinson`, `multithreaded_cbdd_dickinson`, `czdd_dickinson`, `sat_dickinson`, `wide_certificate_sat_dickinson`, `clingo_sat_dickinson` |
+| Boolean-lattice representations | `bdd_dickinson`, `zdd_dickinson`, `cbdd_dickinson`, `upper_endpoint_cbdd_dickinson`, `cbdd_dickinson_improved_1`, `wide_certificate_cbdd_dickinson`, `multithreaded_cbdd_dickinson`, `czdd_dickinson`, `sat_dickinson`, `wide_certificate_sat_dickinson`, `clingo_sat_dickinson` |
 | Ceiling and singular-support searches | `ceiling_pruned_dickinson`, `kernel_cone_dickinson`, `affine_companion_dickinson`, `layered_singular_lift_dickinson`, `breadth_first_singular_lift_dickinson` |
 | Frank–Wolfe proposals before Dickinson | `frank_wolfe_dickinson`, `one_step_frank_wolfe_dickinson`, `pairwise_frank_wolfe_dickinson`, `support_polished_frank_wolfe_dickinson` |
-| FracESSA and Zischg descendants | `fracessa`, `fracessa_circular`, `zischg_hadeler`, `zischg_dickinson`, `zischg_fracessa` |
+| FracESSA and Zischg descendants | `fracessa`, `zischg_hadeler`, `zischg_dickinson`, `zischg_fracessa` |

@@ -2,6 +2,40 @@
 
 This append-only file records meaningful decisions, results, and evidence that are not clear from Git. Do not log routine edits here.
 
+## 2026-08-16 — Ordinary-copositivity cone comparison completed
+
+- Completed the five-second ordinary-copositivity campaign for 11 literature and experimental cone models on the 49-matrix Smoke
+  set and the 512 preprocessing-unresolved Core/Stress set, with complete preprocessing and diagnostics enabled.
+- `adaptive_zischg_sponsel_copomatrix` completed 405 Core/Stress cases, followed by `adaptive_sponsel_copomatrix` with 403. The
+  strongest literature baselines were `copomatrix_2011` with 349 and `danninger_1990` with 344.
+- Verified exactly 512 current-hash rows per model, complete diagnostics, a uniform five-second limit, and no disagreement with
+  known corpus truth. Removed 16,589 obsolete-hash rows for the four rebuilt experiments; both SQLite databases passed integrity
+  checks.
+
+## 2026-08-16 — Circular FracESSA archived
+
+- Moved `fracessa_circular` to `models/zzz-old-do-not-use/`. Its circulant-only contract makes a mixed-corpus result table
+  inapplicable to most matrices, so it is preserved for inspection but excluded from maintained builds, inventories, tests,
+  current result summaries, and stored diagnostic benchmark rows.
+
+## 2026-08-16 — Cardinality-local BDD and ZDD models archived
+
+- Moved `cardinality_bdd_dickinson` and `cardinality_zdd_dickinson` to `models/zzz-old-do-not-use/` after their inferior
+  Core/Stress outcomes. Their source, focused tests, and algorithm descriptions remain available for historical inspection.
+- Removed both identifiers from maintained builds, public analysis inventories, current result summaries, and stored diagnostic
+  benchmark rows. They are no longer benchmark candidates.
+
+## 2026-08-16 — Hadeler-based current-preprocessing comparison completed
+
+- Rebuilt and tested every maintained target, then ran all 34 finished Hadeler-, Dickinson-, and FracESSA-derived model identities on
+  the 49-matrix Smoke and 512-matrix Core/Stress sets in combined mode with complete preprocessing, diagnostics, and five-second
+  per-matrix timeouts. Every model identity has exactly 512 current-hash rows and every completed classification agrees with corpus
+  truth.
+- The strongest completion group solved 457 of 512 matrices: BDD, CBDD, CBDD Improved 1, ZDD, CZDD, SAT, Clingo-SAT, and
+  Multithreaded CBDD. Upper-Endpoint CBDD solved 456. Dense-Bitset reported 71 explicit size-limit errors, while circular FracESSA
+  reported 133 out-of-contract non-circulant inputs; neither was counted as a negative classification.
+- Removed 80,739 Hadeler-based result rows tied to obsolete companion hashes. The diagnostics database passed its integrity check.
+
 ## 2026-08-16 — Upper-endpoint CBDD Dickinson experiment
 
 - Added `upper_endpoint_cbdd_dickinson` as an isolated copy of CBDD Dickinson. Before activating a new interval `[L,U]`, it probes
