@@ -42,9 +42,9 @@ Smoke contains 49 matrices. Core and Stress contains 512 matrices and excludes e
 | `nullity_support_pruned_dickinson` | — | 49 / 0 / 0 | 380 / 132 / 0 | complete; current hash `eb10b9cd82485841432a044b057ad97dc35255b594f12dff9a8c9c84a2b9b01a`; diagnostics complete |
 | `one_step_frank_wolfe_dickinson` | — | 49 / 0 / 0 | 380 / 132 / 0 | complete; current hash `ba397746515edc3f4405fda44b43d8d9d5ace799117f032ee5ec06c030f1e846`; diagnostics complete |
 | `pairwise_frank_wolfe_dickinson` | — | 49 / 0 / 0 | 380 / 132 / 0 | complete; current hash `37e83d3190b260c219e6dd0c5148cb1bc28578345cc4bbc2786581d1d23c5738`; diagnostics complete |
-| `rhs_dickinson` | — | pending | pending | current hash pending |
+| `rhs_dickinson` | — | 49 / 0 / 0 | 374 / 138 / 0 | complete; current hash `f38a9b9bbdc66fc875c7a5e99c30e3bb48fc60922e858c95fcbd68fe75920f7e`; diagnostics complete |
 | `sat_dickinson` | — | 49 / 0 / 0 | 457 / 55 / 0 | complete; current hash `8e8e120fa9f914c7394676138ddd897936b8ea675e9ee5e939d841128fa464f1`; diagnostics complete |
-| `support_polished_frank_wolfe_dickinson` | — | pending | pending | current hash pending |
+| `support_polished_frank_wolfe_dickinson` | — | 49 / 0 / 0 | 381 / 131 / 0 | complete; current hash `149ca4834609770d1cbe48e7f184d9f9286bb6c949159c43287bd40549978dad`; diagnostics complete |
 | `support_pruned_dickinson` | — | pending | pending | current hash pending |
 | `wide_certificate_cbdd_dickinson` | percentage 90 | pending | pending | pending |
 | `wide_certificate_sat_dickinson` | percentage 90 | pending | pending | pending |
