@@ -3,7 +3,7 @@
 Status: current implemented workflow.
 
 This document specifies the shared preprocessing applied after parsing a matrix. It explains the order, purpose, possible decisions,
-single-switch behavior, child-matrix handling, and progress meaning of every preprocessing operation. It intentionally gives only
+single-switch behavior, child-matrix handling, and diagnostics meaning of every preprocessing operation. It intentionally gives only
 the mathematics needed to understand the decisions; the individual model `ALGORITHM.md` files own full algorithm derivations.
 
 The shared C++ pipeline, analysis CLI, and Python boundary implement the fixed order and single-switch contract below.
@@ -29,15 +29,16 @@ input validation
 -> root checks
 -> connected components
 -> ordinary checks
--> if reduction_depth reached maximum_reduction_depth: return COPOSITIVE, NOT_COPOSITIVE, or UNRESOLVED to the parent
+-> if reduction_depth reached maximum_reduction_depth: retain the component's partial result
 -> Danninger reduction
 -> COPOMATRIX reduction
--> component-result aggregation
--> return COPOSITIVE, NOT_COPOSITIVE, or UNRESOLVED
+-> component-result collection
+-> return partial certificates and any unresolved component matrices
 ```
 
 There is no caller configuration between these stages. Preprocessing is either disabled completely or runs this fixed sequence.
-The reduction-depth bound is an internal program parameter, currently two.
+The reduction-depth bound is the fixed internal constant two. It is not exposed through a settings file, CLI option, or Python
+argument. The original matrix is depth zero, children are depth one, and grandchildren are depth two.
 
 ## 2. Result State
 
@@ -68,8 +69,10 @@ A timeout, node limit, allocation failure, or other resource failure is never co
 ## 3. Complete Control Flow
 
 The pseudocode below is written for ordinary copositivity. It begins after mandatory input validation and assumes preprocessing is
-enabled. Its inputs are a matrix $M$ and its `reduction_depth`. The internal parameter `maximum_reduction_depth` is currently two.
-The procedure returns `'copositive'`, `'not_copositive'`, or `'unresolved'`.
+enabled. Its inputs are a matrix $M$ and its `reduction_depth`. The fixed internal `maximum_reduction_depth` is two.
+The procedure returns the root's partial certificate and one record per visited connected component. Every component is visited
+unless an earlier negative certificate already decides the whole matrix. A component record contains its partial certificate and
+retains its matrix only when the requested fact remains unresolved.
 
 `combine_outcome` returns `'not_copositive'` if either input is `'not_copositive'`, returns `'copositive'` if both inputs are
 `'copositive'`, and returns `'unresolved'` otherwise.
@@ -82,18 +85,19 @@ The recursive calls that check one or two children are written explicitly below.
 ### Algorithm: Complete Preprocessing
 
 ```text
+maximum_reduction_depth <- 2  # Check children and grandchildren, but never create great-grandchildren.
 preprocess(M, reduction_depth):
     root_outcome <- root_checks(M)
     IF root_outcome != 'unresolved':
-        RETURN root_outcome
+        RETURN preprocessing_result(root_outcome, no component records)
     overall <- 'copositive'
+    component_results <- empty list
     FOR EACH C in negative_entry_components(M):
         outcome <- ordinary_checks(C)
         IF outcome == 'unresolved' AND reduction_depth >= maximum_reduction_depth:
-            # The configured recursion bound is reached: keep checking siblings, but create no deeper descendants.
-            overall <- 'unresolved'
-            CONTINUE
-        IF outcome == 'unresolved':
+            # The configured recursion bound is reached: retain C, but create no deeper descendants.
+            outcome <- 'unresolved'
+        IF outcome == 'unresolved' AND reduction_depth < maximum_reduction_depth:
             children <- danninger_children(C)
             IF number_of(children) > 2:
                 # Create no child; Danninger stays unresolved and control falls through to COPOMATRIX.
@@ -105,7 +109,8 @@ preprocess(M, reduction_depth):
                 outcome <- 'copositive'
                 FOR EACH H in children:
                     # Only a reduction child increases the depth.
-                    outcome <- combine_outcome(outcome, preprocess(H, reduction_depth = reduction_depth + 1))
+                    child_result <- preprocess(H, reduction_depth = reduction_depth + 1)
+                    outcome <- combine_outcome(outcome, aggregate_certificate(child_result))
                     IF outcome == 'not_copositive':
                         BREAK
             IF outcome == 'unresolved':
@@ -117,17 +122,23 @@ preprocess(M, reduction_depth):
                     outcome <- 'copositive'
                     FOR EACH H in children:
                         # Only a reduction child increases the depth.
-                        outcome <- combine_outcome(outcome, preprocess(H, reduction_depth = reduction_depth + 1))
+                        child_result <- preprocess(H, reduction_depth = reduction_depth + 1)
+                        outcome <- combine_outcome(outcome, aggregate_certificate(child_result))
                         IF outcome == 'not_copositive':
                             BREAK
+        IF outcome == 'unresolved':
+            APPEND (matrix C, partial certificate outcome) TO component_results
+        ELSE:
+            APPEND (no matrix, certificate outcome) TO component_results
         overall <- combine_outcome(overall, outcome)
         IF overall == 'not_copositive':
-            RETURN 'not_copositive'
-    RETURN overall
+            RETURN preprocessing_result(root_outcome, component_results)
+    RETURN preprocessing_result(root_outcome, component_results)
 ```
 
-`outcome` is the current component status. Each later method replaces it only while it remains unresolved. `overall` combines the
-finished component outcomes.
+`outcome` is the current component status. Each later method replaces it only while it remains unresolved. `overall` is the
+certificate obtained by combining the component states; the records additionally preserve the matrices for components that remain
+open.
 
 The only recursive operations are the two visible calls that add one to `reduction_depth`. Every invocation scans its matrix, runs
 root checks, splits connected components, and runs ordinary checks. It may enter the reduction block only while
@@ -139,9 +150,9 @@ Every connected component of $M$ inherits its invocation's depth. Merely copying
 a reduction descendant and does not change the depth. Only Danninger and COPOMATRIX children increment it.
 
 One `'not_copositive'` child makes the reduction outcome `'not_copositive'`; all children must be `'copositive'` to make it
-`'copositive'`; every other combination is `'unresolved'`. If Danninger's children leave the outcome unresolved, they are discarded and COPOMATRIX
-receives the unchanged component $C$. If COPOMATRIX is also unresolved, its children are discarded and preprocessing returns an
-unresolved aggregate result. No copositivity model is called inside preprocessing.
+`'copositive'`; every other combination is `'unresolved'`. If Danninger's children leave the outcome unresolved, they are discarded
+and COPOMATRIX receives the unchanged component $C$. If COPOMATRIX is also unresolved, its children are discarded and the unchanged
+component $C$ is retained in the output work list. No copositivity model is called inside preprocessing.
 
 Strict copositivity uses exactly the same control flow. Replace `'copositive'` by `'strictly_copositive'` and `'not_copositive'` by
 `'not_strictly_copositive'`; `'unresolved'` keeps the same meaning. Combined classification follows the same sequence while carrying the
@@ -154,7 +165,7 @@ Input validation is mandatory and is not a switchable pre-check. The parser requ
 both triangles, and converts supported exact input to the maintained integer representation. Model entry points assume that
 contract. A direct C++ caller is responsible for providing a matrix satisfying it.
 
-Parsing and input validation happen before preprocessing begins. An outer public timeout may cover parsing, preprocessing, and any
+Parsing and input validation happen before preprocessing begins. An outer command timeout may cover parsing, preprocessing, and any
 later caller action, but that does not make the later action part of preprocessing.
 
 ## 5. Matrix Scans
@@ -173,7 +184,7 @@ The scan can collect:
 - full row sums and the all-ones quadratic value;
 - the maximum absolute coefficient used to scale floating Frank--Wolfe arithmetic;
 - positive and negative off-diagonal counts for Danninger and COPOMATRIX pivot selection;
-- exact two-value pattern facts needed for the Motzkin--Straus Z-matrix bypass.
+- exact two-value pattern facts needed for the Motzkin--Straus classifier.
 
 The pipeline-entry matrix is scanned before root checks. If its negative graph is connected, that matrix and scan become the single
 work unit; neither is copied or rescanned. If it is disconnected, one principal component matrix is materialized at a time, and all
@@ -279,7 +290,7 @@ This check belongs after connected components. Any useful negative interaction l
 enumeration retains the decision while reducing the active problem size and allowing early component termination.
 
 The maintained complete profile checks cardinalities one and two at the root and cardinality three after splitting. There is no
-separate cardinality cutoff in the public preprocessing configuration.
+separate cardinality cutoff in the exposed preprocessing configuration.
 
 ### 8.3 Negative-Part Diagonal Dominance
 
@@ -321,7 +332,43 @@ evaluates the resulting quadratic form with exact integers. Only that exact sign
 
 Frank--Wolfe never accepts a component.
 
-### 8.6 Maximal Z-Matrix Check
+### 8.6 Motzkin--Straus And Maximal Z-Matrix Check
+
+This stage selects one of two mutually exclusive exact methods. First it recognizes the two-level Motzkin--Straus form:
+
+- every diagonal entry has one common value $d\geq0$;
+- every off-diagonal entry is either $d$ or one common value $q<0$;
+- the value $q$ occurs at least once.
+
+Let $G$ join $i$ and $j$ exactly when $a_{ij}=q$, and let $\omega$ be the maximum number of pairwise joined vertices. The
+Motzkin--Straus identity gives the exact simplex minimum
+
+$$
+\min_{x\geq0,\;\mathbf1^Tx=1}x^TAx=q+\frac{d-q}{\omega}.
+$$
+
+This is the scaled matrix form of Motzkin and Straus, *Maxima for Graphs and a New Proof of a Theorem of Turán* (1965),
+[doi:10.4153/CJM-1965-053-6](https://doi.org/10.4153/CJM-1965-053-6).
+
+The implementation therefore compares the integers $(-q)\omega$ and $d-q$ without division:
+
+- $(-q)\omega<d-q$: strictly copositive;
+- $(-q)\omega=d-q$: copositive but not strictly copositive;
+- $(-q)\omega>d-q$: not copositive.
+
+An exact maximum-clique branch-and-bound computes $\omega$. The search is adapted from Darren Strash's Open MCS implementation at
+commit `735788af066fc8589f577036af521f22f45c2731`. It retains the MCR minimum-degree initial ordering with neighborhood-degree
+tie-breaking, the static vertex order, a greedy coloring upper bound at every search node, and the MCS recoloring repair that can
+reduce that bound. Graph adjacency remains in coposit's packed multiword support type; search orders and color classes use lazily
+grown retained vectors. The integration uses `size_t` indices, the shared cooperative timeout, and shared diagnostics rather than
+Open MCS's executable and legacy clock timeout.
+
+A strict-only query stops as soon as a proved clique reaches the strict boundary; ordinary or combined classification stops early
+only after a clique passes the ordinary boundary. Equality in combined mode remains open until the coloring bounds prove that no
+larger clique exists. The outer timeout remains authoritative, so an interrupted exponential search produces no Boolean result.
+
+Only an exact pattern match enters this branch. It then skips maximal-Z enumeration because the Motzkin--Straus result classifies the
+whole component. A matrix with any third coefficient value follows the ordinary Z-matrix path below.
 
 A principal Z-matrix is a principal block whose off-diagonal entries are all nonpositive. The check searches maximal such blocks,
 which are maximal cliques in the graph with edges $a_{ij}\leq0$.
@@ -329,8 +376,8 @@ which are maximal cliques in the graph with edges $a_{ij}\leq0$.
 The operational sequence is:
 
 1. recognize the exact Motzkin--Straus two-value graph-matrix pattern;
-2. if that pattern matches, bypass only this Z-matrix check and continue with later stages;
-3. enumerate maximal nonpositive principal blocks;
+2. if that pattern matches, run its exact maximum-clique classifier and skip the remaining Z-matrix steps;
+3. otherwise enumerate maximal nonpositive principal blocks;
 4. split each block internally into components of its strictly negative graph;
 5. copy each resulting principal block and factorize it exactly with fraction-free LDLT.
 
@@ -457,10 +504,9 @@ complete the classification, ordinary copositivity is tried next. `STRICTLY_COPO
 `NOT_COPOSITIVE` disproves both; and `NOT_STRICTLY_COPOSITIVE` together with `COPOSITIVE` proves the boundary case. Any remaining
 unknown state is returned as unresolved.
 
-A descendant whose depth is below the maximum may call Danninger and COPOMATRIX again. A descendant at the maximum calls neither
-reduction and never calls a copositivity model. It returns the facts proved by its scan, root checks, component split, and ordinary
-checks. This allows an internally adjustable finite reduction tree without unbounded recursion. Connected-component copying never
-changes the depth.
+A descendant whose depth is below two may call Danninger and COPOMATRIX again. A grandchild at depth two calls neither reduction and
+never calls a copositivity model. It returns the facts proved by its scan, root checks, component split, and ordinary checks. This
+keeps the reduction tree finite without a runtime setting. Connected-component copying never changes the depth.
 
 ## 12. What Is Repeated
 
@@ -469,8 +515,8 @@ changes the depth.
 | Root checks | Once on the original matrix before splitting | Once on each new reduction child before splitting |
 | Connected-component decomposition | Once on the original matrix | Once per new reduction child |
 | Ordinary checks | Once per top-level component | Once per reduction-child component |
-| Danninger reduction | At most once per unresolved top-level component | At most once per unresolved component while depth is below the maximum |
-| COPOMATRIX reduction | At most once per unresolved top-level component | At most once per unresolved component while depth is below the maximum |
+| Danninger reduction | At most once per unresolved top-level component | At most once per unresolved component while depth is below two |
+| COPOMATRIX reduction | At most once per unresolved top-level component | At most once per unresolved component while depth is below two |
 
 The small-component ordinary check may call the same low-order mathematical routine as the root small-matrix check. That is not a
 repeat on the same problem: the original matrix was too large for the root criterion, while the principal component is a new complete
@@ -478,7 +524,7 @@ low-order problem.
 
 ## 13. Single-Switch Semantics
 
-The agreed target has one preprocessing switch and no individual public check controls:
+The agreed target has one preprocessing switch and no individual check controls:
 
 ```cpp
 bool preprocessing_enabled = true;
@@ -491,20 +537,27 @@ The two states are exhaustive:
 | off | Bypass preprocessing. Equivalently, preprocessing contributes no decision. |
 | on | Run every stage in the fixed order documented here. No individual stage can be skipped or reordered. |
 
-The normal public `fast` and `safe` interfaces always use the complete enabled profile and expose no preprocessing control. The
-analysis interface may expose the single on/off switch for measurements. A narrower experiment that removes one internal check is a
+The C++ and Python analysis interfaces expose the single on/off switch for measurements. A narrower experiment that removes one internal check is a
 temporary source-level experiment, not another supported configuration, and its exact patch must be recorded with its results.
 
 ## 14. Preprocessing Output And Aggregation
 
-Preprocessing returns a decision only when its checks establish the requested property or its negation. Otherwise it returns
-`UNRESOLVED`. It never invokes a copositivity model. Deciding what to do after an unresolved preprocessing result belongs to the
-caller and is outside this preprocessing algorithm.
+Preprocessing returns a root partial certificate plus one result record per connected component. Each record carries the component's
+known ordinary and strict facts. A fully resolved record needs no matrix. An unresolved record retains the exact matrix on which the
+missing facts must be solved. Preprocessing never invokes a copositivity model.
+
+The dispatcher calls the selected model only for unresolved records, fills their missing facts, and combines all component results
+with logical AND. If the negative-entry graph is connected, the pending record borrows the original matrix. A proper principal
+component is materialized once because the maintained models require a dense `matrix_integer`; that owned matrix is then moved into
+the result record and is never copied again.
+
+Danninger and COPOMATRIX remain certificate-only proof attempts. Their generated descendants are not returned to the dispatcher.
+When such an attempt remains unresolved, its descendants are discarded and its unchanged parent component is the pending work item.
 
 For multiple original components, ordinary and strict results are combined independently with logical AND. Processing may stop as
 soon as the requested result becomes false. Positive completion requires the corresponding property from every component.
 
-## 15. Progress And Timeouts
+## 15. Diagnostics And Timeouts
 
 The fixed flow gives each visible preprocessing phase one unambiguous name:
 
@@ -517,15 +570,28 @@ ordinary: principal triples
 ordinary: negative-part diagonal dominance
 ordinary: all-ones
 ordinary: Frank-Wolfe
+ordinary: Motzkin-Straus
 ordinary: Z-matrix
 ordinary: exact factorization
 Danninger reduction
 COPOMATRIX reduction
 ```
 
-Progress percentages, when a truthful denominator exists, are local to the current matrix or component. They are activity indicators,
+Diagnostics percentages, when a truthful denominator exists, are local to the current matrix or component. They are activity indicators,
 not estimates of remaining wall time. Expiration during a root check, component operation, ordinary check, or reduction child leaves
 preprocessing unresolved.
+
+The maintained diagnostics retain one summary across preprocessing and every later model-stage line:
+
+- `preprocessing_outcome=running|resolved|pending` distinguishes an interrupted/in-progress pass, a completed preprocessing decision,
+  and completed preprocessing with work left for the model;
+- `component_split`, `components_seen`, and `largest_component` record the top-level connected-component decomposition actually visited;
+- `pending_components` and `largest_pending_component` record the unresolved matrices returned by preprocessing;
+- `reduction_child_checks`, `maximum_reduction_depth`, and `reduction_decisions` record bounded certificate-only child work; and
+- `model_delegations` counts actual selected-model calls.
+
+Thus a large matrix can be identified directly as fully resolved, partly reduced to smaller pending blocks, or still running in a
+particular preprocessing phase. A `running` row contains only work observed before interruption and is not a completed unresolved result.
 
 When preprocessing is off, none of the preprocessing phase names is emitted.
 
@@ -537,11 +603,11 @@ The ordering deliberately places cheap decisions and structural decomposition be
 - negative-component traversal uses the packed multiword support representation and is cheap after the scan;
 - principal-triple work can grow rapidly with negative degrees, so it is component-local;
 - bounded Frank--Wolfe uses only order-many floating iterations, followed by exact verification of proposed witnesses;
-- maximal-Z search may enumerate exponentially many maximal cliques, so it follows splitting and bypasses exact Motzkin--Straus
-  patterns;
+- the Motzkin--Straus maximum-clique branch-and-bound and maximal-Z search are both exponential in the worst case, so they follow
+  splitting and only one of them runs on a given component;
 - exact fraction-free LDLT has bounded pivot count but can suffer severe arbitrary-precision coefficient growth;
 - the two reduction gates refuse pivots with more than two immediate children;
-- preprocessing returns `UNRESOLVED` whenever these stages establish neither the requested fact nor its negation.
+- preprocessing retains a pending component record whenever these stages establish neither the requested fact nor its negation.
 
 Disabling preprocessing removes all shared shortcuts and contributes no classification. It must never turn a timeout or unresolved
 state into a negative classification.
@@ -556,11 +622,15 @@ The maintained implementation preserves these invariants:
 4. avoid repeating negative-part diagonal dominance and all-ones decisions at root and component level;
 5. run Frank--Wolfe, maximal-Z enumeration, and exact definiteness only on post-split work units;
 6. reuse each matrix scan and collect Z/reduction sign data without an extra full-matrix sign pass;
-7. bound recursive reduction descendants with one internal maximum-depth parameter, currently two;
+7. fix the internal maximum reduction depth at two, with no settings-file, CLI, or Python control;
 8. make the enabled profile execute connected components, every check, Danninger, and COPOMATRIX in the documented fixed order;
 9. preserve combined-mode equality states and the logical implications between strict and ordinary copositivity;
-10. keep the public, analysis, Python, progress, and project documentation synchronized with this specification;
-11. relink every model companion against the reconciled shared preprocessing before comparing results.
+10. keep the C++, Python, diagnostics, and project documentation synchronized with this specification;
+11. preserve one result record per connected component and delegate only its missing facts to the selected model;
+12. borrow the unchanged original matrix, own each materialized principal component once, and perform no later matrix copies;
+13. keep Danninger and COPOMATRIX descendants certificate-only and retain their parent component after an inconclusive attempt;
+14. relink every model companion against the reconciled shared preprocessing before comparing results.
 
-Focused tests cover the master switch, complete low-order decisions, shared scan data, two-child reduction, depth-zero stopping,
-child recursion, grandchild stopping, combined equality, disconnected aggregation, and delegation of only the unchanged original matrix.
+Focused tests cover the master switch, complete low-order decisions, shared scan data, two-child reduction, the fixed depth-two
+bound, child recursion, grandchild stopping, combined equality, disconnected aggregation, resolved-component skipping, delegation of only
+unresolved component matrices, connected-matrix borrowing, early model failure, and unchanged-parent reduction fallback.

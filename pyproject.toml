@@ -26,7 +26,9 @@ sdist.include = [
     "cpp/CMakeLists.txt",
     "cpp/include/**",
     "models/**/solver.cpp",
-    "cpp/python_module.cpp",
+    "cpp/model_main.cpp",
+    "cpp/coposit_main.cpp",
+    "cpp/companion_launcher.hpp",
     "python/run_results.py",
     "python/pycoposit/*.py",
 ]
@@ -34,3 +36,4 @@ sdist.include = [
 [tool.scikit-build.cmake.define]
 BUILD_TESTING = false
 COPOSIT_BUILD_PYTHON = true
+COPOSIT_BUILD_APPS = true

@@ -17,22 +17,26 @@ from .types import (
     Matrix,
     Preprocessing,
     StatusCode,
+    _resolve_mode,
+    _resolve_model_parameter,
     _validate_algorithm,
-    _validate_mode,
     _validate_preprocessing,
 )
 
 _SENTINEL = None
 
 
-def _safe_compute(algorithm: Algorithm, matrix: Matrix, mode: CopositivityMode, preprocessing: Preprocessing) -> dict:
+def _safe_compute(
+    algorithm: Algorithm, matrix: Matrix, mode: CopositivityMode, preprocessing: Preprocessing, model_parameter: str | None
+) -> dict:
     try:
-        return compute_matrix(algorithm, matrix, mode, preprocessing)
+        return compute_matrix(algorithm, matrix, mode, preprocessing, model_parameter=model_parameter)
     except Exception as error:  # defensive: keep one bad job from breaking the worker protocol
         return {
             "algorithm": algorithm,
             "mode": mode,
             "preprocessing": preprocessing,
+            "model_parameter": model_parameter,
             "matrix_id": matrix.matrix_id if matrix.matrix_id is None or type(matrix.matrix_id) is int else None,
             "status": int(StatusCode.INTERNAL_ERROR),
             "is_copositive": None,
@@ -42,13 +46,16 @@ def _safe_compute(algorithm: Algorithm, matrix: Matrix, mode: CopositivityMode, 
         }
 
 
-def _queue_worker(input_queue, output_queue, algorithm: Algorithm, mode: CopositivityMode, preprocessing: Preprocessing) -> None:
+def _queue_worker(
+    input_queue, output_queue, algorithm: Algorithm, mode: CopositivityMode, preprocessing: Preprocessing,
+    model_parameter: str | None,
+) -> None:
     while True:
         payload = input_queue.get()
         if payload is _SENTINEL:
             return
         matrix = pickle.loads(payload)
-        output_queue.put(bytes(ForkingPickler.dumps(_safe_compute(algorithm, matrix, mode, preprocessing))))
+        output_queue.put(bytes(ForkingPickler.dumps(_safe_compute(algorithm, matrix, mode, preprocessing, model_parameter))))
 
 
 def _max_pending_matrices(config: MPConfig) -> int:
@@ -56,7 +63,10 @@ def _max_pending_matrices(config: MPConfig) -> int:
 
 
 class _QueueRunner:
-    def __init__(self, algorithm: Algorithm, mode: CopositivityMode, preprocessing: Preprocessing, config: MPConfig):
+    def __init__(
+        self, algorithm: Algorithm, mode: CopositivityMode, preprocessing: Preprocessing, config: MPConfig,
+        model_parameter: str | None,
+    ):
         self.algorithm = algorithm
         self.config = config
         self._context = mp.get_context(config.start_method)
@@ -70,7 +80,7 @@ class _QueueRunner:
                 process = self._context.Process(
                     target=_queue_worker,
                     name=f"coposit-worker-{worker_index}",
-                    args=(self._input_queue, self._output_queue, algorithm, mode, preprocessing),
+                    args=(self._input_queue, self._output_queue, algorithm, mode, preprocessing, model_parameter),
                     daemon=True,
                 )
                 process.start()
@@ -129,8 +139,9 @@ def _run_matrices_multiprocessing(
     mode: CopositivityMode,
     preprocessing: Preprocessing,
     config: MPConfig,
+    model_parameter: str | None,
 ) -> Iterator[dict]:
-    runner = _QueueRunner(algorithm, mode, preprocessing, config)
+    runner = _QueueRunner(algorithm, mode, preprocessing, config, model_parameter)
     completed = False
     try:
         matrices_iter = iter(matrices)
@@ -169,17 +180,21 @@ def run_multiprocessing(
     algorithm: Algorithm,
     matrices: Matrix | Iterable[Matrix],
     mp_config: MPConfig | None = None,
-    mode: CopositivityMode = "strictly_copositive",
+    mode: CopositivityMode | None = None,
     preprocessing: Preprocessing = "both",
+    model_parameter: str | None = None,
 ) -> dict | Iterator[dict]:
     """Run one matrix or an iterable across worker processes in completion order."""
 
     _validate_algorithm(algorithm)
-    _validate_mode(mode)
+    mode = _resolve_mode(algorithm, mode)
+    model_parameter = _resolve_model_parameter(algorithm, model_parameter)
     _validate_preprocessing(preprocessing)
     config = mp_config if mp_config is not None else MPConfig()
     is_single = isinstance(matrices, Matrix)
-    results = _run_matrices_multiprocessing(algorithm, (matrices,) if is_single else matrices, mode, preprocessing, config)
+    results = _run_matrices_multiprocessing(
+        algorithm, (matrices,) if is_single else matrices, mode, preprocessing, config, model_parameter
+    )
     if is_single:
         return list(results)[0]
     return results

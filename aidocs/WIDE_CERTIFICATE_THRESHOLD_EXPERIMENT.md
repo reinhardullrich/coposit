@@ -2,6 +2,9 @@
 
 Status: research result.
 
+The model names below identify the historical binaries used for this run. The maintained code now has one
+`wide_certificate_cbdd_dickinson` model whose runtime percentage parameter reproduces the 75%, 90%, and 95% rules.
+
 ## Setup
 
 Matrix 12649 is the order-50 BPQY COP construction with designated support size 12 and seed 0. The experiment selected CP mode,

@@ -1,6 +1,6 @@
 #include <coposit/model.hpp>
 
-#include "../source_trace.hpp"
+#include "../source_diagnostics.hpp"
 
 #include <gtest/gtest.h>
 
@@ -42,11 +42,11 @@ TEST(Copomatrix2011ModelTest, UsesPrincipalAndAllNegativeSchurChildren)
 
 TEST(Copomatrix2011ModelTest, SourceTracePreservesPrincipalBeforeSchur)
 {
-    baseline_source_trace::clear();
+    baseline_source_diagnostics::clear();
     EXPECT_TRUE(model::solve(symmetric_matrix(2, {2, -1, 2})));
-    const std::vector<baseline_source_trace::event> expected{
+    const std::vector<baseline_source_diagnostics::event> expected{
         {"diagonal-scan", 2}, {"principal", 1}, {"schur", 1}};
-    EXPECT_EQ(baseline_source_trace::events, expected);
+    EXPECT_EQ(baseline_source_diagnostics::events, expected);
 }
 
 TEST(Copomatrix2011ModelTest, UsesXuYaoNegativeStaircase)

@@ -3,7 +3,7 @@
 #include <coposit/model.hpp>
 #include <coposit/open_node_limit.hpp>
 
-#include "../source_trace.hpp"
+#include "../source_diagnostics.hpp"
 
 #include <cstddef>
 #include <initializer_list>
@@ -54,10 +54,10 @@ TEST(Danninger1990ModelTest, SolvesPositiveDefiniteTridiagonalStressMatrix)
 
 TEST(Danninger1990ModelTest, SourceTracePreservesPlusBeforeMinusStaircases)
 {
-    baseline_source_trace::clear();
+    baseline_source_diagnostics::clear();
     EXPECT_TRUE(model::solve(symmetric_matrix(4, {4, -1, 1, -1, 4, -1, 1, 4, -1, 4})));
-    const std::vector<baseline_source_trace::event> expected{{"plus", 1, 2}, {"minus", 1, 2}};
-    EXPECT_EQ(baseline_source_trace::events, expected);
+    const std::vector<baseline_source_diagnostics::event> expected{{"plus", 1, 2}, {"minus", 1, 2}};
+    EXPECT_EQ(baseline_source_diagnostics::events, expected);
 }
 
 TEST(Danninger1990ModelTest, HasNoFormerDimensionLimit)

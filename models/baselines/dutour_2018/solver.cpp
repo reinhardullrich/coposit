@@ -1,9 +1,9 @@
 #include <coposit/model.hpp>
 #include <coposit/open_node_limit.hpp>
-#include <coposit/progress.hpp>
+#include <coposit/diagnostics.hpp>
 #include <coposit/timeout.hpp>
 
-#include "../source_trace.hpp"
+#include "../source_diagnostics.hpp"
 
 #include <cstddef>
 #include <stdexcept>
@@ -96,31 +96,31 @@ void replace_generator_with_sum(matrix_integer& gram, size_t replaced, size_t ot
  */
 bool test_copositivity(const matrix_integer& matrix, copositivity_mode mode)
 {
-    progress::tracker progress(progress::metric::proof, matrix.rows());
+    diagnostics::tracker diagnostics(diagnostics::metric::proof, matrix.rows());
     std::vector<node> pending;
     pending.reserve(64); // Initial capacity only; this is not a dimension limit.
-    pending.push_back({matrix_integer(matrix), progress.active() ? 1.0L : 0.0L, 0});
+    pending.push_back({matrix_integer(matrix), diagnostics.active() ? 1.0L : 0.0L, 0});
 
     while (!pending.empty()) {
         timeout_checkpoint();
         node current(std::move(pending.back()));
         pending.pop_back();
-        progress.visit(matrix.rows(), current.depth, pending.size() + 1);
+        diagnostics.visit(matrix.rows(), current.depth, pending.size() + 1);
 
         size_t split_i;
         size_t split_j;
         switch (inspect(current.gram, split_i, split_j, mode)) {
             case inspection::reject:
-                COPOSIT_SOURCE_TRACE("reject");
-                progress.finish();
+                COPOSIT_SOURCE_DIAGNOSTICS("reject");
+                diagnostics.finish();
                 return false;
             case inspection::accept:
-                COPOSIT_SOURCE_TRACE("accept");
-                progress.resolved(current.weight);
+                COPOSIT_SOURCE_DIAGNOSTICS("accept");
+                diagnostics.resolved(current.weight);
                 continue;
             case inspection::split:
-                COPOSIT_SOURCE_TRACE("split", split_i, split_j);
-                progress.split();
+                COPOSIT_SOURCE_DIAGNOSTICS("split", split_i, split_j);
+                diagnostics.split();
                 break;
         }
 
@@ -131,13 +131,13 @@ bool test_copositivity(const matrix_integer& matrix, copositivity_mode mode)
         const long double child_weight = current.weight * 0.5L;
 
         // LIFO order visits Dutour Sikirić's first child before its sibling.
-        COPOSIT_SOURCE_TRACE("push-second", split_j, split_i);
+        COPOSIT_SOURCE_DIAGNOSTICS("push-second", split_j, split_i);
         pending.push_back({std::move(second_child), child_weight, current.depth + 1});
-        COPOSIT_SOURCE_TRACE("push-first", split_i, split_j);
+        COPOSIT_SOURCE_DIAGNOSTICS("push-first", split_i, split_j);
         pending.push_back({std::move(current.gram), child_weight, current.depth + 1});
     }
 
-    progress.finish();
+    diagnostics.finish();
     return true;
 }
 

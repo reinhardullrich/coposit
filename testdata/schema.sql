@@ -24,11 +24,9 @@ CREATE TABLE matrices (
     source_id INTEGER REFERENCES sources(source_id),
     family TEXT,
     smoke_set INTEGER NOT NULL DEFAULT 0 CHECK(smoke_set IN (0, 1)),
-    representative_core INTEGER NOT NULL DEFAULT 0 CHECK(representative_core IN (0, 1)),
-    stress_test INTEGER NOT NULL DEFAULT 0 CHECK(stress_test IN (0, 1)),
-    scale_set INTEGER NOT NULL DEFAULT 0 CHECK(scale_set IN (0, 1)),
-    timeout_5s_strict_set INTEGER NOT NULL DEFAULT 0 CHECK(timeout_5s_strict_set IN (0, 1)),
-    n_le_100 INTEGER GENERATED ALWAYS AS (dimension <= 100) VIRTUAL,
+    core_and_stress_test INTEGER NOT NULL DEFAULT 0 CHECK(core_and_stress_test IN (0, 1)),
+    preprocessing_solved INTEGER NOT NULL DEFAULT 0 CHECK(preprocessing_solved IN (0, 1)),
+    n_le_100 INTEGER GENERATED ALWAYS AS (dimension <= 100 AND preprocessing_solved = 0) VIRTUAL,
     additional_source_ids TEXT NOT NULL DEFAULT '[]'
         CHECK(json_valid(additional_source_ids) AND json_type(additional_source_ids) = 'array'),
     references_solved TEXT NOT NULL DEFAULT '[]'
@@ -36,7 +34,7 @@ CREATE TABLE matrices (
     references_unsolved TEXT NOT NULL DEFAULT '[]'
         CHECK(json_valid(references_unsolved) AND json_type(references_unsolved) = 'array'),
     n_gt_100_solved INTEGER GENERATED ALWAYS AS (
-        dimension > 100 AND json_array_length(references_solved) > 0
+        dimension > 100 AND json_array_length(references_solved) > 0 AND preprocessing_solved = 0
     ) VIRTUAL,
     fastest_elapsed_ns INTEGER CHECK(fastest_elapsed_ns IS NULL OR fastest_elapsed_ns >= 0),
     fastest_result_ref TEXT CHECK(CASE

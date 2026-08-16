@@ -215,6 +215,29 @@ inline void observe_positive_certificate(classification_state& state, bool copos
     else if (copositive_passes) state.accept_copositive();
 }
 
+inline void observe_z_matrix_outcome(classification_state& state, z_matrix_precheck::outcome result)
+{
+    classification_state evidence;
+    switch (result) {
+    case z_matrix_precheck::outcome::strictly_copositive:
+        evidence.accept_strict();
+        break;
+    case z_matrix_precheck::outcome::copositive_not_strictly_copositive:
+        evidence.accept_copositive();
+        evidence.reject_strict();
+        break;
+    case z_matrix_precheck::outcome::not_strictly_copositive:
+        evidence.reject_strict();
+        break;
+    case z_matrix_precheck::outcome::not_copositive:
+        evidence.reject_copositive();
+        break;
+    case z_matrix_precheck::outcome::unresolved:
+        return;
+    }
+    state.merge(evidence);
+}
+
 template<query requested>
 void observe_small_face(classification_state& state, const matrix_integer& matrix, const size_t* indices, size_t dimension)
 {
@@ -278,7 +301,7 @@ void observe_small_principal_triples(classification_state& state, const matrix_i
 
     for (size_t center = 0; center < matrix.rows(); ++center) {
         timeout_checkpoint();
-        progress::advance_preprocessing(center + 1, matrix.rows());
+        diagnostics::advance_preprocessing(center + 1, matrix.rows());
         negative_neighbors[center].copy_indices_to(neighbors);
         for (size_t first = 0; first < neighbors.size(); ++first) {
             for (size_t second = first + 1; second < neighbors.size(); ++second) {
@@ -310,7 +333,7 @@ public:
 
         for (size_t iteration = 0; iteration < matrix.rows(); ++iteration) {
             timeout_checkpoint();
-            progress::advance_preprocessing(iteration + 1, matrix.rows());
+            diagnostics::advance_preprocessing(iteration + 1, matrix.rows());
             if (!std::isfinite(value)) break;
 
             const size_t toward = static_cast<size_t>(std::min_element(product_.begin(), product_.end()) - product_.begin());
@@ -431,7 +454,7 @@ classification_state root_checks_scanned(const matrix_integer& matrix, const mat
     const size_t dimension = matrix.rows();
     if (scan.dimension != dimension) throw std::logic_error("matrix scan dimension does not match matrix");
 
-    progress::preprocessing_stage(progress::preprocessing_phase::root_checks, dimension);
+    diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::root_checks, dimension);
     if (dimension <= 3) return classify_small_matrix_state<requested>(matrix);
 
     classification_state state;
@@ -464,14 +487,14 @@ classification_state ordinary_checks_scanned(const matrix_integer& matrix, const
 {
     const size_t dimension = matrix.rows();
     if (scan.dimension != dimension) throw std::logic_error("matrix scan dimension does not match matrix");
-    progress::preprocessing_stage(progress::preprocessing_phase::principal_submatrices, dimension, 0, dimension);
+    diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::principal_submatrices, dimension, 0, dimension);
     if (dimension <= 3) return classify_small_matrix_state<requested>(matrix);
 
     classification_state state;
     observe_small_principal_triples<requested>(state, matrix, scan.negative_neighbors);
     if (state.done<requested>()) return state;
 
-    progress::preprocessing_stage(progress::preprocessing_phase::negative_part_diagonal_dominance, dimension);
+    diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::negative_part_diagonal_dominance, dimension);
     bool all_row_sums_nonnegative = true;
     bool all_row_sums_positive = true;
     for (const integer& row_sum : scan.negative_part_row_sums) {
@@ -481,11 +504,11 @@ classification_state ordinary_checks_scanned(const matrix_integer& matrix, const
     observe_positive_certificate(state, all_row_sums_nonnegative, all_row_sums_positive);
     if (state.done<requested>()) return state;
 
-    progress::preprocessing_stage(progress::preprocessing_phase::all_ones, dimension);
+    diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::all_ones, dimension);
     observe_nonpositive_value(state, scan.all_ones_quadratic_value.sign());
     if (state.done<requested>()) return state;
 
-    progress::preprocessing_stage(progress::preprocessing_phase::frank_wolfe, dimension, 0, dimension);
+    diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::frank_wolfe, dimension, 0, dimension);
     frank_wolfe_witness_search search;
     auto observer = [&](int sign) {
         observe_nonpositive_value(state, sign);
@@ -497,16 +520,13 @@ classification_state ordinary_checks_scanned(const matrix_integer& matrix, const
     z_matrix_precheck::request z_request = z_matrix_precheck::request::combined;
     if constexpr (requested == query::copositive) z_request = z_matrix_precheck::request::copositive;
     else if constexpr (requested == query::strict) z_request = z_matrix_precheck::request::strict;
-    const z_matrix_precheck::outcome z_result = z_matrix_precheck::check(
-        matrix, scan.negative_neighbors, scan.nonpositive_neighbors, scan.is_motzkin_straus_pattern, z_request);
-    if (z_result == z_matrix_precheck::outcome::not_copositive) state.reject_copositive();
-    else if (z_result == z_matrix_precheck::outcome::not_strictly_copositive) state.reject_strict();
+    observe_z_matrix_outcome(state, z_matrix_precheck::check(matrix, scan, z_request));
     if (state.done<requested>()) return state;
 
-    progress::preprocessing_stage(progress::preprocessing_phase::exact_factorization, dimension, 0, dimension);
+    diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::exact_factorization, dimension, 0, dimension);
     matrix_integer factored(matrix);
     fraction_free_ldlt_factorization factorization(dimension);
-    factorization.factorize_inplace(factored, progress::enabled());
+    factorization.factorize_inplace(factored, diagnostics::enabled());
     const bool positive_semidefinite = factorization.is_positive_semidefinite();
     const bool positive_definite = factorization.is_positive_definite();
     observe_positive_certificate(state, positive_semidefinite, positive_definite);
@@ -542,7 +562,7 @@ model::copositivity_classification run_scanned(const matrix_integer& matrix, con
     const bool check_principal_pairs = check_small_principals && selected.principal_submatrices_up_to >= 2;
     const bool check_principal_triples = check_small_principals && selected.principal_submatrices_up_to >= 3;
 
-    progress::preprocessing_stage(progress::preprocessing_phase::cheap_certificates, dimension);
+    diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::cheap_certificates, dimension);
     if (selected.small_dimension && dimension <= 3) {
         return classify_small_matrix<requested>(matrix);
     }
@@ -592,7 +612,7 @@ model::copositivity_classification run_scanned(const matrix_integer& matrix, con
     }
 
     if (check_principal_triples) {
-        progress::preprocessing_stage(progress::preprocessing_phase::principal_submatrices, dimension, 0, dimension);
+        diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::principal_submatrices, dimension, 0, dimension);
         observe_small_principal_triples<requested>(state, matrix, scan.negative_neighbors);
         if (state.done<requested>()) return state.value;
     }
@@ -602,15 +622,12 @@ model::copositivity_classification run_scanned(const matrix_integer& matrix, con
         if constexpr (requested == query::copositive) z_request = z_matrix_precheck::request::copositive;
         else if constexpr (requested == query::strict) z_request = z_matrix_precheck::request::strict;
 
-        const z_matrix_precheck::outcome z_result = z_matrix_precheck::check(
-            matrix, scan.negative_neighbors, scan.nonpositive_neighbors, scan.is_motzkin_straus_pattern, z_request);
-        if (z_result == z_matrix_precheck::outcome::not_copositive) state.reject_copositive();
-        else if (z_result == z_matrix_precheck::outcome::not_strictly_copositive) state.reject_strict();
+        observe_z_matrix_outcome(state, z_matrix_precheck::check(matrix, scan, z_request));
         if (state.done<requested>()) return state.value;
     }
 
     if (selected.frank_wolfe) {
-        progress::preprocessing_stage(progress::preprocessing_phase::frank_wolfe, dimension, 0, dimension);
+        diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::frank_wolfe, dimension, 0, dimension);
         frank_wolfe_witness_search search;
         auto observer = [&](int sign) {
             observe_nonpositive_value(state, sign);
@@ -621,10 +638,10 @@ model::copositivity_classification run_scanned(const matrix_integer& matrix, con
     }
 
     if (selected.positive_definiteness) {
-        progress::preprocessing_stage(progress::preprocessing_phase::exact_factorization, dimension, 0, dimension);
+        diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::exact_factorization, dimension, 0, dimension);
         matrix_integer factored(matrix);
         fraction_free_ldlt_factorization factorization(dimension);
-        factorization.factorize_inplace(factored, progress::enabled());
+        factorization.factorize_inplace(factored, diagnostics::enabled());
         const bool positive_semidefinite = factorization.is_positive_semidefinite();
         const bool positive_definite = factorization.is_positive_definite();
         observe_positive_certificate(state, positive_semidefinite, positive_definite);
@@ -660,7 +677,7 @@ model::copositivity_classification run(const matrix_integer& matrix, const optio
                                        FinalClassifier& final_classifier)
 {
     validate_options(selected);
-    progress::preprocessing_stage(progress::preprocessing_phase::matrix_scan, matrix.rows(), 0, matrix.rows());
+    diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::matrix_scan, matrix.rows(), 0, matrix.rows());
     const matrix_scan_result scan = scan_matrix(matrix, requirements_for<requested>(selected));
     return run_scanned<requested>(matrix, selected, scan, final_classifier);
 }
@@ -675,12 +692,12 @@ template<typename FinalAlgorithm>
 bool check(const matrix_integer& matrix, model::copositivity_mode mode, const options& selected, FinalAlgorithm&& final_algorithm)
 {
     if (!selected.any()) {
-        progress::preprocessing_stage(progress::preprocessing_phase::model_delegation, matrix.rows());
+        diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::model_delegation, matrix.rows());
         return final_algorithm(matrix);
     }
     if (mode == model::copositivity_mode::strictly_copositive) {
         auto classifier = [&](const matrix_integer& part) {
-            progress::preprocessing_stage(progress::preprocessing_phase::model_delegation, part.rows());
+            diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::model_delegation, part.rows());
             const bool result = final_algorithm(part);
             return model::copositivity_classification{result, result};
         };
@@ -688,7 +705,7 @@ bool check(const matrix_integer& matrix, model::copositivity_mode mode, const op
     }
 
     auto classifier = [&](const matrix_integer& part) {
-        progress::preprocessing_stage(progress::preprocessing_phase::model_delegation, part.rows());
+        diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::model_delegation, part.rows());
         const bool result = final_algorithm(part);
         return model::copositivity_classification{result, false};
     };
@@ -701,7 +718,7 @@ model::copositivity_classification classify(const matrix_integer& matrix, const 
                                             FinalClassifier&& final_classifier)
 {
     auto classifier = [&](const matrix_integer& part) {
-        progress::preprocessing_stage(progress::preprocessing_phase::model_delegation, part.rows());
+        diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::model_delegation, part.rows());
         return final_classifier(part);
     };
     if (!selected.any()) return classifier(matrix);

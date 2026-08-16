@@ -12,7 +12,7 @@ import sqlite3
 import time
 
 from pycoposit import Matrix, StatusCode, compute_matrix
-from pycoposit.core import load_native_module
+from pycoposit.core import install_timeout_handler, model_companion_path
 
 
 MODELS = (
@@ -38,8 +38,6 @@ def sha256(path: Path) -> str:
 
 
 def compute_with_timeout(model: str, matrix: Matrix, timeout_seconds: float) -> dict:
-    module = load_native_module(model)
-    module._install_timeout_handler(signal.SIGALRM)
     signal.setitimer(signal.ITIMER_REAL, timeout_seconds)
     try:
         return compute_matrix(model, matrix, "copositive")
@@ -63,8 +61,9 @@ def main() -> int:
     if args.limit is not None and args.limit <= 0:
         parser.error("--limit must be positive")
 
+    install_timeout_handler(signal.SIGALRM)
     for model in MODELS:
-        binary = Path(load_native_module(model).__file__)
+        binary = model_companion_path(model)
         print(f"model={model} sha256={sha256(binary)}", flush=True)
 
     database = sqlite3.connect(args.database)

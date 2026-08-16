@@ -3,6 +3,7 @@
 #include <coposit/matrix_integer.hpp>
 
 #include <stdexcept>
+#include <string_view>
 
 namespace coposit::model {
 
@@ -25,5 +26,8 @@ bool solve(const matrix_integer& matrix, copositivity_mode mode = copositivity_m
 
 /* Implemented only by models that can determine both predicates in one traversal. */
 copositivity_classification classify(const matrix_integer& matrix);
+
+/* Implemented only by models with one required runtime parameter. */
+void configure(std::string_view parameter);
 
 } // namespace coposit::model

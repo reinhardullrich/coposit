@@ -1,9 +1,9 @@
 #include <coposit/model.hpp>
 #include <coposit/open_node_limit.hpp>
-#include <coposit/progress.hpp>
+#include <coposit/diagnostics.hpp>
 #include <coposit/timeout.hpp>
 
-#include "../source_trace.hpp"
+#include "../source_diagnostics.hpp"
 
 #include <array>
 #include <cstddef>
@@ -57,7 +57,7 @@ public:
 
     bool check(const matrix_integer& matrix) const
     {
-        progress::tracker progress(progress::metric::traversal, dimension_);
+        diagnostics::tracker diagnostics(diagnostics::metric::traversal, dimension_);
         simplex current(dimension_);
         current.vertices.set_identity(dimension_);
         for (integer& denominator : current.denominators) denominator.set_one();
@@ -69,28 +69,28 @@ public:
 
         while (true) {
             timeout_checkpoint();
-            progress.visit(dimension_, path.size(), open_nodes);
+            diagnostics.visit(dimension_, path.size(), open_nodes);
             --open_nodes;
 
             size_t slicing_vertex = dimension_;
             switch (inspect(current, slicing_vertex)) {
                 case inspection::rejected:
-                    COPOSIT_SOURCE_TRACE("rejected");
-                    progress.finish();
+                    COPOSIT_SOURCE_DIAGNOSTICS("rejected");
+                    diagnostics.finish();
                     return false;
                 case inspection::certified:
-                    COPOSIT_SOURCE_TRACE("certified");
-                    progress.resolved();
+                    COPOSIT_SOURCE_DIAGNOSTICS("certified");
+                    diagnostics.resolved();
                     while (!path.empty() && path.back().next_child == path.back().cut.size()) path.pop_back();
                     if (path.empty()) {
-                        progress.finish();
+                        diagnostics.finish();
                         return true;
                     }
                     current = make_next_child(path.back());
                     break;
                 case inspection::split:
-                    COPOSIT_SOURCE_TRACE("split", slicing_vertex);
-                    progress.split();
+                    COPOSIT_SOURCE_DIAGNOSTICS("split", slicing_vertex);
+                    diagnostics.split();
                     path.push_back(begin_slice(std::move(current), slicing_vertex));
                     enforce_open_node_limit(open_nodes + path.back().cut.size());
                     open_nodes += path.back().cut.size();

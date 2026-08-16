@@ -4,17 +4,14 @@
 
 # coposit
 
-coposit decides exact copositivity (CP, the non-strict predicate) and strict copositivity (SCP) for nonempty symmetric integer
-matrices. The eight literature baselines and the selected Adaptive Sponsel–COPOMATRIX and Dickinson Final models support both
-selectable modes; other coposit-created variants remain explicitly strict-only except for `dense_bitset_dickinson`, `cbdd_zed_dickinson`,
-`wide_certificate_cbdd_zed_dickinson`, its 75%, 90%, and 95%-remaining copies, `multithreaded_cbdd_zed_dickinson`, and the
-`ceiling_pruned_dickinson`, `sat_zed_dickinson`, `clingo_sat_zed_dickinson`, and circular-only `fracessa_circular` experiments.
-Hadeler 1983, Dickinson 2019, Dickinson Final, Dense-Bitset Dickinson, Danninger 1990, all CBDD-Zed Dickinson variants, SAT-Zed
-Dickinson, Clingo-SAT-Zed Dickinson, Ceiling-Pruned Dickinson, and FracESSA Circular can classify both predicates in one traversal.
+coposit experiments with exact copositivity (CP, the non-strict predicate) and strict copositivity (SCP) algorithms for nonempty
+symmetric integer matrices. Every Dickinson-, Hadeler-, and FracESSA-based model supports selected CP or SCP checks and full CP/SCP
+classification in one traversal. Danninger 1990 also supports combined classification. Other models expose only the modes they
+implement explicitly.
 
 ## Build And Test
 
-Required: CMake 3.18 or newer, C and C++17 compilers, Python 3.11 or newer, FLINT, MPFR, and GMP. CMake fetches pybind11, GoogleTest,
+Required: CMake 3.18 or newer, C and C++17 compilers, Python 3.11 or newer, FLINT, MPFR, and GMP. CMake fetches GoogleTest,
 CaDiCaL 2.2.1 for the SAT experiment, and clingo 5.8.2 with clasp 3.4.1 for the Clingo-SAT experiment.
 
 ```bash
@@ -31,40 +28,34 @@ distances. Values may be exact integers, decimals, scientific notation such as `
 one optional sign before its numerator and an unsigned nonzero integer denominator. Compact matrix text contains no whitespace.
 
 ```bash
-cpp/build/coposit fast strict 2#1,0,1
-cpp/build/coposit safe strict matrix.txt
-cpp/build/coposit fast non-strict '2#1,-1,1'
-cpp/build/coposit safe both '2#1,-1,1'
-cpp/build/coposit safe strict --progress long-running-matrix.mtx
-cpp/build/coposit fast strict --timeout 30 long-running-matrix.mtx
+cpp/build/coposit --model adaptive_sponsel_copomatrix --mode strict '2#1,0,1'
+cpp/build/coposit --model dickinson_2019 --mode both matrix.txt
+cpp/build/coposit --model hadeler_1983 --mode non-strict --preprocessing off '2#1,-1,1'
+cpp/build/coposit --model dickinson_2019 --mode both --diagnostics --timeout 30 long-running-matrix.mtx
 ```
 
 Quotes are optional shell syntax and are not part of the matrix. A positional argument beginning with one or more decimal digits
 immediately followed by `#` is compact matrix text; every other positional argument is a file path. Omitting the argument or passing
 `-` reads standard input.
 
-The public command requires one search method:
+`coposit` always requires an explicit model. For a combined-capable model, omitting `--mode` selects `both`; every other model
+requires `strict` or `non-strict`. There are no `fast`, `safe`, or implicit model aliases during the experimentation phase. Combined
+mode prints named `copositive` and `strictly_copositive` results; a single-predicate command prints `true` or `false`.
 
-| Method | Solver | Completion contract |
-|---|---|---|
-| `fast` | Adaptive Sponsel–COPOMATRIX | Every Boolean is exact, but the bounded traversal may stop unresolved |
-| `safe` | Dickinson Final | Complete finite exact certificate enumeration when allowed to finish |
-
-After the method, the public command requires `strict` or `non-strict`; `safe` additionally accepts `both`. No predicate has a hidden
-default. Combined safe mode performs one Dickinson classification traversal and prints named `copositive` and
-`strictly_copositive` results. The single-predicate commands print `true` or `false`. Both methods use the fused component/pre-check
-pipeline: globally valid checks run during the root scan, negative-entry components are then visited, and Frank–Wolfe plus exact
-definiteness and the negative-only maximal-Z-matrix test are deferred to each component. The Z-matrix test automatically bypasses
-Motzkin–Straus graph matrices. Danninger is then attempted when its best pivot creates at most two children; an unresolved matrix
+The complete preprocessing pipeline is on by default and can be bypassed with `--preprocessing off`. Globally valid checks run
+during the root scan, negative-entry components are then visited, and Frank–Wolfe plus exact
+definiteness and the structural matrix checks are deferred to each component. Exact Motzkin–Straus graph matrices use the
+Open-MCS-derived exact maximum-clique search instead of maximal-Z enumeration. Danninger is then attempted when its best pivot creates at most
+two children; an unresolved matrix
 receives the corresponding COPOMATRIX attempt. Reduction children re-enter the same pipeline up to the internal maximum reduction
-depth of two. Invalid input, a node limit, or another unresolved resource failure exits nonzero instead of returning `false`.
-The public command intentionally has no preprocessing option: both stages are always enabled. Explicit model and preprocessing
-selection belongs to the analysis interfaces described below.
+depth of two. Resolved connected components are discarded; the selected model receives only unresolved component matrices. An
+inconclusive Danninger or COPOMATRIX attempt retains its unchanged parent component rather than its generated children. Invalid input,
+a node limit, or another unresolved resource failure exits nonzero instead of returning `false`.
 
-`--progress` writes one status line to standard error every second without changing the final standard-output result. The named
+`--diagnostics` writes one status line to standard error every second without changing the final standard-output result. The named
 metric identifies the current preprocessing phase and work counter, or exact support-enumeration coverage, certified simplex
 volume, recursive proof coverage, or traversal counters according to the model; it is deliberately not an ETA. See
-[`docs/PROGRESS_REPORTING.md`](docs/PROGRESS_REPORTING.md) for the definitions and overhead boundary.
+[`docs/DIAGNOSTICS_REPORTING.md`](docs/DIAGNOSTICS_REPORTING.md) for the definitions and overhead boundary.
 
 `--timeout SECONDS` applies a hard wall-clock limit to the complete command, including input parsing, connected components,
 pre-checks, and the model. `SECONDS` must be positive and may contain a decimal fraction. At expiry the launcher terminates its
@@ -83,13 +74,13 @@ For a worked, introductory explanation of Dickinson's certificate traversal, see
 [`docs/DICKINSON_ALGORITHM_STEP_BY_STEP.md`](docs/DICKINSON_ALGORITHM_STEP_BY_STEP.md). Each model's authoritative technical
 description remains its local `ALGORITHM.md`.
 
-The selected Adaptive Sponsel–COPOMATRIX and Dickinson Final sources live directly under `models/`. Literature baselines live under
-`models/baselines/<model-name>/`; every other coposit-created model and comparison lives under
-`models/experiments/<model-name>/`. The user-facing `coposit` launcher dispatches `fast` and `safe` to separate one-model companion
-binaries. `coposit-analyze` is the sole C++ analysis command and dispatches an explicit model choice to an internal isolated
-companion. The Python package remains the batch-analysis interface. Model algorithm code is intentionally copied rather than shared
-so variants can diverge and interweave algorithms freely. `dickinson_final` is the selected independent copy of the `dickinson_2019`
-baseline used by the public `safe` method. The `fracessa` model decides
+All models inheriting the Hadeler, Dickinson, or FracESSA support-system approach live under
+`models/hadeler-based/<model-name>/`; [`models/hadeler-based/README.md`](models/hadeler-based/README.md) gives the compact inventory.
+Other literature baselines live under `models/baselines/<model-name>/`, and other coposit-created models and comparisons, including
+Adaptive Sponsel–COPOMATRIX, live under `models/experiments/<model-name>/`. No model directory lives directly under `models/`.
+`coposit` dispatches an explicit model choice to an internal isolated companion. Python uses this same command rather than a second
+native model interface. Model algorithm code is intentionally copied rather than shared so variants can diverge and interweave algorithms freely.
+The `fracessa` model decides
 whether the simplex minimum is positive from exact first-order candidate payoff signs for `-A`, stopping at the first nonnegative
 payoff. Its supports use the shared packed representation with `ceil(n / 64)` machine words, so it has no fixed-width dimension limit.
 The separate `fracessa_circular` experiment assumes a circular-symmetric input and applies FracESSA's direct bracelet generation,
@@ -97,10 +88,10 @@ complete rotation/reflection orbit pruning, and exact affine-multiplier reductio
 
 ## C++ Analysis Interface
 
-Select one comparison model and enable or bypass the complete preprocessing pipeline with `coposit-analyze`:
+Select any baseline or experiment and enable or bypass the complete preprocessing pipeline with `coposit`:
 
 ```bash
-cpp/build/coposit-analyze \
+cpp/build/coposit \
   --model bundfuss_2008 \
   --mode strict \
   --timeout 30 \
@@ -108,16 +99,14 @@ cpp/build/coposit-analyze \
   matrix.mtx
 ```
 
-The fixed pipeline is on by default; its internal stages cannot be switched independently. Every selectable model supports strict
-and non-strict mode; Danninger, Hadeler, and Dickinson Final additionally support one-pass `--mode both`. The inventory comprises
-the literature baselines except superseded Dickinson 2019,
-plus Dickinson Final and Adaptive Sponsel–COPOMATRIX. The complete model list, preprocessing flow, output contract, and
-examples are in [`docs/ANALYSIS_CLI.md`](docs/ANALYSIS_CLI.md).
+The fixed pipeline is on by default; its internal stages cannot be switched independently. Every baseline and experiment is selectable.
+Models expose only their implemented predicate modes; every Dickinson-, Hadeler-, and FracESSA-based model plus Danninger 1990 supports
+one-pass `--mode both` and defaults to it. The complete model list, preprocessing flow, output contract, and examples are in
+[`docs/ANALYSIS_CLI.md`](docs/ANALYSIS_CLI.md).
 
 ## Python Analysis Interface
 
-The source-tree package mirrors FracESSA's thin native, sequential, and bounded multiprocessing paths. The first argument selects a
-maintained algorithm:
+The source-tree package provides thin `coposit`, sequential, and bounded multiprocessing paths. The first argument selects a model:
 
 ```python
 from pycoposit import MPConfig, Matrix, run, run_multiprocessing

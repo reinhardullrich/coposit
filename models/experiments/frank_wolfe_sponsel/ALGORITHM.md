@@ -327,7 +327,7 @@ The Frank–Wolfe addition has no loop and always terminates after one triangula
 It can only remove a node by rejection; otherwise it leaves the Sponsel tree unchanged.
 
 The inherited same-dimensional partition need not expose a boundary zero quickly. coposit stops unresolved if a split would exceed
-50,000 simultaneously unfinished nodes. Timed native modules also observe cooperative timeout checkpoints. Neither condition is
+50,000 simultaneously unfinished nodes. Timed model companions also observe cooperative timeout checkpoints. Neither condition is
 reported as a negative classification.
 
 ## Known Difficult Inputs

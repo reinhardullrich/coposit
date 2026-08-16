@@ -32,6 +32,7 @@ inline void timeout_checkpoint()
 
 #else
 
+inline void reset_timeout() noexcept {}
 inline bool timeout_pending() noexcept { return false; }
 inline void timeout_checkpoint() noexcept {}
 

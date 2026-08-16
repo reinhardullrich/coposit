@@ -9,8 +9,26 @@ runtime.
 - `externalize_large_matrices.py` and `add_matrix_file_hashes_2026_08_11.py` preserve the completed external-file migration.
 - `restore_fastest_result_cache_from_diagnostics_2026_08_15.sql` restores and verifies the compact fastest-result cache after benchmark
   rows moved into the separate diagnostics database.
+- `reset_fastest_result_cache_to_both_2026_08_16.sql` clears and reconstructs those fields using only complete `both`-mode results,
+  independently of preprocessing selection.
 - `reshape_generated_stress_2026_08_15.py` removes the 120 sparse/dense generated stress matrices above order 1,000, their dependent
   diagnostics and external payloads, and inserts 90 matrices at 15 additional irregular dimensions from 43 through 199.
+- `remove_generated_stress_2026_08_16.py` removes the remaining 150 precheck-trivial generated matrices, their 21 external payloads,
+  dependent local diagnostics, and the two now-unused generator sources.
+- `fuse_core_and_stress_test_2026_08_16.sql` replaces the separate Core and Stress flags with their union while excluding the
+  precheck-trivial sparse/dense generated panel, which was still retained in Scale at that point.
+- `retire_scale_and_timeout_sets_2026_08_16.sql` removes the obsolete Scale and Timeout 5s Strict columns after guarding their final
+  memberships and corpus size.
+- `add_preprocessing_solved_2026_08_16.sql` marks all 2,115 retained matrices completely classified by the new maintained depth-2
+  workflow in the five-second corpus run or its sixty-second continuation; partial facts are excluded.
+- `exclude_preprocessing_solved_from_benchmarks_2026_08_16.py` removes those rows from both curated benchmark sets, deterministically
+  refills Smoke to 49 and Core and Stress to 512, and changes both generated set definitions to exclude preprocessing-complete rows.
+- `refresh_benchmark_sets_after_motzkin_straus_2026_08_16.sql` removes the 21 additional Smoke and 226 additional Core members solved
+  by the current preprocessing pipeline, then records the exact unresolved replacements that restore the curated 49- and 512-row
+  sizes. N ≤ 100 remains comprehensive and therefore falls naturally to 754 rows.
+- `replace_hildebrand_circulants_2026_08_16.py` replaces the 17 order-15–25 Hildebrand points by one diversified low-digit exact
+  representative per order, deletes their obsolete local diagnostics and four payloads, and preserves the 512-row Core set with six
+  same-order boundary replacements.
 - `add_literature_sources_2026_08_14.py` preserves the initial normalized 78-source migration and 901 literature links.
 - `complete_source_links_2026_08_14.py` adds collection, repository, and local-generator sources and completes all current matrix
   source links.

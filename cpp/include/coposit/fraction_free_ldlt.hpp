@@ -19,7 +19,7 @@
 #include <vector>
 
 #include <coposit/matrix_integer.hpp>
-#include <coposit/progress.hpp>
+#include <coposit/diagnostics.hpp>
 #include <coposit/timeout.hpp>
 
 namespace coposit {
@@ -56,8 +56,8 @@ public:
      * exact signed determinant and rank are available after either result; a singular factorization must not be passed to
      * solve_inplace().
      */
-    int factorize_inplace(matrix_integer& system, bool report_preprocessing_progress = false,
-                          progress::tracker* model_progress = nullptr)
+    int factorize_inplace(matrix_integer& system, bool report_preprocessing_diagnostics = false,
+                          diagnostics::tracker* model_diagnostics = nullptr)
     {
         assert(system.rows() == system.cols());
 
@@ -89,11 +89,14 @@ public:
 
         for (size_t pivot_position = 0; pivot_position < dimension; ++pivot_position) {
             timeout_checkpoint();
-            if (report_preprocessing_progress) progress::advance_preprocessing(pivot_position + 1, dimension);
-            if (model_progress != nullptr) model_progress->adaptive_work(pivot_position + 1, dimension);
+            if (report_preprocessing_diagnostics) diagnostics::advance_preprocessing(pivot_position + 1, dimension);
+            if (model_diagnostics != nullptr) model_diagnostics->adaptive_work(pivot_position + 1, dimension);
             // Failure means that every diagonal and off-diagonal entry in the active symmetric block is zero. The completed
             // pivots therefore give the exact rank, not merely a lower bound.
-            if (!select_nonzero_diagonal(raw_system, pivot_position, dimension, immediate)) return 0;
+            if (!select_nonzero_diagonal(raw_system, pivot_position, dimension, immediate)) {
+                factorization_is_immediate_ = immediate;
+                return 0;
+            }
             rank_ = pivot_position + 1;
             fmpz* const pivot = entry(raw_system, pivot_position, pivot_position);
 
@@ -247,59 +250,7 @@ public:
         fmpz_abs(denominator.native_handle(), determinant_);
         if (dimension_ == 0) return;
 
-        bool immediate = factorization_is_immediate_ &&
-                         all_values_are_immediate(raw_right_hand_sides, dimension_, right_hand_side_count);
-        bool previous_is_one = true;
-        ulong unsigned_denominator = 0;
-        ulong denominator_inverse = 0;
-        slong normalization_shift = 0;
-        bool denominator_is_negative = false;
-
-        // Later congruences also transform completed factor columns. The retained triangle therefore uses the final
-        // coordinate system, so transform every new right-hand side completely before replaying Bareiss elimination.
-        for (size_t index = 0; index < operation_count_; ++index) {
-            apply_operation_to_right_hand_sides(raw_right_hand_sides, right_hand_side_count,
-                                                coordinate_operations_[index], immediate);
-        }
-
-        for (size_t pivot_position = 0; pivot_position < dimension_; ++pivot_position) {
-            timeout_checkpoint();
-            if (pivot_position + 1 == dimension_) break;
-
-            const fmpz* const pivot = entry(raw_system, pivot_position, pivot_position);
-            bool next_step_is_immediate = immediate;
-            if (immediate) {
-                for (size_t row = pivot_position + 1; row < dimension_; ++row) {
-                    for (size_t column = 0; column < right_hand_side_count; ++column) {
-                        next_step_is_immediate &= update_immediate(
-                            rhs_entry(raw_right_hand_sides, row, column), pivot, entry(raw_system, row, pivot_position),
-                            rhs_entry(raw_right_hand_sides, pivot_position, column), pivot_position > 0,
-                            previous_is_one, previous_pivot_, unsigned_denominator, denominator_inverse,
-                            normalization_shift, denominator_is_negative);
-                    }
-                }
-            } else {
-                for (size_t row = pivot_position + 1; row < dimension_; ++row) {
-                    for (size_t column = 0; column < right_hand_side_count; ++column) {
-                        fmpz* const result = rhs_entry(raw_right_hand_sides, row, column);
-                        fmpz_mul(result, result, pivot);
-                        fmpz_submul(result, entry(raw_system, row, pivot_position),
-                                    rhs_entry(raw_right_hand_sides, pivot_position, column));
-                        if (pivot_position > 0 && !previous_is_one) fmpz_divexact(result, result, previous_pivot_);
-                    }
-                }
-            }
-            fmpz_set(previous_pivot_, pivot);
-            previous_is_one = fmpz_is_one(previous_pivot_);
-            immediate = next_step_is_immediate;
-
-            if (immediate) {
-                unsigned_denominator = FLINT_ABS(static_cast<slong>(*previous_pivot_));
-                denominator_is_negative = static_cast<slong>(*previous_pivot_) < 0;
-                normalization_shift = flint_clz(unsigned_denominator);
-                denominator_inverse = n_preinvert_limb_prenorm(unsigned_denominator << normalization_shift);
-            }
-        }
+        eliminate_right_hand_sides(raw_right_hand_sides, right_hand_side_count, raw_system, dimension_);
         for (size_t column = 0; column < right_hand_side_count; ++column) {
             timeout_checkpoint();
             for (size_t row = dimension_; row-- > 0; ) {
@@ -314,6 +265,51 @@ public:
         }
 
         restore_original_coordinates(raw_right_hand_sides, right_hand_side_count);
+    }
+
+    /*
+     * Solve a retained singular system when the supplied right-hand sides lie in its range. Returns false for an
+     * inconsistent system. On success, right_hand_sides is overwritten by one integer numerator solution with every free
+     * transformed coordinate set to zero, and denominator is positive. The right-hand sides are unspecified after false.
+     */
+    bool solve_consistent_inplace(matrix_integer& right_hand_sides, integer& denominator,
+                                  const matrix_integer& factored_system) const
+    {
+        assert(!nonsingular_);
+        assert(rank_ < dimension_);
+        assert(factored_system.rows() == dimension_);
+        assert(factored_system.cols() == dimension_);
+        assert(right_hand_sides.rows() == dimension_);
+
+        fmpz_mat_struct* const raw_right_hand_sides = right_hand_sides.native_handle();
+        const fmpz_mat_struct* const raw_system = factored_system.native_handle();
+        const size_t right_hand_side_count = right_hand_sides.cols();
+
+        if (rank_ == 0) denominator.set_one();
+        else fmpz_abs(denominator.native_handle(), entry(raw_system, rank_ - 1, rank_ - 1));
+
+        eliminate_right_hand_sides(raw_right_hand_sides, right_hand_side_count, raw_system, rank_);
+        for (size_t row = rank_; row < dimension_; ++row) {
+            for (size_t column = 0; column < right_hand_side_count; ++column) {
+                if (!fmpz_is_zero(rhs_entry(raw_right_hand_sides, row, column))) return false;
+            }
+        }
+
+        for (size_t column = 0; column < right_hand_side_count; ++column) {
+            timeout_checkpoint();
+            for (size_t row = rank_; row-- > 0; ) {
+                fmpz* const numerator = rhs_entry(raw_right_hand_sides, row, column);
+                fmpz_mul(numerator, denominator.native_handle(), numerator);
+                for (size_t solved_row = row + 1; solved_row < rank_; ++solved_row) {
+                    fmpz_submul(numerator, entry(raw_system, solved_row, row),
+                                rhs_entry(raw_right_hand_sides, solved_row, column));
+                }
+                fmpz_divexact(numerator, numerator, entry(raw_system, row, row));
+            }
+        }
+
+        restore_original_coordinates(raw_right_hand_sides, right_hand_side_count);
+        return true;
     }
 
 private:
@@ -506,6 +502,65 @@ private:
                 fmpz* const target = rhs_entry(right_hand_sides, operation.target, column);
                 fmpz_add(target, target, rhs_entry(right_hand_sides, operation.source, column));
                 if (immediate && COEFF_IS_MPZ(*target)) immediate = false;
+            }
+        }
+    }
+
+    void eliminate_right_hand_sides(fmpz_mat_struct* right_hand_sides, size_t right_hand_side_count,
+                                    const fmpz_mat_struct* factored_system, size_t pivot_count) const
+    {
+        bool immediate = factorization_is_immediate_ &&
+                         all_values_are_immediate(right_hand_sides, dimension_, right_hand_side_count);
+        bool previous_is_one = true;
+        ulong unsigned_denominator = 0;
+        ulong denominator_inverse = 0;
+        slong normalization_shift = 0;
+        bool denominator_is_negative = false;
+
+        // Later congruences also transform completed factor columns. The retained triangle therefore uses the final
+        // coordinate system, so transform every new right-hand side completely before replaying Bareiss elimination.
+        for (size_t index = 0; index < operation_count_; ++index) {
+            apply_operation_to_right_hand_sides(right_hand_sides, right_hand_side_count, coordinate_operations_[index],
+                                                immediate);
+        }
+
+        for (size_t pivot_position = 0; pivot_position < pivot_count; ++pivot_position) {
+            timeout_checkpoint();
+            if (pivot_position + 1 == dimension_) break;
+
+            const fmpz* const pivot = entry(factored_system, pivot_position, pivot_position);
+            bool next_step_is_immediate = immediate;
+            if (immediate) {
+                for (size_t row = pivot_position + 1; row < dimension_; ++row) {
+                    for (size_t column = 0; column < right_hand_side_count; ++column) {
+                        next_step_is_immediate &= update_immediate(
+                            rhs_entry(right_hand_sides, row, column), pivot,
+                            entry(factored_system, row, pivot_position),
+                            rhs_entry(right_hand_sides, pivot_position, column), pivot_position > 0,
+                            previous_is_one, previous_pivot_, unsigned_denominator, denominator_inverse,
+                            normalization_shift, denominator_is_negative);
+                    }
+                }
+            } else {
+                for (size_t row = pivot_position + 1; row < dimension_; ++row) {
+                    for (size_t column = 0; column < right_hand_side_count; ++column) {
+                        fmpz* const result = rhs_entry(right_hand_sides, row, column);
+                        fmpz_mul(result, result, pivot);
+                        fmpz_submul(result, entry(factored_system, row, pivot_position),
+                                    rhs_entry(right_hand_sides, pivot_position, column));
+                        if (pivot_position > 0 && !previous_is_one) fmpz_divexact(result, result, previous_pivot_);
+                    }
+                }
+            }
+            fmpz_set(previous_pivot_, pivot);
+            previous_is_one = fmpz_is_one(previous_pivot_);
+            immediate = next_step_is_immediate;
+
+            if (immediate) {
+                unsigned_denominator = FLINT_ABS(static_cast<slong>(*previous_pivot_));
+                denominator_is_negative = static_cast<slong>(*previous_pivot_) < 0;
+                normalization_shift = flint_clz(unsigned_denominator);
+                denominator_inverse = n_preinvert_limb_prenorm(unsigned_denominator << normalization_shift);
             }
         }
     }

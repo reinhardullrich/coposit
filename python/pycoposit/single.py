@@ -5,30 +5,42 @@ from __future__ import annotations
 from collections.abc import Iterable, Iterator
 
 from .core import compute_matrix
-from .types import Algorithm, CopositivityMode, Matrix, Preprocessing, _validate_algorithm, _validate_mode, _validate_preprocessing
+from .types import (
+    Algorithm,
+    CopositivityMode,
+    Matrix,
+    Preprocessing,
+    _resolve_mode,
+    _resolve_model_parameter,
+    _validate_algorithm,
+    _validate_preprocessing,
+)
 
 
 def _run_matrices(
-    algorithm: Algorithm, matrices: Iterable[Matrix], mode: CopositivityMode, preprocessing: Preprocessing, progress: bool
+    algorithm: Algorithm, matrices: Iterable[Matrix], mode: CopositivityMode, preprocessing: Preprocessing, diagnostics: bool,
+    model_parameter: str | None,
 ) -> Iterator[dict]:
     for matrix in matrices:
-        yield compute_matrix(algorithm, matrix, mode, preprocessing, progress)
+        yield compute_matrix(algorithm, matrix, mode, preprocessing, diagnostics, model_parameter=model_parameter)
 
 
 def run(
     algorithm: Algorithm,
     matrices: Matrix | Iterable[Matrix],
-    mode: CopositivityMode = "strictly_copositive",
+    mode: CopositivityMode | None = None,
     preprocessing: Preprocessing = "both",
-    progress: bool = False,
+    diagnostics: bool = False,
+    model_parameter: str | None = None,
 ) -> dict | Iterator[dict]:
     """Run one matrix immediately or lazily yield an iterable in input order."""
 
     _validate_algorithm(algorithm)
-    _validate_mode(mode)
+    mode = _resolve_mode(algorithm, mode)
+    model_parameter = _resolve_model_parameter(algorithm, model_parameter)
     _validate_preprocessing(preprocessing)
-    if type(progress) is not bool:
-        raise TypeError("progress must be a bool")
+    if type(diagnostics) is not bool:
+        raise TypeError("diagnostics must be a bool")
     if isinstance(matrices, Matrix):
-        return compute_matrix(algorithm, matrices, mode, preprocessing, progress)
-    return _run_matrices(algorithm, matrices, mode, preprocessing, progress)
+        return compute_matrix(algorithm, matrices, mode, preprocessing, diagnostics, model_parameter=model_parameter)
+    return _run_matrices(algorithm, matrices, mode, preprocessing, diagnostics, model_parameter)

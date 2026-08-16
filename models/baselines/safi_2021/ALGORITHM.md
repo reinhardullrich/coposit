@@ -245,7 +245,7 @@ choices: first endpoint of the first negative Gram entry, ascending cut indices,
 
 As with other simplex refinements, a boundary matrix may generate an unending refinement without exposing its zero direction.
 coposit allows at most 50,000 open nodes. Before a slice creates its unfinished children, it returns the distinct unresolved
-`node_limit` outcome if the logical unfinished count, including unmaterialized siblings, would exceed that count. A timed native-module run may also
+`node_limit` outcome if the logical unfinished count, including unmaterialized siblings, would exceed that count. A timed model-companion run may also
 observe the shared signal flag at simplex and matrix-row boundaries and return a distinct timeout outcome. Neither resource result
 is `false`.
 

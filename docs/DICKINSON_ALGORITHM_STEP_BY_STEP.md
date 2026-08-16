@@ -3,7 +3,7 @@
 This is a slow introduction to the maintained `dickinson_2019` model. It assumes only first-semester linear algebra: vectors,
 matrices, matrix multiplication, and solving a linear system.
 
-The authoritative model description is [`models/baselines/dickinson_2019/ALGORITHM.md`](../models/baselines/dickinson_2019/ALGORITHM.md). This document
+The authoritative model description is [`models/hadeler-based/dickinson_2019/ALGORITHM.md`](../models/hadeler-based/dickinson_2019/ALGORITHM.md). This document
 explains the same algorithm more gently. Dickinson's paper is:
 
 - Peter J. C. Dickinson, “A New Certificate for Copositivity,” *Linear Algebra and its Applications* 569, 15–37 (2019),

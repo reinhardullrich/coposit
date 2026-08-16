@@ -1,8 +1,8 @@
 #include <coposit/model.hpp>
-#include <coposit/progress.hpp>
+#include <coposit/diagnostics.hpp>
 #include <coposit/timeout.hpp>
 
-#include "../source_trace.hpp"
+#include "../source_diagnostics.hpp"
 
 #include <array>
 #include <cstddef>
@@ -29,23 +29,23 @@ struct sparse_ray {
 class copomatrix_checker {
 public:
     copomatrix_checker(copositivity_mode mode, size_t dimension)
-        : mode_(mode), progress_(progress::metric::proof, dimension)
+        : mode_(mode), diagnostics_(diagnostics::metric::proof, dimension)
     {
     }
 
-    ~copomatrix_checker() { progress_.finish(); }
+    ~copomatrix_checker() { diagnostics_.finish(); }
 
     bool check(const matrix_integer& matrix, long double weight = 1.0L, size_t depth = 0)
     {
         timeout_checkpoint();
         const size_t dimension = matrix.rows();
-        progress_.visit(dimension, depth, depth + 1);
-        COPOSIT_SOURCE_TRACE("diagonal-scan", dimension);
+        diagnostics_.visit(dimension, depth, depth + 1);
+        COPOSIT_SOURCE_DIAGNOSTICS("diagonal-scan", dimension);
         for (size_t i = 0; i < dimension; ++i) {
             if (diagonal_fails(matrix(i, i))) return false;
         }
         if (dimension == 1) {
-            progress_.resolved(weight);
+            diagnostics_.resolved(weight);
             return true;
         }
 
@@ -70,9 +70,9 @@ public:
             }
         }
 
-        progress_.split();
+        diagnostics_.split();
         long double child_weight = 0.0L;
-        if (progress_.active()) {
+        if (diagnostics_.active()) {
             integer child_count;
             if (pivot.is_zero() || negative.empty()) {
                 child_count.set_one();
@@ -87,13 +87,13 @@ public:
         }
 
         matrix_integer block = make_principal_block(matrix);
-        COPOSIT_SOURCE_TRACE("principal", child_dimension);
+        COPOSIT_SOURCE_DIAGNOSTICS("principal", child_dimension);
         if (!check_projection(block, child_weight, depth + 1)) return false;
         if (pivot.is_zero()) return negative.empty();
         if (negative.empty()) return true;
 
         matrix_integer schur = make_schur_block(matrix, block, p, pivot);
-        COPOSIT_SOURCE_TRACE("schur", child_dimension);
+        COPOSIT_SOURCE_DIAGNOSTICS("schur", child_dimension);
         if (positive.empty()) return check_projection(schur, child_weight, depth + 1);
 
         std::vector<sparse_ray> rays;
@@ -120,7 +120,7 @@ private:
                 if (matrix(i, j).sign() < 0) return check(matrix, weight, depth);
             }
         }
-        progress_.resolved(weight);
+        diagnostics_.resolved(weight);
         return true;
     }
 
@@ -236,7 +236,7 @@ private:
     }
 
     const copositivity_mode mode_;
-    progress::tracker progress_;
+    diagnostics::tracker diagnostics_;
 };
 
 } // namespace

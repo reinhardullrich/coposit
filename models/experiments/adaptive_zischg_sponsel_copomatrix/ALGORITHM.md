@@ -16,7 +16,7 @@ This model combines three exact ideas:
 - **Zischg–Bomze decomposition** splits a projected matrix into the connected components of its negative-entry graph. Cross-component
   entries are nonnegative, so strict copositivity is exactly the conjunction of the smaller component problems.
 
-COPOMATRIX guarantees progress in dimension, but a pivot row with many positive and negative entries can create a combinatorial
+COPOMATRIX guarantees a dimension decrease, but a pivot row with many positive and negative entries can create a combinatorial
 number of children. Sponsel normally creates only two children and may certify a complete simplex without splitting, but repeated
 same-order subdivision has no useful finite bound on boundary inputs.
 
@@ -528,7 +528,7 @@ After 10,000 Sponsel splits, pivot zero is forced even when its mixed-sign row c
 1+\binom{s+t-1}{s}
 \]
 
-children. The cutoff guarantees dimensional progress but may replace a deep binary refinement with a very broad projection.
+children. The cutoff guarantees dimensional diagnostics but may replace a deep binary refinement with a very broad projection.
 
 ### Strict matrices outside the `H` certificate
 

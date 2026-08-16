@@ -173,7 +173,7 @@ children, and traversal are unchanged from the pinned source.
 
 The cone dimension does not decrease. Runtime depends on how many cones the repeated subdivisions create. coposit allows at most
 50,000 open nodes: before a split, the current node is replaced by its two unfinished children, and the run stops with the distinct
-unresolved `node_limit` outcome if that would create 50,001 open nodes. A timed native-module run may likewise observe the shared
+unresolved `node_limit` outcome if that would create 50,001 open nodes. A timed model-companion run may likewise observe the shared
 signal flag at node and matrix-row boundaries and return a distinct timeout outcome. Neither resource outcome is reported as
 `false`; neither changes a mathematical test or traversal decision.
 
@@ -181,7 +181,7 @@ signal flag at node and matrix-row boundaries and return a distinct timeout outc
 
 The central weakness is that every split keeps the same dimension. A matrix can have many negative generator pairs that are all too
 weak to trigger the two-generator rejection. The Gram matrix is then not entrywise nonnegative, but no split makes permanent
-dimension-reducing progress. The algorithm can build a large tree of closely related cones.
+dimension-reducing diagnostics. The algorithm can build a large tree of closely related cones.
 
 Sparse positive-definite chain matrices are a concrete example. Corpus matrix **9656** is
 
@@ -209,6 +209,6 @@ generator coordinates that the source decisions never inspect and changes no gen
 The baseline deliberately contains no low-dimensional shortcut, SNC slice, Danninger reduction, Hadeler test, graph decomposition,
 or coposit-created hybrid rule.
 
-Timeout checkpoints are enabled only in timed native-module builds. Standalone `coposit` and model-test builds compile the same calls
+Timeout checkpoints are enabled only in timed model-companion builds. Standalone `coposit` and model-test builds compile the same calls
 to no-ops, so the baseline has no timer thread, clock read, or signal handler. The fixed 50,000-open-node guard applies to every
 build and is a coposit resource boundary, not part of the pinned source algorithm.

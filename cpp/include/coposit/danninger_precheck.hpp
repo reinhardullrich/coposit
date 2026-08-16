@@ -25,7 +25,7 @@ inline pivot_choice minimum_small_pivot(const matrix_integer& matrix, const matr
     pivot_choice best{dimension, 3};
     for (size_t pivot = 0; pivot < dimension; ++pivot) {
         timeout_checkpoint();
-        progress::advance_preprocessing(pivot + 1, dimension);
+        diagnostics::advance_preprocessing(pivot + 1, dimension);
         const size_t positive = scan.positive_off_diagonal_counts[pivot];
         const size_t negative = scan.negative_off_diagonal_counts[pivot];
         size_t children;
@@ -46,7 +46,7 @@ template<typename ChildPreprocessor>
 outcome check(const matrix_integer& matrix, const matrix_scan_result& scan, model::copositivity_mode mode,
               ChildPreprocessor&& preprocess_child)
 {
-    progress::preprocessing_stage(progress::preprocessing_phase::danninger, matrix.rows(), 0, matrix.rows());
+    diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::danninger, matrix.rows(), 0, matrix.rows());
     const int required_sign = mode == model::copositivity_mode::strictly_copositive ? 1 : 0;
     for (size_t index = 0; index < matrix.rows(); ++index) {
         timeout_checkpoint();

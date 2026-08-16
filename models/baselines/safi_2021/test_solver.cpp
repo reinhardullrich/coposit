@@ -1,6 +1,6 @@
 #include <coposit/model.hpp>
 
-#include "../source_trace.hpp"
+#include "../source_diagnostics.hpp"
 
 #include <gtest/gtest.h>
 
@@ -40,10 +40,10 @@ TEST(Safi2021ModelTest, ExecutesPublishedSlicingBranches)
 
 TEST(Safi2021ModelTest, SourceTracePreservesSliceBeforeChildCertification)
 {
-    baseline_source_trace::clear();
+    baseline_source_diagnostics::clear();
     EXPECT_TRUE(model::solve(symmetric_matrix(2, {2, -1, 2})));
-    const std::vector<baseline_source_trace::event> expected{{"split"}, {"certified"}};
-    EXPECT_EQ(baseline_source_trace::events, expected);
+    const std::vector<baseline_source_diagnostics::event> expected{{"split"}, {"certified"}};
+    EXPECT_EQ(baseline_source_diagnostics::events, expected);
 }
 
 TEST(Safi2021ModelTest, HasNoFormerDimensionLimit)

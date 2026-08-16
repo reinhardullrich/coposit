@@ -4,7 +4,6 @@ import json
 import os
 from pathlib import Path
 import re
-import signal
 import sqlite3
 import subprocess
 import sys
@@ -23,9 +22,10 @@ from pycoposit import (
     run,
     run_multiprocessing,
 )
-from pycoposit.core import load_native_module, matrix_parser_source
+from pycoposit.core import coposit_path, matrix_parser_source, model_companion_path
 from pycoposit.mp import _max_pending_matrices
-from pycoposit.types import _validate_algorithm, _validate_mode, _validate_preprocessing
+from pycoposit.types import _resolve_model_parameter, _validate_algorithm, _validate_mode, _validate_preprocessing
+from run_results import _resolve_mode, _result_model_id
 
 
 COPOSITIVE_BASELINES = (
@@ -38,21 +38,10 @@ COPOSITIVE_BASELINES = (
     "bundfuss_2008",
     "sponsel_2012",
 )
-COPOSITIVE_MODE_ALGORITHMS = COPOSITIVE_BASELINES + (
+COPOSITIVE_MODE_ALGORITHMS = tuple(dict.fromkeys(COPOSITIVE_BASELINES + (
     "adaptive_sponsel_copomatrix",
-    "dickinson_final",
-    "dense_bitset_dickinson",
-    "fracessa_circular",
-    "cbdd_zed_dickinson",
-    "wide_certificate_cbdd_zed_dickinson",
-    "wide_75_certificate_cbdd_zed_dickinson",
-    "wide_90_certificate_cbdd_zed_dickinson",
-    "wide_95_certificate_cbdd_zed_dickinson",
-    "multithreaded_cbdd_zed_dickinson",
-    "ceiling_pruned_dickinson",
-    "sat_zed_dickinson",
-    "clingo_sat_zed_dickinson",
-)
+    *COMBINED_CLASSIFICATION_ALGORITHMS,
+)))
 STRICT_ONLY_ALGORITHMS = tuple(algorithm for algorithm in ALGORITHMS if algorithm not in COPOSITIVE_MODE_ALGORITHMS)
 
 
@@ -77,15 +66,15 @@ class WrapperTests(unittest.TestCase):
                 """INSERT INTO results (
                        matrix_id, model_id, mode, preprocessing, binary_sha256, status, elapsed_ns,
                        timeout_ns, recorded_at, diagnostics, certificate_joint_distribution
-                   ) VALUES (1, 'cbdd_zed_dickinson', 'strictly_copositive', 'none', ?, 'timeout',
-                             60000000000, 60000000000, 'now', 'last progress line', '[[2,28,492]]')""",
+                   ) VALUES (1, 'cbdd_dickinson', 'strictly_copositive', 'none', ?, 'timeout',
+                             60000000000, 60000000000, 'now', 'last diagnostics line', '[[2,28,492]]')""",
                 ("1" * 64,),
             )
             self.assertEqual(
                 diagnostics.execute(
                     "SELECT elapsed_ns, diagnostics, certificate_joint_distribution FROM results"
                 ).fetchone(),
-                (60_000_000_000, "last progress line", "[[2,28,492]]"),
+                (60_000_000_000, "last diagnostics line", "[[2,28,492]]"),
             )
 
     def test_schema_keeps_strict_and_copositive_truth_consistent(self):
@@ -127,26 +116,20 @@ class WrapperTests(unittest.TestCase):
         self.assertIn("hadeler_1983", ALGORITHMS)
         self.assertEqual(COPOSITIVITY_MODES, ("copositive", "strictly_copositive", "both"))
         self.assertEqual(PREPROCESSING_MODES, ("none", "both"))
-        self.assertEqual(
-            COMBINED_CLASSIFICATION_ALGORITHMS,
-            (
-                "danninger_1990",
-                "hadeler_1983",
-                "dickinson_2019",
-                "dickinson_final",
-                "dense_bitset_dickinson",
-                "cbdd_zed_dickinson",
-                "wide_certificate_cbdd_zed_dickinson",
-                "wide_75_certificate_cbdd_zed_dickinson",
-                "wide_90_certificate_cbdd_zed_dickinson",
-                "wide_95_certificate_cbdd_zed_dickinson",
-                "multithreaded_cbdd_zed_dickinson",
-                "ceiling_pruned_dickinson",
-                "sat_zed_dickinson",
-                "clingo_sat_zed_dickinson",
-                "fracessa_circular",
-            ),
+        expected_combined = tuple(
+            algorithm
+            for algorithm in ALGORITHMS
+            if algorithm == "danninger_1990"
+            or algorithm == "dickinson_2019"
+            or algorithm.endswith("_dickinson")
+            or algorithm == "cbdd_dickinson_improved_1"
+            or algorithm == "hadeler_1983"
+            or algorithm.endswith("_hadeler")
+            or algorithm == "fracessa"
+            or algorithm.startswith("fracessa_")
+            or algorithm.endswith("_fracessa")
         )
+        self.assertEqual(COMBINED_CLASSIFICATION_ALGORITHMS, expected_combined)
         self.assertEqual(StatusCode.NODE_LIMIT, 6)
         with self.assertRaises(TypeError):
             _validate_algorithm(1)
@@ -163,9 +146,9 @@ class WrapperTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             Matrix("1#1", matrix_id=1 << 63)
         with self.assertRaises(TypeError):
-            run("hadeler_1983", Matrix("1#1"), progress="yes")
+            run("hadeler_1983", Matrix("1#1"), diagnostics="yes")
         with self.assertRaises(TypeError):
-            compute_matrix("cbdd_zed_dickinson", Matrix("1#1"), collect_certificate_joint_distribution="yes")
+            compute_matrix("cbdd_dickinson", Matrix("1#1"), collect_certificate_joint_distribution="yes")
         self.assertIsNone(Matrix("1#1").matrix_id)
         unlabeled_result = run("hadeler_1983", Matrix("1#1"))
         self.assertEqual(unlabeled_result["status"], StatusCode.OK)
@@ -174,17 +157,53 @@ class WrapperTests(unittest.TestCase):
             MPConfig(workers=0)
         self.assertEqual(_max_pending_matrices(MPConfig(workers=2, prefetch_per_worker=3, queue_maxsize=4)), 4)
 
-    def test_serial_dickinson_experiments_collect_sparse_certificate_joint_distributions(self):
-        for model in ("cbdd_zed_dickinson", "czdd_zed_dickinson", "sat_zed_dickinson", "clingo_sat_zed_dickinson"):
+    def test_reference_runner_defaults_only_to_full_classification(self):
+        for algorithm in COMBINED_CLASSIFICATION_ALGORITHMS:
+            self.assertEqual(_resolve_mode(algorithm, None), "both")
+        self.assertEqual(_resolve_mode("bundfuss_2008", "strictly_copositive"), "strictly_copositive")
+        with self.assertRaisesRegex(ValueError, "run it once with --mode copositive"):
+            _resolve_mode("bundfuss_2008", None)
+
+    def test_wide_certificate_runtime_percentage(self):
+        self.assertNotIn("wide_75_certificate_cbdd_dickinson", ALGORITHMS)
+        for model in ("wide_certificate_cbdd_dickinson", "wide_certificate_sat_dickinson"):
             with self.subTest(model=model):
+                with self.assertRaises(ValueError):
+                    _resolve_model_parameter(model, None)
+                self.assertEqual(_resolve_model_parameter(model, "95"), "95")
+                self.assertEqual(_result_model_id(model, "95"), f"{model}@95")
+                with self.assertRaises(ValueError):
+                    _resolve_model_parameter(model, "101")
+
+                result = run(model, Matrix("1#1"), model_parameter="75")
+                self.assertEqual(result["status"], StatusCode.OK)
+                self.assertEqual(result["model_parameter"], "75")
+                self.assertEqual((result["is_copositive"], result["is_strictly_copositive"]), (True, True))
+        with self.assertRaises(ValueError):
+            _resolve_model_parameter("hadeler_1983", "75")
+
+    def test_serial_dickinson_experiments_collect_sparse_certificate_joint_distributions(self):
+        for model in (
+            "cbdd_dickinson",
+            "upper_endpoint_cbdd_dickinson",
+            "czdd_dickinson",
+            "sat_dickinson",
+            "wide_certificate_sat_dickinson",
+            "clingo_sat_dickinson",
+        ):
+            with self.subTest(model=model):
+                parameter = "50" if model == "wide_certificate_sat_dickinson" else None
                 result = compute_matrix(
                     model,
                     Matrix("2#1,0,1"),
                     preprocessing="none",
                     collect_certificate_joint_distribution=True,
+                    model_parameter=parameter,
                 )
                 self.assertEqual(result["status"], StatusCode.OK)
-                self.assertEqual(result["certificate_joint_distribution"], [(1, 1, 2, 2)])
+                expected = [[1, 1, 2, 2]]
+                if model == "upper_endpoint_cbdd_dickinson": expected.append([2, 0, 2, 1])
+                self.assertEqual(result["certificate_joint_distribution"], expected)
 
     def test_matrix_market_file_path(self):
         with tempfile.TemporaryDirectory() as temporary_directory:
@@ -259,25 +278,45 @@ class WrapperTests(unittest.TestCase):
         self.assertEqual(result["status"], StatusCode.PARSE_ERROR)
         self.assertIn("must not contain whitespace", result["error_message"])
 
-    def test_every_native_model(self):
+    def test_every_model_uses_coposit(self):
+        root = Path(__file__).resolve().parents[2]
+        source_models = {
+            source.parent.name
+            for category in ("baselines", "experiments", "hadeler-based")
+            for source in (root / "models" / category).glob("*/solver.cpp")
+        }
+        self.assertEqual(set(ALGORITHMS), source_models)
+        help_output = subprocess.run([coposit_path(), "--help"], check=True, capture_output=True, text=True).stdout
+        self.assertEqual(set(help_output.partition("Models:\n")[2].split()), source_models)
         for algorithm in ALGORITHMS:
             with self.subTest(algorithm=algorithm):
-                positive = run(algorithm, Matrix("2#1,0,1", matrix_id=1))
-                boundary = run(algorithm, Matrix("1#0", matrix_id=2))
+                parameter = "50" if algorithm in ("wide_certificate_cbdd_dickinson", "wide_certificate_sat_dickinson") else None
+                positive = run(
+                    algorithm, Matrix("2#1,0,1", matrix_id=1), "strictly_copositive", model_parameter=parameter
+                )
+                boundary = run(
+                    algorithm, Matrix("1#0", matrix_id=2), "strictly_copositive", model_parameter=parameter
+                )
                 self.assertEqual(positive["status"], StatusCode.OK)
                 self.assertEqual(positive["mode"], "strictly_copositive")
                 self.assertIsNone(positive["is_copositive"])
                 self.assertIs(positive["is_strictly_copositive"], True)
                 self.assertIs(boundary["is_strictly_copositive"], False)
-                native_module = load_native_module(algorithm)
-                self.assertEqual(native_module.STATUS_NODE_LIMIT, StatusCode.NODE_LIMIT)
+                self.assertTrue(model_companion_path(algorithm).is_file())
 
     def test_every_supported_model_decides_non_strict_copositivity_before_and_after_preprocessing(self):
         for algorithm in COPOSITIVE_MODE_ALGORITHMS:
             for preprocessing in ("none", "both"):
                 with self.subTest(algorithm=algorithm, preprocessing=preprocessing):
-                    boundary = run(algorithm, Matrix("2#1,-1,1", matrix_id=1), "copositive", preprocessing)
-                    negative = run(algorithm, Matrix("2#1,-2,1", matrix_id=2), "copositive", preprocessing)
+                    parameter = "50" if algorithm in ("wide_certificate_cbdd_dickinson", "wide_certificate_sat_dickinson") else None
+                    boundary = run(
+                        algorithm, Matrix("2#1,-1,1", matrix_id=1), "copositive", preprocessing,
+                        model_parameter=parameter,
+                    )
+                    negative = run(
+                        algorithm, Matrix("2#1,-2,1", matrix_id=2), "copositive", preprocessing,
+                        model_parameter=parameter,
+                    )
                     self.assertEqual(boundary["status"], StatusCode.OK)
                     self.assertEqual(boundary["mode"], "copositive")
                     self.assertIs(boundary["is_copositive"], True)
@@ -312,7 +351,8 @@ class WrapperTests(unittest.TestCase):
         for algorithm in COMBINED_CLASSIFICATION_ALGORITHMS:
             for matrix_id, (matrix, expected_copositive, expected_strict) in enumerate(cases, 1):
                 with self.subTest(algorithm=algorithm, matrix_id=matrix_id):
-                    result = run(algorithm, Matrix(matrix, matrix_id=matrix_id), "both")
+                    parameter = "50" if algorithm in ("wide_certificate_cbdd_dickinson", "wide_certificate_sat_dickinson") else None
+                    result = run(algorithm, Matrix(matrix, matrix_id=matrix_id), model_parameter=parameter)
                     self.assertEqual(result["status"], StatusCode.OK)
                     self.assertEqual(result["mode"], "both")
                     self.assertIs(result["is_copositive"], expected_copositive)
@@ -332,7 +372,9 @@ class WrapperTests(unittest.TestCase):
                 "SELECT dimension, matrix FROM matrices WHERE matrix_id = 9660"
             ).fetchone()
 
-        result = run("dutour_2018", Matrix(f"{dimension}#{values}", matrix_id=9660), preprocessing="none")
+        result = run(
+            "dutour_2018", Matrix(f"{dimension}#{values}", matrix_id=9660), "strictly_copositive", preprocessing="none"
+        )
         self.assertEqual(result["status"], StatusCode.NODE_LIMIT)
         self.assertIsNone(result["is_strictly_copositive"])
         self.assertIn("50000 open nodes", result["error_message"])
@@ -365,19 +407,6 @@ class WrapperTests(unittest.TestCase):
             [(True, False), (False, False)],
         )
 
-    @unittest.skipUnless(hasattr(signal, "SIGUSR1"), "native timeout signalling requires POSIX SIGUSR1")
-    def test_every_native_model_observes_the_timeout_signal(self):
-        for algorithm in ALGORITHMS:
-            with self.subTest(algorithm=algorithm):
-                native_module = load_native_module(algorithm)
-                native_module._install_timeout_handler(signal.SIGUSR1)
-                native_module._reset_timeout()
-                os.kill(os.getpid(), signal.SIGUSR1)
-                result = native_module.compute_matrix("2#1,0,1")
-                self.assertEqual(result["status"], StatusCode.TIMEOUT)
-                self.assertIsNone(result["is_strictly_copositive"])
-
-
 @unittest.skipUnless(hasattr(os, "sched_getaffinity"), "CPU affinity requires Linux")
 class ResultsRunnerTests(unittest.TestCase):
     def setUp(self):
@@ -386,7 +415,7 @@ class ResultsRunnerTests(unittest.TestCase):
             self.skipTest("results runner needs distinct parent and worker CPUs")
         self.parent_cpu, self.worker_cpu = available_cpus[:2]
 
-    def test_runner_refreshes_fastest_cache_from_separate_diagnostics_database(self):
+    def test_runner_refreshes_fastest_classification_cache_from_separate_diagnostics_database(self):
         root = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as temporary_directory:
             directory = Path(temporary_directory)
@@ -394,19 +423,27 @@ class ResultsRunnerTests(unittest.TestCase):
             diagnostics = directory / "diagnostics.sqlite3"
             with closing(sqlite3.connect(corpus)) as connection:
                 connection.executescript((root / "testdata" / "schema.sql").read_text())
-                connection.execute(
+                connection.executemany(
                     "INSERT INTO matrices(matrix_id, dimension, matrix, is_strictly_copositive, is_copositive) "
-                    "VALUES (1, 1, '1', 1, 1)"
+                    "VALUES (?, 1, ?, ?, ?)",
+                    ((1, "1", 1, 1), (2, "0", 0, 1), (3, "-1", 0, 0)),
                 )
                 connection.commit()
             with closing(sqlite3.connect(diagnostics)) as connection:
                 connection.executescript((root / "testdata" / "diagnostics_schema.sql").read_text())
-                connection.execute(
+                connection.executemany(
                     """INSERT INTO results (
                            matrix_id, model_id, mode, preprocessing, binary_sha256, status,
-                           is_strictly_copositive, elapsed_ns, timeout_ns, recorded_at
-                       ) VALUES (1, 'wrong_result', 'strictly_copositive', 'none', ?, 'ok', 0, 0, 1, 'now')""",
-                    ("0" * 64,),
+                           is_copositive, is_strictly_copositive, elapsed_ns, timeout_ns, recorded_at
+                       ) VALUES (?, ?, ?, ?, ?, 'ok', ?, ?, ?, 1, 'now')""",
+                    (
+                        (1, "legacy_strict", "strictly_copositive", "both", "0" * 64, None, 1, 0),
+                        (1, "full_positive", "both", "both", "0" * 64, 1, 1, 1),
+                        (2, "full_no_preprocessing", "both", "none", "0" * 64, 1, 0, 0),
+                        (2, "full_boundary", "both", "both", "0" * 64, 1, 0, 1),
+                        (3, "legacy_cp", "copositive", "both", "0" * 64, 0, None, 0),
+                        (3, "full_negative", "both", "both", "0" * 64, 0, 0, 1),
+                    ),
                 )
                 connection.commit()
 
@@ -430,21 +467,18 @@ class ResultsRunnerTests(unittest.TestCase):
             subprocess.run(command, cwd=root, env=environment, check=True, capture_output=True, text=True)
 
             with closing(sqlite3.connect(corpus)) as connection:
-                fastest_elapsed_ns, reference = connection.execute(
-                    "SELECT fastest_elapsed_ns, fastest_result_ref FROM matrices WHERE matrix_id = 1"
-                ).fetchone()
-            with closing(sqlite3.connect(diagnostics)) as connection:
-                result = connection.execute(
-                    """SELECT elapsed_ns, model_id, mode, preprocessing, binary_sha256
-                       FROM results WHERE model_id = 'hadeler_1983'"""
-                ).fetchone()
-            self.assertEqual(fastest_elapsed_ns, result[0])
+                cached = connection.execute(
+                    "SELECT matrix_id, fastest_elapsed_ns, fastest_result_ref FROM matrices ORDER BY matrix_id"
+                ).fetchall()
             self.assertEqual(
-                json.loads(reference),
-                {"model_id": result[1], "mode": result[2], "preprocessing": result[3], "binary_sha256": result[4]},
+                [(matrix_id, elapsed_ns, json.loads(reference)["model_id"], json.loads(reference)["mode"])
+                 for matrix_id, elapsed_ns, reference in cached],
+                [(1, 1, "full_positive", "both"),
+                 (2, 0, "full_no_preprocessing", "both"),
+                 (3, 1, "full_negative", "both")],
             )
 
-    def test_large_runner_throttles_progress_output(self):
+    def test_large_runner_throttles_diagnostics_output(self):
         root = Path(__file__).resolve().parents[2]
         with tempfile.TemporaryDirectory() as temporary_directory:
             database = Path(temporary_directory) / "results.sqlite3"
@@ -478,9 +512,9 @@ class ResultsRunnerTests(unittest.TestCase):
             environment["PYTHONPATH"] = str(root / "python")
             completed = subprocess.run(command, cwd=root, env=environment, check=True, capture_output=True, text=True)
 
-            progress_lines = re.findall(r"^\[\d+/101\].*$", completed.stdout, flags=re.MULTILINE)
-            self.assertLess(len(progress_lines), 101)
-            self.assertTrue(progress_lines[-1].startswith("[101/101]"))
+            diagnostics_lines = re.findall(r"^\[\d+/101\].*$", completed.stdout, flags=re.MULTILINE)
+            self.assertLess(len(diagnostics_lines), 101)
+            self.assertTrue(diagnostics_lines[-1].startswith("[101/101]"))
             with closing(sqlite3.connect(database)) as connection:
                 self.assertEqual(connection.execute("SELECT COUNT(*) FROM results").fetchone()[0], 101)
 
@@ -492,12 +526,11 @@ class ResultsRunnerTests(unittest.TestCase):
                 initialize_runner_database(connection, root)
                 connection.executemany(
                     "INSERT INTO matrices(matrix_id, dimension, matrix, is_strictly_copositive, is_copositive, "
-                    "representative_core, stress_test, timeout_5s_strict_set, references_unsolved) "
-                    "VALUES (?, ?, '1', ?, ?, ?, ?, ?, ?)",
-                    ((1, 1, 1, 1, 1, 0, 0, "[]"), (2, 1, 1, 1, 0, 1, 0, "[]"),
-                     (3, 1, None, None, 0, 0, 1, "[]"),
-                     (4, 101, 1, 1, 0, 0, 0, '[{"source_id":1,"comment":"timeout"}]'),
-                     (5, 1, 1, 1, 1, 0, 0, "[]"), (6, 1, 1, 1, 1, 0, 0, "[]")),
+                    "core_and_stress_test, preprocessing_solved, references_unsolved) VALUES (?, ?, '1', ?, ?, ?, ?, ?)",
+                    ((1, 1, 1, 1, 1, 0, "[]"), (2, 1, 1, 1, 1, 1, "[]"),
+                     (3, 1, None, None, 0, 0, "[]"),
+                     (4, 101, 1, 1, 0, 0, '[{"source_id":1,"comment":"timeout"}]'),
+                     (5, 1, 1, 1, 1, 0, "[]"), (6, 1, 1, 1, 1, 0, "[]")),
                 )
                 connection.execute(
                     """INSERT INTO results (
@@ -515,9 +548,7 @@ class ResultsRunnerTests(unittest.TestCase):
                 "--timeout-seconds",
                 "5",
                 "--matrix-set",
-                "representative_core",
-                "stress_test",
-                "timeout_5s_strict_set",
+                "core_and_stress_test",
                 "n_le_100",
                 "references_unsolved",
                 "--matrix-ids",
@@ -542,9 +573,9 @@ class ResultsRunnerTests(unittest.TestCase):
                 rows = connection.execute(
                     "SELECT matrix_id, preprocessing FROM results WHERE model_id = 'hadeler_1983' ORDER BY matrix_id"
                 ).fetchall()
-            self.assertEqual(rows, [(1, "both"), (2, "both"), (3, "both"), (4, "both")])
+            self.assertEqual(rows, [(1, "both"), (3, "both"), (4, "both")])
             self.assertIn(
-                "matrix_sets=representative_core,stress_test,timeout_5s_strict_set,n_le_100,references_unsolved",
+                "matrix_sets=core_and_stress_test,n_le_100,references_unsolved",
                 completed.stdout,
             )
             self.assertIn("preprocessing=both", completed.stdout)
@@ -725,10 +756,10 @@ class ResultsRunnerTests(unittest.TestCase):
             self.assertEqual(len(rows), 5)
             self.assertTrue(all(row[0] == "hadeler_1983" and row[3:5] == (64, "ok") for row in rows))
             self.assertEqual({row[2] for row in rows}, {"none", "both"})
+            combined_rows = [row for row in rows if row[1] == "both"]
             copositive_rows = [row for row in rows if row[1] == "copositive"]
-            strict_rows = [row for row in rows if row[1] == "strictly_copositive"]
+            self.assertEqual([(row[5], row[6]) for row in combined_rows], [(1, 1), (0, 0), (0, 0)])
             self.assertEqual([(row[5], row[6]) for row in copositive_rows], [(1, None), (0, None)])
-            self.assertEqual([(row[5], row[6]) for row in strict_rows], [(None, 1), (None, 0), (None, 0)])
             self.assertTrue(all(row[7] >= 0 for row in rows))
             self.assertTrue(all(row[8:] == (1_000_000_000_000_000, None) for row in rows))
             worker_pids = re.findall(r"\bpid=(\d+)", first.stdout)
@@ -771,8 +802,10 @@ class ResultsRunnerTests(unittest.TestCase):
                 sys.executable,
                 str(root / "python" / "run_results.py"),
                 "dutour_2018",
+                "--mode",
+                "strictly_copositive",
                 "--timeout-seconds",
-                "0.01",
+                "0.1",
                 "--dimension-from",
                 str(dimension),
                 "--dimension-to",
@@ -794,7 +827,9 @@ class ResultsRunnerTests(unittest.TestCase):
                 rows = connection.execute(
                     "SELECT matrix_id, status, is_strictly_copositive, elapsed_ns, length(binary_sha256) FROM results ORDER BY matrix_id"
                 ).fetchall()
-            self.assertEqual(rows[0], (1, "timeout", None, None, 64))
+            self.assertEqual(rows[0][:3], (1, "timeout", None))
+            self.assertGreater(rows[0][3], 0)
+            self.assertEqual(rows[0][4], 64)
             self.assertEqual([row[:3] for row in rows[1:]], [(2, "ok", 0), (3, "ok", 0)])
             self.assertTrue(all(row[3] >= 0 for row in rows[1:]))
             self.assertTrue(all(row[4] == 64 for row in rows[1:]))
@@ -803,15 +838,15 @@ class ResultsRunnerTests(unittest.TestCase):
             self.assertEqual(len(set(worker_pids)), 1)
 
             retry_command = command.copy()
-            retry_command[retry_command.index("0.01")] = "0.02"
+            retry_command[retry_command.index("0.1")] = "0.2"
             retry_command.append("--retry-timeouts")
             retried = subprocess.run(retry_command, cwd=root, env=environment, check=True, capture_output=True, text=True)
             with closing(sqlite3.connect(database)) as connection:
                 timeout_values = connection.execute("SELECT matrix_id, timeout_ns FROM results ORDER BY matrix_id").fetchall()
-            self.assertEqual(timeout_values, [(1, 20_000_000), (2, 10_000_000), (3, 10_000_000)])
+            self.assertEqual(timeout_values, [(1, 200_000_000), (2, 100_000_000), (3, 100_000_000)])
             self.assertIn("matrices=1", retried.stdout)
 
-    def test_runner_stores_last_cbdd_certificate_distribution_on_timeout(self):
+    def test_runner_automatically_stores_last_cbdd_diagnostics_on_timeout(self):
         root = Path(__file__).resolve().parents[2]
         with closing(sqlite3.connect(root / "testdata" / "copos_testdata.sqlite3")) as source:
             dimension, hard_matrix = source.execute(
@@ -836,7 +871,7 @@ class ResultsRunnerTests(unittest.TestCase):
             command = [
                 sys.executable,
                 str(root / "python" / "run_results.py"),
-                "cbdd_zed_dickinson",
+                "cbdd_dickinson",
                 "--timeout-seconds",
                 "0.1",
                 "--parent-cpu",
@@ -847,7 +882,6 @@ class ResultsRunnerTests(unittest.TestCase):
                 str(database),
                 "--preprocessing",
                 "none",
-                "--certificate-joint-distribution",
             ]
             environment = os.environ.copy()
             environment["PYTHONPATH"] = str(root / "python")

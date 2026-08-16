@@ -1,12 +1,16 @@
 # pycoposit Analysis Interface
 
 `pycoposit` is the analysis interface. It exposes explicit model and preprocessing selection through the same three-layer shape as
-PyFracESSA; these controls are intentionally absent from the normal `coposit fast|safe strict|non-strict` command:
+PyFracESSA and has no `fast`, `safe`, or implicit model aliases:
 
-- `compute_matrix(algorithm, matrix, mode="strictly_copositive", preprocessing="both", progress=False)` is the one-matrix native adapter;
-- `run(algorithm, matrices, mode="strictly_copositive", preprocessing="both", progress=False)` is the sequential path;
-- `run_multiprocessing(algorithm, matrices, mp_config=None, mode="strictly_copositive", preprocessing="both")` is the bounded
+- `compute_matrix(algorithm, matrix, mode=None, preprocessing="both", diagnostics=False,
+  collect_certificate_joint_distribution=False, model_parameter=None)` is the one-matrix `coposit` adapter;
+- `run(algorithm, matrices, mode=None, preprocessing="both", diagnostics=False, model_parameter=None)` is the sequential path;
+- `run_multiprocessing(algorithm, matrices, mp_config=None, mode=None, preprocessing="both", model_parameter=None)` is the bounded
   process path and yields iterables in completion order.
+
+When `mode` is omitted, every Dickinson-, Hadeler-, and FracESSA-based model selects `both`; Danninger 1990 does the same. A model
+without one-pass combined classification requires an explicit `"copositive"` or `"strictly_copositive"` mode.
 
 Every call requires one of these algorithm identifiers:
 
@@ -20,26 +24,26 @@ adaptive_sponsel_copomatrix
 adaptive_zischg_sponsel_copomatrix
 hadeler_1983
 dickinson_2019
-dickinson_final
 dense_bitset_dickinson
 interval_recursive_dickinson
-interval_bdd_dickinson
-interval_zdd_dickinson
+bdd_dickinson
+zdd_dickinson
 cardinality_bdd_dickinson
 cardinality_zdd_dickinson
-dickinson_zed
-bdd_zed_dickinson
-zdd_zed_dickinson
-cbdd_zed_dickinson
-wide_certificate_cbdd_zed_dickinson
-wide_75_certificate_cbdd_zed_dickinson
-wide_90_certificate_cbdd_zed_dickinson
-wide_95_certificate_cbdd_zed_dickinson
-multithreaded_cbdd_zed_dickinson
+cbdd_dickinson
+upper_endpoint_cbdd_dickinson
+cbdd_dickinson_improved_1
+wide_certificate_cbdd_dickinson
+multithreaded_cbdd_dickinson
 ceiling_pruned_dickinson
-czdd_zed_dickinson
-sat_zed_dickinson
-clingo_sat_zed_dickinson
+kernel_cone_dickinson
+affine_companion_dickinson
+layered_singular_lift_dickinson
+breadth_first_singular_lift_dickinson
+czdd_dickinson
+sat_dickinson
+wide_certificate_sat_dickinson
+clingo_sat_dickinson
 support_pruned_dickinson
 nullity_support_pruned_dickinson
 rhs_dickinson
@@ -58,36 +62,53 @@ zischg_dickinson
 zischg_fracessa
 ```
 
-Each native extension links exactly one self-contained model. Python selects the extension; model implementations are not merged or
-deduplicated. `dense_bitset_dickinson`, the CBDD-Zed Dickinson variants, `ceiling_pruned_dickinson`, `sat_zed_dickinson`, and
-`clingo_sat_zed_dickinson` support individually selected CP and SCP and classify both predicates in one traversal.
+Python invokes the same `coposit --model ...` command as C++ callers. That command selects an isolated one-model companion; Python
+does not import a separate model-specific extension. Every Dickinson-, Hadeler-, and FracESSA-based model supports individually
+selected CP and SCP and classifies both predicates in one traversal. Danninger 1990 also has that capability.
 
 `dense_bitset_dickinson` allocates one packed bit for every Boolean-lattice support and traverses surviving bits by cardinality.
 Set either `COPOSIT_DENSE_BITSET_MAX_N` or `COPOSIT_DENSE_BITSET_MAX_GIB`; setting neither uses a one-GiB bitmap limit.
 
-`multithreaded_cbdd_zed_dickinson` defaults to seven C++ worker threads pinned consecutively to CPUs 3–9 inside one matrix call. Set
+`wide_certificate_cbdd_dickinson` and `wide_certificate_sat_dickinson` accept `model_parameter="75"`, `"90"`, `"95"`, or any
+other integer percentage from 0 through 100. The argument is required. The percentage applies to the remaining width $n-k$; each
+model has one implementation and one internal companion.
+
+`multithreaded_cbdd_dickinson` defaults to seven C++ worker threads pinned consecutively to CPUs 3–9 inside one matrix call. Set
 `COPOSIT_CBDD_WORKERS` to another positive count and `COPOSIT_CBDD_FIRST_CPU` to the first CPU. When it is called through
 `run_multiprocessing()`, multiply the process count by this internal thread count when budgeting CPUs and exact-arithmetic scratch
-memory. The same workers enumerate and check independent maximal-Zed search subtrees before the Dickinson stage. With
-`progress=True`, completed Zed blocks update during that scan; completed supports and certificates appear after each parallel batch
-in the normal one-second decision-diagram status line.
+memory. With `diagnostics=True`, completed supports and certificates appear after each parallel batch in the normal one-second
+decision-diagram status line.
 
-Serial `cbdd_zed_dickinson`, `czdd_zed_dickinson`, `sat_zed_dickinson`, and `clingo_sat_zed_dickinson` progress also print the sparse
+Serial `cbdd_dickinson`, `upper_endpoint_cbdd_dickinson`, `czdd_dickinson`, `sat_dickinson`, `wide_certificate_sat_dickinson`, and
+`clingo_sat_dickinson`
+diagnostics also print the sparse
 joint histogram `certificate_k_d_u_counts=[(k,d,upper_size,count),...]`. Here `k` is the support cardinality at which a certificate was
 generated, `d = |U| - |L|` is its number of free indices, and `upper_size = |U|` shows how high the interval reaches. The histogram
-is collected only while visible progress or the explicit diagnostics capture is enabled.
+is collected only while visible diagnostics or the explicit diagnostics capture is enabled.
 
-`ceiling_pruned_dickinson` uses the normal support progress line and the same sparse histogram. Its `visited` count includes emitted
+`ceiling_pruned_dickinson` uses the normal support diagnostics line and the same sparse histogram. Its `visited` count includes emitted
 supports and exactly counted forbidden-branch skips, `covered` is the skipped part, `processed` counts exact Dickinson systems, and
 `certificates` counts only retained certificates with full upper endpoint.
 
-The serial and multithreaded CBDD models' Zed scan is on by default. Set `COPOSIT_CBDD_ZED_SCAN=off` to skip it for isolated
-Dickinson experiments, or `COPOSIT_CBDD_ZED_SCAN=on` to select it explicitly. Other values are errors. The switch changes only these
-experimental models and does not change the exact Dickinson decision that follows. The serial model also bypasses the scan
-automatically for exact Motzkin–Straus graph-matrix patterns.
+`kernel_cone_dickinson` keeps that traversal and, at a singular root of nullity greater than one, searches the exact projected
+nullspace cone directly for additional full-upper-endpoint certificates. It does not traverse a graph of lifted principal supports.
 
-The Clingo-SAT model has the independent equivalent switch `COPOSIT_CLINGO_SAT_ZED_SCAN=on|off` and the same automatic
-Motzkin–Straus bypass.
+`affine_companion_dickinson` additionally tests whether the singular system $A_Ix=\mathbf1$ is consistent. It searches the complete
+affine line when the nullity is one and tests one retained-factorization particular solution at higher nullity before continuing the
+same homogeneous and ordinary Dickinson fallback.
+
+`cbdd_dickinson_improved_1` keeps ordinary CBDD Dickinson and replaces its singular one-vector step with both nullity-one
+orientations, one consistent affine particular solution, and the complete stacked local-coordinate/outside-product line family at
+nullity two. It batches the local intervals and retains only intervals that add coverage to the exact current CBDD union.
+
+`upper_endpoint_cbdd_dickinson` keeps ordinary CBDD Dickinson and, before activating `[L,U]`, solves the distinct larger support
+`U` once when `A_U` is nonsingular. The probe is not recursive.
+
+`layered_singular_lift_dickinson` and `breadth_first_singular_lift_dickinson` use the same line. Their `processed` counter is
+`outer_processed + lifted_processed`, so it can exceed `visited`. Lift diagnostics also separate duplicate and covered skips, the
+cache size, current and maximum lifted cardinality and depth, and—for breadth first—the current and maximum FIFO frontier. Their
+certificate distribution is `(root_k,lifted_k,|U|,|L|,count)`. Certificates found while lifting are retained only after the current
+outer cardinality is complete.
 
 ## Build And Run
 
@@ -98,6 +119,9 @@ cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release
 cmake --build cpp/build --parallel
 PYTHONPATH=python python3 -m unittest discover -s python/tests -v
 ```
+
+The source-tree adapter finds `cpp/build/coposit`; an installed package keeps `coposit` and its isolated model companions beside
+`pycoposit`. Set `COPOSIT` to an explicit launcher path only when using another build tree.
 
 Sequential use accepts one `Matrix` or an iterable:
 
@@ -115,7 +139,7 @@ assert classification["is_copositive"] is True
 assert classification["is_strictly_copositive"] is False
 
 # Interactive one-second status lines go to stderr; ordinary result data is unchanged.
-run("cbdd_zed_dickinson", Matrix("matrix.mtx"), progress=True)
+run("cbdd_dickinson", Matrix("matrix.mtx"), diagnostics=True)
 ```
 
 `Matrix` has two fields:
@@ -167,13 +191,11 @@ fractions are available only in the compact FracESSA format.
 
 Every result contains `algorithm`, `mode`, optional `matrix_id`, integer `status`, `is_copositive`, `is_strictly_copositive`,
 `elapsed_ns`, and `error_message`. For `copositive` or `strictly_copositive`, only the selected field contains `True` or
-`False`; the other is `None`. `mode="both"` fills both fields after one traversal and is supported by `danninger_1990`,
-`hadeler_1983`, `dickinson_2019`, `dickinson_final`, `dense_bitset_dickinson`, and `fracessa_circular`, listed by
-`COMBINED_CLASSIFICATION_ALGORITHMS`. Their only possible pairs are
+`False`; the other is `None`. `mode="both"` fills both fields after one traversal and is supported by every model listed in
+`COMBINED_CLASSIFICATION_ALGORITHMS`: all Dickinson-, Hadeler-, and FracESSA-based models plus Danninger 1990. Their only possible pairs are
 `(False, False)`, `(True, False)`, and `(True, True)`. Other models return `EXEC_ERROR` for `both`. Both fields are `None` on any
-failure. The eight baselines under `models/baselines/`, `adaptive_sponsel_copomatrix`, and `dickinson_final` support the two
-individually selected modes.
-Other coposit-created variants return `EXEC_ERROR` for `copositive` mode rather than silently applying their strict rules. The
+failure. The eight baselines, `adaptive_sponsel_copomatrix`, and every combined-capable family model support the two individually
+selected modes. Other coposit-created variants return `EXEC_ERROR` for `copositive` mode rather than silently applying strict rules. The
 capability check happens before connected-component splitting or pre-checks, so preprocessing cannot bypass that restriction.
 Status codes are `OK=0`,
 `PARSE_ERROR=1`, `EXEC_ERROR=4`, `TIMEOUT=5`,
@@ -192,20 +214,29 @@ CPU. It reads the tracked corpus database but writes by default to the ignored l
 ```bash
 PYTHONPATH=python python3 python/run_results.py hadeler_1983 \
     --timeout-seconds 5 \
-    --matrix-set representative_core stress_test \
+    --matrix-set core_and_stress_test \
     --parent-cpu 3 \
     --cpus 4 5 6 7 \
     --preprocessing both
 ```
 
-`--matrix-set` accepts one or more of `smoke_set`, `representative_core`, `stress_test`, `scale_set`,
-`timeout_5s_strict_set`, `n_le_100`, `n_gt_100_solved`, and `references_unsolved`, and runs their union. The first seven names select
+When `--mode` is omitted, a model with one-pass combined classification runs in `both` mode. A model without that capability stops
+with an explicit error; run it once with `--mode copositive` and once with `--mode strictly_copositive`. A matrix is fully classified
+only when both predicates are known. A completed strict-only call returning `false` is a partial predicate result, not a solved
+matrix, because it does not distinguish a copositive boundary matrix from a non-copositive matrix.
+
+`--matrix-set` accepts one or more of `smoke_set`, `core_and_stress_test`, `n_le_100`, `n_gt_100_solved`, and
+`references_unsolved`, and runs their union. The first four names select
 Boolean corpus flags; `references_unsolved` selects rows with at least one explicit literature failure claim. It can
-be combined with the dimension and matrix-ID bounds. Without it, the runner selects all rows inside those bounds.
+be combined with the dimension and matrix-ID bounds. Every named set selector excludes `preprocessing_solved = 1`, including the
+derived `references_unsolved` selector. Without a set selector, the runner selects all rows inside the explicit bounds.
 `--matrix-ids ID...` further restricts a run to an explicit set of positive matrix IDs.
 `--without-results` further restricts the selection to matrices that have no row at all in `results`, independently of model or status.
 `--results-database PATH` overrides the diagnostics database. A custom `--database` without this option keeps the historical single-file
 behavior, which is useful for disposable test databases.
+
+`--model-parameter PERCENTAGE` is required for both wide-certificate models. Parameterized result rows append `@PERCENTAGE` to the
+selected model identifier so different values of the same binary do not overwrite one another.
 
 For `dense_bitset_dickinson`, the mutually exclusive `--dense-bitset-max-n N` and `--dense-bitset-max-gib GIB` options pass the
 corresponding allocation limit to every persistent worker.
@@ -215,27 +246,29 @@ corresponding allocation limit to every persistent worker.
 all exact checks, and depth-bounded Danninger and COPOMATRIX reductions. Their internal maximum reduction depth is two and is not a
 Python option. The selected value is stored in the constrained `results.preprocessing` column and forms part of the result identity.
 
-The stored `binary_sha256` is the hash of the selected model's native extension. A timeout or worker failure stores a `NULL`
+The stored `binary_sha256` is the hash of the selected model companion executed through `coposit`. A timeout or worker failure stores a `NULL`
 classification. Existing rows for the same matrix, model, mode, preprocessing choice, and binary are skipped so interrupted runs
 resume. Pass `--rerun` to replace every selected row, or `--retry-timeouts` to replace only timeout rows for that exact identity.
 Normal runs do not hash external matrix files before parsing or before reusing an existing result.
 The same serialized batch transaction refreshes `matrices.fastest_elapsed_ns` and `matrices.fastest_result_ref` for affected IDs,
-using the fastest `ok` result that agrees with every known corpus truth value.
+using the fastest eligible `ok` result that agrees with every known corpus truth value. Only one-pass combined `both` results are
+eligible; preprocessing may be enabled or disabled. Predicate-only measurements are excluded.
 
-For supported serial Dickinson experiments with `--preprocessing none`, `--certificate-joint-distribution` also captures the
-complete one-second progress diagnostics and sparse certificate distribution. CBDD-Zed and CZDD-Zed store
-`(support cardinality, free indices, upper-set cardinality, count)` quadruples; historical rows and the other supported experiments
-retain their original triples. While a matrix is active, the parent replaces its `running` row once per second. The final status then
-replaces that row. Consequently, a hard timeout retains the most recent diagnostics and distribution even if the solver cannot
-return during the cooperative grace period.
+Every `run_results.py` campaign automatically captures the complete one-second diagnostic text and any sparse certificate
+distribution supplied by the selected model. CBDD and CZDD store `(support cardinality, free indices, upper-set cardinality, count)`
+quadruples; other supported experiments retain their triples. While a matrix is active, the parent replaces its `running` row once
+per second. The final status then replaces that row. Consequently, a hard timeout retains the most recent diagnostics and distribution
+even if the solver cannot return during the cooperative grace period. There is no diagnostics-off runner option while this benchmark
+policy is active.
 
-Each worker loads its model once. At a matrix deadline the parent sends `SIGUSR1`; the native handler only sets a signal-safe flag,
-and the model returns `TIMEOUT` at its next safe checkpoint. The worker then accepts the next matrix without reloading the module.
+Each persistent Python worker starts `coposit` for one matrix at a time. On POSIX the launcher immediately replaces itself with the
+selected model companion. At a matrix deadline the parent sends `SIGUSR1` to the worker, which forwards it to the companion; the
+native handler only sets a signal-safe flag, and the model returns `TIMEOUT` at its next safe checkpoint. The worker then accepts the next matrix.
 If the native call has not returned one second after the signal, the parent records the timeout with its latest saved diagnostic
 snapshot, terminates that worker, and starts a replacement on the same CPU.
 A `node_limit` row is likewise unresolved and has no Boolean classification. A single long FLINT operation can delay a cooperative
 timeout return until the operation finishes. Ctrl-C stops new assignments and lets already-running matrices finish or reach their
-configured timeout before the runner exits. Runs of at most 100 matrices print every result; larger runs print progress at most once
+configured timeout before the runner exits. Runs of at most 100 matrices print every result; larger runs print diagnostics at most once
 per second, plus every mismatch or error and the final result. A bounded queue passes completed results to the SQLite writer on the
 parent CPU. The writer drains everything currently queued into one transaction; both the queue and each batch are limited to twice
 the worker count. An orderly stop drains every row, while a hard process or machine failure can lose at most the current bounded batch.

@@ -1,10 +1,10 @@
 #include <coposit/model.hpp>
 #include <coposit/open_node_limit.hpp>
-#include <coposit/progress.hpp>
+#include <coposit/diagnostics.hpp>
 #include <coposit/small_copositivity.hpp>
 #include <coposit/timeout.hpp>
 
-#include "../source_trace.hpp"
+#include "../source_diagnostics.hpp"
 
 #include <array>
 #include <cstddef>
@@ -54,25 +54,25 @@ private:
 class danninger_checker {
 public:
     danninger_checker(copositivity_mode mode, size_t dimension)
-        : mode_(mode), progress_(progress::metric::proof, dimension)
+        : mode_(mode), diagnostics_(diagnostics::metric::proof, dimension)
     {
     }
     danninger_checker(copositivity_classification& classification, size_t dimension)
-        : mode_(copositivity_mode::copositive), classification_(&classification), progress_(progress::metric::proof, dimension)
+        : mode_(copositivity_mode::copositive), classification_(&classification), diagnostics_(diagnostics::metric::proof, dimension)
     {
     }
 
-    ~danninger_checker() { progress_.finish(); }
+    ~danninger_checker() { diagnostics_.finish(); }
 
     bool check(const matrix_integer& matrix, long double weight = 1.0L, size_t depth = 0)
     {
         const active_node_scope current_node(open_nodes_);
         timeout_checkpoint();
         const size_t dimension = matrix.rows();
-        progress_.visit(dimension, depth, open_nodes_);
+        diagnostics_.visit(dimension, depth, open_nodes_);
         switch (dimension) {
             case 0:
-                progress_.resolved(weight);
+                diagnostics_.resolved(weight);
                 return true;
             case 1:
             case 2:
@@ -80,11 +80,11 @@ public:
                 if (classification_ != nullptr) {
                     const copositivity_classification current = small_copositivity::classify(matrix);
                     classification_->is_strictly_copositive &= current.is_strictly_copositive;
-                    if (current.is_copositive) progress_.resolved(weight);
+                    if (current.is_copositive) diagnostics_.resolved(weight);
                     return current.is_copositive;
                 }
                 if (small_copositivity::check(matrix, mode_)) {
-                    progress_.resolved(weight);
+                    diagnostics_.resolved(weight);
                     return true;
                 }
                 return false;
@@ -137,25 +137,25 @@ public:
             for (const integer& entry : p) {
                 if (entry.sign() < 0) return false;
             }
-            progress_.split();
+            diagnostics_.split();
             return check(block, weight, depth + 1);
         }
 
         // With no mixed signs, the complete-orthant child includes the zero-coordinate face of the other half-cone.
         if (negative.empty()) {
-            COPOSIT_SOURCE_TRACE("block", dimension);
-            progress_.split();
+            COPOSIT_SOURCE_DIAGNOSTICS("block", dimension);
+            diagnostics_.split();
             return check(block, weight, depth + 1);
         }
         if (positive.empty()) {
-            COPOSIT_SOURCE_TRACE("schur", dimension);
-            progress_.split();
+            COPOSIT_SOURCE_DIAGNOSTICS("schur", dimension);
+            diagnostics_.split();
             return check(make_schur(block, pivot, p), weight, depth + 1);
         }
 
-        progress_.split();
+        diagnostics_.split();
         long double child_weight = 0.0L;
-        if (progress_.active()) {
+        if (diagnostics_.active()) {
             integer child_count;
             fmpz_bin_uiui(child_count.native_handle(), static_cast<ulong>(positive.size() + negative.size()),
                           static_cast<ulong>(positive.size()));
@@ -168,14 +168,14 @@ public:
         rays.reserve(child_dimension);
         for (const size_t index : zero) rays.push_back(coordinate_ray(index));
         rays.push_back(plus_ray(positive, negative, pair_rays, 0, 0));
-        COPOSIT_SOURCE_TRACE("plus", positive.size(), negative.size());
+        COPOSIT_SOURCE_DIAGNOSTICS("plus", positive.size(), negative.size());
         if (!check_plus_paths(block, positive, negative, pair_rays, 0, 0, rays, child_weight, depth + 1)) return false;
 
         const matrix_integer schur = make_schur(block, pivot, p);
         rays.clear();
         for (const size_t index : zero) rays.push_back(coordinate_ray(index));
         rays.push_back(minus_ray(negative, pair_rays, 0, 0));
-        COPOSIT_SOURCE_TRACE("minus", positive.size(), negative.size());
+        COPOSIT_SOURCE_DIAGNOSTICS("minus", positive.size(), negative.size());
         return check_minus_paths(schur, positive, negative, pair_rays, 0, 0, rays, child_weight, depth + 1);
     }
 
@@ -372,7 +372,7 @@ private:
 
     const copositivity_mode mode_;
     copositivity_classification* classification_ = nullptr;
-    progress::tracker progress_;
+    diagnostics::tracker diagnostics_;
     size_t open_nodes_ = 0;
 };
 
