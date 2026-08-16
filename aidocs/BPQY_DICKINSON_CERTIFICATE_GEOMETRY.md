@@ -8,7 +8,7 @@ encounter that zero and how much of the remaining support lattice its certificat
 
 BPQY already report empirically that their exact mixed-integer quadratic models become slower as the support size $\rho_0$ of the
 designated optimum increases. The explanation below—the width of Dickinson's certificate interval and its effect in an exact-integer
-copositivity checker—is not given in their paper. It is an internal conclusion from coposit's exact runs and progress trace, not a
+copositivity checker—is not given in their paper. It is an internal conclusion from coposit's exact runs and diagnostics trace, not a
 claim of general research novelty beyond the sources checked here.
 
 Primary source:
@@ -173,7 +173,7 @@ growth is real but does not separate completed rows from timeouts. The instant S
 elimination size. The principal cause of the timeout pattern is therefore certificate coverage and support enumeration, not unusual
 arbitrary-precision growth.
 
-## Matrix 12580 Progress Trace
+## Matrix 12580 Diagnostics Trace
 
 Matrix 12580 is the order-25 COP instance with $\rho_0=6$ and seed 6. It is dense, has no negative diagonal, no failing order-two
 principal submatrix, and a connected negative-entry graph. Its maximum input coefficient has 19 digits; whole-matrix fraction-free
@@ -191,7 +191,7 @@ $$
 
 so this one rounded-materialization certificate covers $2^{17-6}=2,048$ supports rather than the ideal construction's 524,288.
 
-A no-preprocessing progress run completed non-strict copositivity in 27.779 seconds:
+A no-preprocessing diagnostics run completed non-strict copositivity in 27.779 seconds:
 
 | Elapsed | Cardinality | Emitted exact supports | Retained certificates | Cumulative CBDD operations |
 | ---: | ---: | ---: | ---: | ---: |

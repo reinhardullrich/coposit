@@ -52,35 +52,38 @@
 
 ## Model Structure
 
-1. Put unchanged source and literature baselines in `models/baselines/<model-name>/`. Keep the selected
-   `adaptive_sponsel_copomatrix` and `dickinson_final` models directly under `models/`; put every other coposit-created variant or
-   comparison under `models/experiments/<model-name>/`. Do not create a separate legacy-model category. Each model directory owns its
-   complete algorithm implementation, including copied cone, Danninger, or hybrid code it changes or interweaves.
+1. Put every model in the Hadeler, Dickinson, or FracESSA inheritance line under `models/hadeler-based/<model-name>/`. Put other
+   unchanged source and literature baselines in `models/baselines/<model-name>/` and other coposit-created models under
+   `models/experiments/<model-name>/`. Do not put model directories directly under `models/` or create a legacy-model category.
+   Each model directory owns its complete algorithm implementation, including copied cone, Danninger, or hybrid code it changes or
+   interweaves.
 2. Create a new model by copying the closest existing model and changing that copy independently. Duplication between models is deliberate
    isolation, not Ponytail cleanup debt; share it only when Reinhard explicitly decides that it is stable project-wide infrastructure.
 3. Shared code under `cpp/include/coposit/` is limited to genuinely model-independent infrastructure such as exact integer and
    matrix storage, packed support storage, reusable exact factorization, input parsing, and the minimal model call contract.
-4. Every model implements the same `coposit::model::solve(const matrix_integer&, copositivity_mode)` link-time contract and assumes
-   its matrix is nonempty, square, and symmetric, with strict mode as the default. Literature baselines implement both modes;
-   coposit-created variants reject non-strict mode until explicitly
-   extended. `adaptive_sponsel_copomatrix` is explicitly extended to both individually selected modes but does not implement combined
-   classification. The user-facing `coposit` launcher requires `fast` or `safe`, followed by `strict` or `non-strict`; `safe` also accepts
-   `both` and returns Dickinson Final's two results from one classification traversal. `fast` executes an `adaptive_sponsel_copomatrix`
-   companion and `safe` executes a `dickinson_final` companion, both with connected-component splitting and pre-checks enabled. Each
-   companion and every internal `coposit-analyze` model companion or Python native module links exactly one model; both launchers link
-   none. `coposit-analyze --model MODEL --mode strict|non-strict|both` is the only user-facing C++ model-selection interface and owns
-   the single complete-preprocessing on/off control. Its model inventory is the literature baselines except
-   `dickinson_2019`, plus `dickinson_final` and `adaptive_sponsel_copomatrix`; experimental variants remain Python/reference-run only.
-   Do not add public model-named executables, link model implementations together, or add C++ runtime factories, registries, or
-   inheritance.
-5. Name a faithful historical or external baseline `<first-author>_<year>`, using one surname in the identifier, for example
+4. The maximal-Z-matrix check belongs only to shared preprocessing. Model implementations must not repeat it or expose a model-local
+   switch for it.
+5. Every model implements the same `coposit::model::solve(const matrix_integer&, copositivity_mode)` link-time contract and assumes
+   its matrix is nonempty, square, and symmetric. Every Dickinson-, Hadeler-, and FracESSA-based model also implements
+   `coposit::model::classify(const matrix_integer&)`, supports `both` as one traversal, and defaults to `both` when an analysis or
+   reference-run interface omits the mode. Do not implement that classification as two hidden predicate runs. Other models require
+   an explicit mode unless they independently implement combined classification. `adaptive_sponsel_copomatrix` supports both
+   individually selected predicates but not combined classification. There is no public `fast`, `safe`, or implicit model-selection
+   interface during the experimentation phase.
+   `coposit --model MODEL --mode strict|non-strict|both` is the sole low-level model-execution interface and owns the single
+   complete-preprocessing on/off control. Its inventory includes every literature baseline and every experiment. Python must invoke
+   models through `coposit`; it must not import, link, or expose a separate model-specific native execution path. Every internal
+   companion links exactly one model and the launcher links none. Do not add method aliases, public model-named
+   executables, C++ runtime factories, registries, inheritance, or executables that link model implementations together until
+   Reinhard explicitly promotes a public interface.
+6. Name a faithful historical or external baseline `<first-author>_<year>`, using one surname in the identifier, for example
    `dutour_2018`. Give every such model a local `ALGORITHM.md` that identifies the exact paper or source revision.
-6. A baseline must preserve the source model's mathematical tests, split choice and construction, traversal, pruning, and termination
+7. A baseline must preserve the source model's mathematical tests, split choice and construction, traversal, pruning, and termination
    rules. Arithmetic, storage, and recomputation may be optimized only when those mathematical decisions remain unchanged. Do not
    add another model's shortcut or reduction to a baseline.
-7. Give coposit-created models descriptive non-citation names. The first mathematical change to a baseline requires a copied model
+8. Give coposit-created models descriptive non-citation names. The first mathematical change to a baseline requires a copied model
    directory and a new name; never let an original baseline silently become a coposit variant.
-8. Every maintained algorithm must have one authoritative, human-facing `ALGORITHM.md` beside its implementation. This file is only
+9. Every maintained algorithm must have one authoritative, human-facing `ALGORITHM.md` beside its implementation. This file is only
    about the algorithm: do not put build instructions, binary usage, benchmarks, experiment results, or development history in it.
    Write for a reader who understands basic programming and mathematics but does not already know the source: begin with the idea
    in plain language, define necessary terms and notation, and only then give exact formulas and implementation details. Explain
@@ -98,29 +101,37 @@
 
 ## Python Structure
 
-1. Keep the maintained package under `python/pycoposit/` with the same thin `core.py`, sequential `single.py`, and bounded process
-   runner `mp.py` split used by FracESSA.
+1. Keep the maintained package under `python/pycoposit/` with the thin `core.py`, sequential `single.py`, and bounded process runner
+   `mp.py` split. `core.py` adapts Python objects to `coposit`; it does not load model-specific extension modules.
 2. Require an explicit maintained model identifier in `compute_matrix()`, `run()`, and `run_multiprocessing()`.
 3. Keep multiprocessing completion-ordered and bound submitted-but-not-yielded work by both the worker prefetch window and result
    queue capacity. Never report a worker crash, timeout, or resource limit as a negative classification.
-4. Use `python/run_results.py` for timed corpus reference runs. Keep model IDs lowercase, hash the exact native module used, keep one
-   persistent single-threaded worker pinned to each requested CPU, request cooperative native timeouts with `SIGUSR1`, and keep every
-   SQLite write in the parent process. Pin the parent dispatcher and its bounded database-writer queue to a separate explicit CPU;
-   for standard local reference runs use CPU 3 for that parent work and CPUs 4 through 7 for the four native solver workers.
+4. Use `python/run_results.py` for timed corpus reference runs. Keep model IDs lowercase, hash the exact model companion used, keep
+   one persistent single-threaded Python worker pinned to each requested CPU, and keep every SQLite write in the parent process. The
+   worker must execute the selected model only through `coposit` and must report a timeout or terminated companion as
+   unresolved. Pin the parent dispatcher and its bounded database-writer queue to a separate explicit CPU; for standard local
+   reference runs use CPU 3 for that parent work and CPUs 4 through 7 for the four solver workers.
+5. Run every benchmark, corpus test, comparison, and reference run of a Hadeler-, Dickinson-, or FracESSA-based model in `both` mode
+   so the result is a full CP/SCP classification. A single-predicate run is allowed only when explicitly studying that predicate or
+   its early-exit cost; label it as a predicate run and never count it as a fully solved matrix run.
+6. Call all optional runtime activity reporting and stored telemetry **diagnostics**, never progress. The C++ flag is `--diagnostics`,
+   the Python argument is `diagnostics=True`, and test-only baseline event recording is source diagnostics.
+7. Until Reinhard explicitly changes this policy, enable and persist diagnostics for every benchmark, comparison, corpus, reference,
+   and diagnostic run. `python/run_results.py` does this automatically; do not bypass it with an alternate benchmark path that omits
+   diagnostics.
+8. Keep runtime-tunable variants as one model when their implementations differ only by a scalar parameter. Python forwards the
+   required value as `--model-parameter VALUE` to `coposit`; do not create copied model directories for parameter values.
 
 ## Matrix Test Sets
 
-Use the seven overlapping Boolean flags in the `matrices` table instead of inventing an ad hoc matrix list. See
+Use the four overlapping Boolean flags in the `matrices` table instead of inventing an ad hoc matrix list. See
 `aidocs/BENCHMARK_SETS.md` for their composition and selection evidence.
 
 1. Use `smoke_set` first for fast correctness, build, wrapper, runner, and integration checks after an implementation change.
-2. Use `representative_core` for the normal comparison between algorithms, routine performance measurements, and parameter choices.
-3. Use `stress_test` when testing difficult branching, equality and boundary cases, exact-arithmetic growth, timeouts, or node limits.
-4. Use `scale_set` for large matrices and questions about dimension growth, density, storage, memory use, and scalability.
-5. Use `timeout_5s_strict_set` for matrices on which both final pre-checked algorithms timed out in the frozen five-second strict run.
-6. Use `n_le_100` for comprehensive comparisons over every current and future matrix of order at most 100.
-7. Use `n_gt_100_solved` for higher-order matrices with at least one paper-reported completed solve in `references_solved`.
-8. A matrix may belong to several sets. Run the smallest applicable set first; use the complete corpus only for final reference results
+2. Use `core_and_stress_test` for normal algorithm comparisons, parameter choices, difficult exact cases, and timeout pressure.
+3. Use `n_le_100` for comprehensive comparisons over every current and future matrix of order at most 100.
+4. Use `n_gt_100_solved` for higher-order matrices with at least one paper-reported completed solve in `references_solved`.
+5. A matrix may belong to several sets. Run the smallest applicable set first; use the complete corpus only for final reference results
    or when the question explicitly requires exhaustive coverage.
 
 ## Style
@@ -145,7 +156,7 @@ ctest --test-dir cpp/build --output-on-failure
 3. Bound parallel corpus runs by memory as well as CPU count, and serialize SQLite writes.
 4. Check the copied corpus with `sqlite3 testdata/copos_testdata.sqlite3 'PRAGMA integrity_check;'`.
 5. After any change to shared preprocessing or any other shared code executed before model delegation, rebuild and relink every model
-   native module, every CLI companion, and every test target before running or comparing results. This includes parsing and input
+   companion and every test target before running or comparing results. This includes parsing and input
    preparation, matrix scans, pre-checks, reductions, connected components, and preprocessing routing. Never mix benchmark rows from
    binaries built against different versions of that pre-model pipeline; run the complete build and test commands above rather than
    building only the model currently under investigation.

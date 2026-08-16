@@ -1,8 +1,11 @@
 #include <coposit/pre_check.hpp>
+#include <coposit/open_mcs.hpp>
 #include <coposit/small_copositivity.hpp>
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <cstdint>
 #include <initializer_list>
 #include <stdexcept>
 
@@ -35,6 +38,61 @@ matrix_integer constant_off_diagonal(size_t dimension, slong diagonal, slong off
         }
     }
     return matrix;
+}
+
+matrix_integer motzkin_straus_matrix(size_t dimension, slong diagonal, std::uint32_t edges)
+{
+    matrix_integer matrix(dimension, dimension);
+    std::uint32_t edge = 1;
+    for (size_t row = 0; row < dimension; ++row) {
+        matrix(row, row) = integer(diagonal);
+        for (size_t column = row + 1; column < dimension; ++column) {
+            matrix(row, column) = integer((edges & edge) != 0 ? -1 : diagonal);
+            matrix(column, row) = matrix(row, column);
+            edge <<= 1;
+        }
+    }
+    return matrix;
+}
+
+size_t maximum_clique(size_t dimension, std::uint32_t edges)
+{
+    size_t best = 1;
+    for (std::uint32_t vertices = 1; vertices < (std::uint32_t{1} << dimension); ++vertices) {
+        bool clique = true;
+        size_t cardinality = 0;
+        std::uint32_t edge = 1;
+        for (size_t row = 0; row < dimension; ++row) {
+            if ((vertices & (std::uint32_t{1} << row)) != 0) ++cardinality;
+            for (size_t column = row + 1; column < dimension; ++column) {
+                if ((vertices & (std::uint32_t{1} << row)) != 0 && (vertices & (std::uint32_t{1} << column)) != 0
+                    && (edges & edge) == 0)
+                    clique = false;
+                edge <<= 1;
+            }
+        }
+        if (clique) best = std::max(best, cardinality);
+    }
+    return best;
+}
+
+std::vector<support> graph_adjacency(size_t dimension, std::uint32_t edges)
+{
+    std::vector<support> adjacency;
+    adjacency.reserve(dimension);
+    for (size_t vertex = 0; vertex < dimension; ++vertex) adjacency.emplace_back(dimension);
+
+    std::uint32_t edge = 1;
+    for (size_t row = 0; row < dimension; ++row) {
+        for (size_t column = row + 1; column < dimension; ++column) {
+            if ((edges & edge) != 0) {
+                adjacency[row].set(column);
+                adjacency[column].set(row);
+            }
+            edge <<= 1;
+        }
+    }
+    return adjacency;
 }
 
 TEST(PreCheckTest, DefaultsToOnAndCanBeSwitchedFullyOff)
@@ -99,7 +157,7 @@ TEST(PreCheckTest, ZMatrixCheckIsNegativeOnlyAndModeAware)
     EXPECT_EQ(calls, 3U);
 }
 
-TEST(PreCheckTest, ZMatrixCheckIncludesSingletonBlocksAndBypassesMotzkinStrausMatrices)
+TEST(PreCheckTest, ZMatrixCheckIncludesSingletonBlocksAndMotzkinStrausMatricesUseTheirExactSolver)
 {
     pre_check::options selected = pre_check::options::none();
     selected.z_matrix = true;
@@ -113,11 +171,81 @@ TEST(PreCheckTest, ZMatrixCheckIncludesSingletonBlocksAndBypassesMotzkinStrausMa
     EXPECT_EQ(calls, 0U);
 
     const matrix_integer motzkin_straus = symmetric_matrix(4, {1, -1, 1, 1, 1, 1, 1, 1, 1, 1});
-    EXPECT_TRUE(pre_check::check(motzkin_straus, strict, selected, [&](const matrix_integer&) {
+    EXPECT_FALSE(pre_check::check(motzkin_straus, strict, selected, [&](const matrix_integer&) {
         ++calls;
         return true;
     }));
-    EXPECT_EQ(calls, 1U);
+    EXPECT_EQ(calls, 0U);
+}
+
+TEST(PreCheckTest, MotzkinStrausBranchAndBoundMatchesEveryOrderFiveGraph)
+{
+    pre_check::options selected = pre_check::options::none();
+    selected.z_matrix = true;
+    constexpr size_t dimension = 5;
+    constexpr std::uint32_t graph_count = std::uint32_t{1} << (dimension * (dimension - 1) / 2);
+
+    for (std::uint32_t edges = 1; edges < graph_count; ++edges) {
+        const size_t clique = maximum_clique(dimension, edges);
+        for (slong diagonal = 1; diagonal <= 4; ++diagonal) {
+            size_t calls = 0;
+            const auto result = pre_check::classify(motzkin_straus_matrix(dimension, diagonal, edges), selected,
+                                                    [&](const matrix_integer&) {
+                                                        ++calls;
+                                                        return model::copositivity_classification{false, false};
+                                                    });
+            EXPECT_EQ(result.is_copositive, clique <= static_cast<size_t>(diagonal + 1));
+            EXPECT_EQ(result.is_strictly_copositive, clique < static_cast<size_t>(diagonal + 1));
+            EXPECT_EQ(calls, 0U);
+        }
+    }
+}
+
+TEST(PreCheckTest, OpenMcsMatchesEveryOrderSixGraph)
+{
+    constexpr size_t dimension = 6;
+    constexpr std::uint32_t graph_count = std::uint32_t{1} << (dimension * (dimension - 1) / 2);
+    for (std::uint32_t edges = 0; edges < graph_count; ++edges) {
+        const auto adjacency = graph_adjacency(dimension, edges);
+        open_mcs::maximum_clique_search search(adjacency);
+        const auto result = search.run([](size_t) { return false; });
+        ASSERT_TRUE(result.complete) << "graph=" << edges;
+        ASSERT_EQ(result.best, maximum_clique(dimension, edges)) << "graph=" << edges;
+    }
+}
+
+TEST(PreCheckTest, OpenMcsThresholdStopReturnsAProvedCliqueWithoutClaimingCompleteness)
+{
+    std::vector<support> cycle;
+    for (size_t vertex = 0; vertex < 5; ++vertex) cycle.emplace_back(5);
+    for (size_t vertex = 0; vertex < 5; ++vertex) {
+        const size_t next = (vertex + 1) % 5;
+        cycle[vertex].set(next);
+        cycle[next].set(vertex);
+    }
+
+    open_mcs::maximum_clique_search search(cycle);
+    const auto result = search.run([](size_t best) { return best >= 2; });
+    EXPECT_EQ(result.best, 2U);
+    EXPECT_FALSE(result.complete);
+}
+
+TEST(PreCheckTest, MotzkinStrausBranchAndBoundUsesExactNonintegralThresholdsAndSupportsMoreThanSixtyFourIndices)
+{
+    pre_check::options selected = pre_check::options::none();
+    selected.z_matrix = true;
+
+    const auto nonintegral = pre_check::classify(constant_off_diagonal(3, 3, -2), selected, [&](const matrix_integer&) {
+        return model::copositivity_classification{true, true};
+    });
+    EXPECT_FALSE(nonintegral.is_copositive);
+    EXPECT_FALSE(nonintegral.is_strictly_copositive);
+
+    const auto boundary = pre_check::classify(constant_off_diagonal(65, 64, -1), selected, [&](const matrix_integer&) {
+        return model::copositivity_classification{false, false};
+    });
+    EXPECT_TRUE(boundary.is_copositive);
+    EXPECT_FALSE(boundary.is_strictly_copositive);
 }
 
 TEST(PreCheckTest, SmallDimensionMakesACompleteModeDependentDecision)

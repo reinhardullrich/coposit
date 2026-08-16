@@ -2,7 +2,7 @@
 #include <coposit/model.hpp>
 #include <coposit/open_node_limit.hpp>
 
-#include "../source_trace.hpp"
+#include "../source_diagnostics.hpp"
 
 using namespace coposit;
 
@@ -127,11 +127,11 @@ TEST(Dutour2018ModelTest, SourceTracePreservesSplitAndChildOrder) {
     A(0, 0) = integer(2); A(0, 1) = integer(-1);
     A(1, 0) = integer(-1); A(1, 1) = integer(2);
 
-    baseline_source_trace::clear();
+    baseline_source_diagnostics::clear();
     EXPECT_TRUE(model::solve(A));
-    const std::vector<baseline_source_trace::event> expected{
+    const std::vector<baseline_source_diagnostics::event> expected{
         {"split", 0, 1}, {"push-second", 1, 0}, {"push-first", 0, 1}, {"accept"}, {"accept"}};
-    EXPECT_EQ(baseline_source_trace::events, expected);
+    EXPECT_EQ(baseline_source_diagnostics::events, expected);
 }
 
 TEST(Dutour2018ModelTest, FourByFourPositiveOffDiagonalPasses) {

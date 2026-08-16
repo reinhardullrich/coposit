@@ -1,4 +1,4 @@
-"""Public pycoposit data types and validation."""
+"""pycoposit analysis data types and validation."""
 
 from __future__ import annotations
 
@@ -17,26 +17,26 @@ Algorithm = Literal[
     "adaptive_zischg_sponsel_copomatrix",
     "hadeler_1983",
     "dickinson_2019",
-    "dickinson_final",
     "dense_bitset_dickinson",
     "interval_recursive_dickinson",
-    "interval_bdd_dickinson",
-    "interval_zdd_dickinson",
+    "bdd_dickinson",
+    "zdd_dickinson",
     "cardinality_bdd_dickinson",
     "cardinality_zdd_dickinson",
-    "dickinson_zed",
-    "bdd_zed_dickinson",
-    "zdd_zed_dickinson",
-    "cbdd_zed_dickinson",
-    "wide_certificate_cbdd_zed_dickinson",
-    "wide_75_certificate_cbdd_zed_dickinson",
-    "wide_90_certificate_cbdd_zed_dickinson",
-    "wide_95_certificate_cbdd_zed_dickinson",
-    "multithreaded_cbdd_zed_dickinson",
+    "cbdd_dickinson",
+    "upper_endpoint_cbdd_dickinson",
+    "cbdd_dickinson_improved_1",
+    "wide_certificate_cbdd_dickinson",
+    "multithreaded_cbdd_dickinson",
     "ceiling_pruned_dickinson",
-    "czdd_zed_dickinson",
-    "sat_zed_dickinson",
-    "clingo_sat_zed_dickinson",
+    "kernel_cone_dickinson",
+    "affine_companion_dickinson",
+    "layered_singular_lift_dickinson",
+    "breadth_first_singular_lift_dickinson",
+    "czdd_dickinson",
+    "sat_dickinson",
+    "wide_certificate_sat_dickinson",
+    "clingo_sat_dickinson",
     "support_pruned_dickinson",
     "nullity_support_pruned_dickinson",
     "rhs_dickinson",
@@ -64,18 +64,38 @@ COMBINED_CLASSIFICATION_ALGORITHMS: tuple[Algorithm, ...] = (
     "danninger_1990",
     "hadeler_1983",
     "dickinson_2019",
-    "dickinson_final",
     "dense_bitset_dickinson",
-    "cbdd_zed_dickinson",
-    "wide_certificate_cbdd_zed_dickinson",
-    "wide_75_certificate_cbdd_zed_dickinson",
-    "wide_90_certificate_cbdd_zed_dickinson",
-    "wide_95_certificate_cbdd_zed_dickinson",
-    "multithreaded_cbdd_zed_dickinson",
+    "interval_recursive_dickinson",
+    "bdd_dickinson",
+    "zdd_dickinson",
+    "cardinality_bdd_dickinson",
+    "cardinality_zdd_dickinson",
+    "cbdd_dickinson",
+    "upper_endpoint_cbdd_dickinson",
+    "cbdd_dickinson_improved_1",
+    "wide_certificate_cbdd_dickinson",
+    "multithreaded_cbdd_dickinson",
     "ceiling_pruned_dickinson",
-    "sat_zed_dickinson",
-    "clingo_sat_zed_dickinson",
+    "kernel_cone_dickinson",
+    "affine_companion_dickinson",
+    "layered_singular_lift_dickinson",
+    "breadth_first_singular_lift_dickinson",
+    "czdd_dickinson",
+    "sat_dickinson",
+    "wide_certificate_sat_dickinson",
+    "clingo_sat_dickinson",
+    "support_pruned_dickinson",
+    "nullity_support_pruned_dickinson",
+    "rhs_dickinson",
+    "frank_wolfe_dickinson",
+    "one_step_frank_wolfe_dickinson",
+    "pairwise_frank_wolfe_dickinson",
+    "support_polished_frank_wolfe_dickinson",
+    "fracessa",
     "fracessa_circular",
+    "zischg_hadeler",
+    "zischg_dickinson",
+    "zischg_fracessa",
 )
 
 ALGORITHMS: tuple[Algorithm, ...] = (
@@ -88,26 +108,26 @@ ALGORITHMS: tuple[Algorithm, ...] = (
     "adaptive_zischg_sponsel_copomatrix",
     "hadeler_1983",
     "dickinson_2019",
-    "dickinson_final",
     "dense_bitset_dickinson",
     "interval_recursive_dickinson",
-    "interval_bdd_dickinson",
-    "interval_zdd_dickinson",
+    "bdd_dickinson",
+    "zdd_dickinson",
     "cardinality_bdd_dickinson",
     "cardinality_zdd_dickinson",
-    "dickinson_zed",
-    "bdd_zed_dickinson",
-    "zdd_zed_dickinson",
-    "cbdd_zed_dickinson",
-    "wide_certificate_cbdd_zed_dickinson",
-    "wide_75_certificate_cbdd_zed_dickinson",
-    "wide_90_certificate_cbdd_zed_dickinson",
-    "wide_95_certificate_cbdd_zed_dickinson",
-    "multithreaded_cbdd_zed_dickinson",
+    "cbdd_dickinson",
+    "upper_endpoint_cbdd_dickinson",
+    "cbdd_dickinson_improved_1",
+    "wide_certificate_cbdd_dickinson",
+    "multithreaded_cbdd_dickinson",
     "ceiling_pruned_dickinson",
-    "czdd_zed_dickinson",
-    "sat_zed_dickinson",
-    "clingo_sat_zed_dickinson",
+    "kernel_cone_dickinson",
+    "affine_companion_dickinson",
+    "layered_singular_lift_dickinson",
+    "breadth_first_singular_lift_dickinson",
+    "czdd_dickinson",
+    "sat_dickinson",
+    "wide_certificate_sat_dickinson",
+    "clingo_sat_dickinson",
     "support_pruned_dickinson",
     "nullity_support_pruned_dickinson",
     "rhs_dickinson",
@@ -126,6 +146,11 @@ ALGORITHMS: tuple[Algorithm, ...] = (
     "zischg_fracessa",
 )
 
+PARAMETERIZED_ALGORITHMS: tuple[Algorithm, ...] = (
+    "wide_certificate_cbdd_dickinson",
+    "wide_certificate_sat_dickinson",
+)
+
 
 def _validate_algorithm(algorithm: str) -> None:
     if not isinstance(algorithm, str):
@@ -141,11 +166,38 @@ def _validate_mode(mode: str) -> None:
         raise ValueError(f"mode must be one of: {', '.join(COPOSITIVITY_MODES)}")
 
 
+def _resolve_mode(algorithm: Algorithm, mode: CopositivityMode | None) -> CopositivityMode:
+    if mode is not None:
+        _validate_mode(mode)
+        return mode
+    if algorithm in COMBINED_CLASSIFICATION_ALGORITHMS:
+        return "both"
+    raise ValueError(
+        f"{algorithm} cannot classify both predicates in one traversal; run it once with --mode copositive and once with "
+        "--mode strictly_copositive"
+    )
+
+
 def _validate_preprocessing(preprocessing: str) -> None:
     if not isinstance(preprocessing, str):
         raise TypeError("preprocessing must be a str")
     if preprocessing not in PREPROCESSING_MODES:
         raise ValueError(f"preprocessing must be one of: {', '.join(PREPROCESSING_MODES)}")
+
+
+def _resolve_model_parameter(algorithm: Algorithm, model_parameter: str | None) -> str | None:
+    if model_parameter is not None and not isinstance(model_parameter, str):
+        raise TypeError("model_parameter must be a str or None")
+    if algorithm in PARAMETERIZED_ALGORITHMS:
+        if model_parameter is None:
+            raise ValueError(f"{algorithm} requires model_parameter")
+        value = model_parameter
+        if not value.isascii() or not value.isdecimal() or not 0 <= int(value) <= 100:
+            raise ValueError("wide-certificate model_parameter must be an integer percentage from 0 through 100")
+        return str(int(value))
+    if model_parameter is not None:
+        raise ValueError(f"{algorithm} does not accept a model parameter")
+    return None
 
 
 class StatusCode(IntEnum):

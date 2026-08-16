@@ -1,8 +1,9 @@
 #pragma once
 
 #include <coposit/fraction_free_ldlt.hpp>
-#include <coposit/matrix_integer.hpp>
-#include <coposit/progress.hpp>
+#include <coposit/diagnostics.hpp>
+#include <coposit/matrix_scan.hpp>
+#include <coposit/open_mcs.hpp>
 #include <coposit/support.hpp>
 #include <coposit/timeout.hpp>
 
@@ -13,9 +14,42 @@
 namespace coposit::z_matrix_precheck {
 
 enum class request { copositive, strict, combined };
-enum class outcome { unresolved, not_strictly_copositive, not_copositive };
+enum class outcome {
+    unresolved,
+    strictly_copositive,
+    copositive_not_strictly_copositive,
+    not_strictly_copositive,
+    not_copositive,
+};
 
 namespace detail {
+
+inline int compare_clique_to_threshold(const matrix_scan_result& scan, size_t clique_size)
+{
+    integer scaled_edge(scan.motzkin_straus_edge);
+    scaled_edge.negate();
+    scaled_edge.multiply(static_cast<unsigned long>(clique_size));
+    integer threshold;
+    threshold.set_difference(scan.motzkin_straus_nonedge, scan.motzkin_straus_edge);
+    return scaled_edge.compare(threshold);
+}
+
+inline outcome check_motzkin_straus(const matrix_scan_result& scan, request requested)
+{
+    diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::motzkin_straus, scan.dimension);
+    open_mcs::maximum_clique_search search(scan.negative_neighbors);
+    auto enough_to_decide = [&](size_t clique_size) {
+        const int comparison = compare_clique_to_threshold(scan, clique_size);
+        return comparison > 0 || (requested == request::strict && comparison == 0);
+    };
+    const open_mcs::search_result result = search.run(enough_to_decide);
+    const int comparison = compare_clique_to_threshold(scan, result.best);
+    if (comparison > 0) return outcome::not_copositive;
+    if (comparison == 0) {
+        return result.complete ? outcome::copositive_not_strictly_copositive : outcome::not_strictly_copositive;
+    }
+    return outcome::strictly_copositive;
+}
 
 class maximal_z_blocks {
 public:
@@ -76,17 +110,16 @@ inline void copy_principal(const matrix_integer& matrix, const std::vector<size_
 } // namespace detail
 
 /*
- * Search the maximal principal Z-matrices, meaning blocks whose off-diagonal entries are all nonpositive. A non-PSD block
- * disproves copositivity; a singular PSD block disproves strict copositivity. Passing blocks do not prove either property.
+ * A recognized Motzkin--Straus matrix receives its complete graph-based classification. Every other matrix follows the maximal
+ * principal Z-matrix search: a non-PSD block disproves copositivity and a singular PSD block disproves strict copositivity.
  */
-inline outcome check(const matrix_integer& matrix, const std::vector<support>& negative_neighbors,
-                     const std::vector<support>& nonpositive_neighbors, bool is_motzkin_straus_pattern, request requested)
+inline outcome check(const matrix_integer& matrix, const matrix_scan_result& scan, request requested)
 {
     if (matrix.rows() == 0) return outcome::unresolved;
+    if (scan.is_motzkin_straus_pattern) return detail::check_motzkin_straus(scan, requested);
 
-    progress::preprocessing_stage(progress::preprocessing_phase::z_matrix, matrix.rows(), 0, matrix.rows());
-    if (is_motzkin_straus_pattern) return outcome::unresolved;
-    const detail::maximal_z_blocks blocks(nonpositive_neighbors);
+    diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::z_matrix, matrix.rows(), 0, matrix.rows());
+    const detail::maximal_z_blocks blocks(scan.nonpositive_neighbors);
 
     fraction_free_ldlt_factorization factorization(matrix.rows());
     matrix_integer principal;
@@ -96,7 +129,7 @@ inline outcome check(const matrix_integer& matrix, const std::vector<support>& n
     size_t block_count = 0;
 
     blocks.visit([&](const support& block) {
-        progress::advance_preprocessing(++block_count, 0);
+        diagnostics::advance_preprocessing(++block_count, 0);
         support remaining = block;
         support component(matrix.rows());
         support frontier(matrix.rows());
@@ -114,7 +147,7 @@ inline outcome check(const matrix_integer& matrix, const std::vector<support>& n
                 timeout_checkpoint();
                 const size_t vertex = frontier.lowest_index();
                 frontier.reset(vertex);
-                discovered = negative_neighbors[vertex];
+                discovered = scan.negative_neighbors[vertex];
                 discovered.intersect_with(block);
                 discovered.remove(component);
                 component.add(discovered);

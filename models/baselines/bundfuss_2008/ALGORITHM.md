@@ -167,12 +167,12 @@ therefore changes neither its stored matrix nor the arithmetic seen by later nod
 
 The refinement keeps the same dimension. coposit allows at most 50,000 open nodes. Before splitting one node into its two
 unfinished children, it returns the distinct unresolved `node_limit` outcome if those children would raise the count above that
-limit. A timed native-module run may also observe the shared signal flag at node and matrix-row boundaries and return a distinct
+limit. A timed model-companion run may also observe the shared signal flag at node and matrix-row boundaries and return a distinct
 timeout outcome. Neither resource outcome is a negative classification.
 
 ## Known Difficult Inputs
 
-Bundfuss can fail to make finite progress on a copositive boundary matrix whose zero lies inside repeatedly refined simplices rather
+Bundfuss can fail to make finite diagnostics on a copositive boundary matrix whose zero lies inside repeatedly refined simplices rather
 than at one of the generated vertices. The algorithm keeps inserting edge points and approaching the zero, but its strict vertex and
 edge checks may never expose the zero exactly.
 
@@ -197,6 +197,6 @@ equality reject because either one supplies a nonnegative zero. The model must t
 implementation of a strict algorithm from the 2008 paper. It does not implement Salmerón's separate monotonicity-enhanced `zbund`
 route and adds no low-dimensional shortcut, SNC slice, Dutour ratio split, graph reduction, or other solver.
 
-Timeout checkpoints are enabled only in timed native-module builds. Standalone model and test builds compile the same calls to
+Timeout checkpoints are enabled only in timed model-companion builds. Standalone model and test builds compile the same calls to
 no-ops, so they add no timer thread, clock read, or signal handler. The fixed 50,000-open-node guard applies to every build and is a
 coposit resource boundary; it supplies no mathematical decision.

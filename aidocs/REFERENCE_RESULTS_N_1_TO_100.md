@@ -560,7 +560,7 @@ duplicate-coordinate structure.
 - All four Adaptive Sponsel–COPOMATRIX streak settings completed all six graph/lift cases but timed out on every Hildebrand
   circulant in the original hard set. All five Adaptive Zischg–Sponsel–COPOMATRIX cutoffs had the same split on these 26 cases.
   Combining Sponsel and
-  forced COPOMATRIX progress removed the non-Hildebrand part, but neither the base nor projection-local component decomposition
+  forced COPOMATRIX diagnostics removed the non-Hildebrand part, but neither the base nor projection-local component decomposition
   removed the dominant boundary family.
 - Exceptional matrices defeat Sponsel's root `H` certificate, exact large coefficients increase per-node cost, and none of these
   baselines recognizes graph symmetry or duplicate coordinates.

@@ -1,9 +1,9 @@
 #include <coposit/model.hpp>
 #include <coposit/open_node_limit.hpp>
-#include <coposit/progress.hpp>
+#include <coposit/diagnostics.hpp>
 #include <coposit/timeout.hpp>
 
-#include "../source_trace.hpp"
+#include "../source_diagnostics.hpp"
 
 #include <cmath>
 #include <cstddef>
@@ -57,7 +57,7 @@ evaluation inspect(const matrix_integer& gram, copositivity_mode mode)
     const size_t dimension = gram.rows();
     for (size_t i = 0; i < dimension; ++i) {
         if (gram(i, i).sign() < (mode == copositivity_mode::copositive ? 0 : 1)) {
-            COPOSIT_SOURCE_TRACE("reject");
+            COPOSIT_SOURCE_DIAGNOSTICS("reject");
             return {state::reject, dimension, dimension};
         }
     }
@@ -76,7 +76,7 @@ evaluation inspect(const matrix_integer& gram, copositivity_mode mode)
     }
 
     if (split_i == dimension) {
-        COPOSIT_SOURCE_TRACE("accept");
+        COPOSIT_SOURCE_DIAGNOSTICS("accept");
         return {state::accept, dimension, dimension};
     }
 
@@ -86,11 +86,11 @@ evaluation inspect(const matrix_integer& gram, copositivity_mode mode)
     edge_squared.set_product(gram(split_i, split_j), gram(split_i, split_j));
     const int edge_comparison = edge_squared.compare(diagonal_product);
     if (edge_comparison > 0 || (edge_comparison == 0 && mode == copositivity_mode::strictly_copositive)) {
-        COPOSIT_SOURCE_TRACE("reject");
+        COPOSIT_SOURCE_DIAGNOSTICS("reject");
         return {state::reject, dimension, dimension};
     }
 
-    COPOSIT_SOURCE_TRACE("split", split_i, split_j);
+    COPOSIT_SOURCE_DIAGNOSTICS("split", split_i, split_j);
     return {state::split, split_i, split_j};
 }
 
@@ -143,15 +143,15 @@ void divide_by_content(matrix_integer& gram)
     fmpz_mat_scalar_divexact_fmpz(gram.native_handle(), gram.native_handle(), content.native_handle());
 }
 
-split_data prepare_split(const matrix_integer& gram, size_t first, size_t second, bool track_progress)
+split_data prepare_split(const matrix_integer& gram, size_t first, size_t second, bool track_diagnostics)
 {
     const positive_ratio lambda = calculate_lambda(gram(first, first), gram(second, second), gram(first, second));
-    COPOSIT_SOURCE_TRACE("lambda", fmpz_get_ui(lambda.numerator.native_handle()), fmpz_get_ui(lambda.denominator.native_handle()));
+    COPOSIT_SOURCE_DIAGNOSTICS("lambda", fmpz_get_ui(lambda.numerator.native_handle()), fmpz_get_ui(lambda.denominator.native_handle()));
     integer complement;
     complement.set_difference(lambda.denominator, lambda.numerator);
 
     split_data result;
-    if (track_progress) {
+    if (track_diagnostics) {
         slong numerator_exponent;
         slong denominator_exponent;
         const long double numerator = lambda.numerator.to_dbl_2exp(numerator_exponent);
@@ -205,61 +205,61 @@ matrix_integer make_child(const matrix_integer& gram, const split_data& split, s
  */
 bool test_copositivity(const matrix_integer& matrix, copositivity_mode mode)
 {
-    progress::tracker progress(progress::metric::simplex, matrix.rows());
+    diagnostics::tracker diagnostics(diagnostics::metric::simplex, matrix.rows());
     const evaluation initial = inspect(matrix, mode);
-    progress.visit(matrix.rows(), 0, 1);
+    diagnostics.visit(matrix.rows(), 0, 1);
     if (initial.result == state::reject) {
-        progress.finish();
+        diagnostics.finish();
         return false;
     }
     if (initial.result == state::accept) {
-        progress.resolved(progress.active() ? 1.0L : 0.0L);
-        progress.finish();
+        diagnostics.resolved(diagnostics.active() ? 1.0L : 0.0L);
+        diagnostics.finish();
         return true;
     }
-    progress.split();
+    diagnostics.split();
 
     std::vector<node> pending;
     pending.reserve(64); // Initial capacity only; this is not a dimension limit.
-    pending.push_back({matrix_integer(matrix), initial.split_i, initial.split_j, progress.active() ? 1.0L : 0.0L, 0});
+    pending.push_back({matrix_integer(matrix), initial.split_i, initial.split_j, diagnostics.active() ? 1.0L : 0.0L, 0});
 
     while (!pending.empty()) {
         timeout_checkpoint();
         node current = std::move(pending.back());
         pending.pop_back();
         enforce_open_node_limit(pending.size() + 2);
-        const split_data split = prepare_split(current.gram, current.split_i, current.split_j, progress.active());
+        const split_data split = prepare_split(current.gram, current.split_i, current.split_j, diagnostics.active());
 
         matrix_integer child_gram = make_child(current.gram, split, current.split_i);
         evaluation child = inspect(child_gram, mode);
         const long double first_weight = current.weight * split.lambda;
-        progress.visit(matrix.rows(), current.depth + 1, pending.size() + 2);
+        diagnostics.visit(matrix.rows(), current.depth + 1, pending.size() + 2);
         if (child.result == state::reject) {
-            progress.finish();
+            diagnostics.finish();
             return false;
         }
-        if (child.result == state::accept) progress.resolved(first_weight);
+        if (child.result == state::accept) diagnostics.resolved(first_weight);
         if (child.result == state::split) {
-            progress.split();
+            diagnostics.split();
             pending.push_back({std::move(child_gram), child.split_i, child.split_j, first_weight, current.depth + 1});
         }
 
         child_gram = make_child(current.gram, split, current.split_j);
         child = inspect(child_gram, mode);
-        const long double second_weight = progress.active() ? current.weight - first_weight : 0.0L;
-        progress.visit(matrix.rows(), current.depth + 1, pending.size() + 1);
+        const long double second_weight = diagnostics.active() ? current.weight - first_weight : 0.0L;
+        diagnostics.visit(matrix.rows(), current.depth + 1, pending.size() + 1);
         if (child.result == state::reject) {
-            progress.finish();
+            diagnostics.finish();
             return false;
         }
-        if (child.result == state::accept) progress.resolved(second_weight);
+        if (child.result == state::accept) diagnostics.resolved(second_weight);
         if (child.result == state::split) {
-            progress.split();
+            diagnostics.split();
             pending.push_back({std::move(child_gram), child.split_i, child.split_j, second_weight, current.depth + 1});
         }
     }
 
-    progress.finish();
+    diagnostics.finish();
     return true;
 }
 

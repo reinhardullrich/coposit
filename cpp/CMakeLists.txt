@@ -15,7 +15,7 @@ else()
 endif()
 
 option(COPOSIT_BUILD_APPS "Build the command-line applications" ${COPOSIT_STANDALONE_DEFAULT})
-option(COPOSIT_BUILD_PYTHON "Build the Python extension modules" ${COPOSIT_STANDALONE_DEFAULT})
+option(COPOSIT_BUILD_PYTHON "Install and test the Python coposit adapter" ${COPOSIT_STANDALONE_DEFAULT})
 option(COPOSIT_BUILD_TESTS "Build the coposit test suite" ${COPOSIT_STANDALONE_DEFAULT})
 
 if(COPOSIT_BUILD_TESTS)
@@ -30,13 +30,10 @@ if(COPOSIT_BUILD_PYTHON)
     if(NOT Python3_EXECUTABLE)
         find_program(Python3_EXECUTABLE NAMES python3 python REQUIRED)
     endif()
-    find_package(Python3 3.11 COMPONENTS Interpreter Development.Module REQUIRED)
-    set(PYBIND11_FINDPYTHON ON CACHE BOOL "Use CMake FindPython for pybind11" FORCE)
-    FetchContent_Declare(pybind11
-        GIT_REPOSITORY https://github.com/pybind/pybind11.git
-        GIT_TAG v3.0.4
-    )
-    FetchContent_MakeAvailable(pybind11)
+    find_package(Python3 3.11 COMPONENTS Interpreter REQUIRED)
+    if(NOT COPOSIT_BUILD_APPS)
+        message(FATAL_ERROR "COPOSIT_BUILD_PYTHON requires COPOSIT_BUILD_APPS because Python executes coposit")
+    endif()
 endif()
 
 find_path(FLINT_INCLUDE_DIR NAMES flint/flint.h REQUIRED)
@@ -44,7 +41,7 @@ find_library(FLINT_LIBRARY NAMES flint REQUIRED)
 find_library(MPFR_LIBRARY NAMES mpfr REQUIRED)
 find_library(GMP_LIBRARY NAMES gmp REQUIRED)
 
-if(COPOSIT_BUILD_PYTHON OR (COPOSIT_BUILD_TESTS AND BUILD_TESTING))
+if(COPOSIT_BUILD_APPS OR COPOSIT_BUILD_PYTHON OR (COPOSIT_BUILD_TESTS AND BUILD_TESTING))
     FetchContent_Declare(cadical
         GIT_REPOSITORY https://github.com/arminbiere/cadical.git
         GIT_TAG rel-2.2.1
@@ -94,36 +91,24 @@ target_include_directories(coposit_core INTERFACE
 target_link_libraries(coposit_core INTERFACE ${FLINT_LIBRARY} ${MPFR_LIBRARY} ${GMP_LIBRARY})
 add_library(coposit::core ALIAS coposit_core)
 
-add_library(coposit_safe STATIC ../models/dickinson_final/solver.cpp)
-set_target_properties(coposit_safe PROPERTIES POSITION_INDEPENDENT_CODE ON)
-target_link_libraries(coposit_safe PUBLIC coposit_core)
-add_library(coposit::safe ALIAS coposit_safe)
-
 if(COPOSIT_BUILD_APPS)
     add_executable(coposit coposit_main.cpp)
     target_link_libraries(coposit PRIVATE Threads::Threads)
-
-    add_executable(coposit_fast_solver model_main.cpp ../models/adaptive_sponsel_copomatrix/solver.cpp)
-    set_target_properties(coposit_fast_solver PROPERTIES OUTPUT_NAME coposit-fast)
-    target_compile_definitions(coposit_fast_solver PRIVATE COPOSIT_PUBLIC_FAST=1)
-    target_link_libraries(coposit_fast_solver PRIVATE coposit_core)
-
-    add_executable(coposit_safe_solver model_main.cpp)
-    set_target_properties(coposit_safe_solver PROPERTIES OUTPUT_NAME coposit-safe)
-    target_compile_definitions(coposit_safe_solver PRIVATE COPOSIT_PUBLIC_SAFE=1)
-    target_link_libraries(coposit_safe_solver PRIVATE coposit_safe)
-
-    add_dependencies(coposit coposit_fast_solver coposit_safe_solver)
-
-    add_executable(coposit_analyze coposit_analyze_main.cpp)
-    set_target_properties(coposit_analyze PROPERTIES OUTPUT_NAME coposit-analyze)
-    target_link_libraries(coposit_analyze PRIVATE Threads::Threads)
 endif()
 
 set(COPOSIT_COMBINED_CLASSIFICATION_MODELS
-    danninger_1990 hadeler_1983 dickinson_2019 dickinson_final dense_bitset_dickinson cbdd_zed_dickinson wide_certificate_cbdd_zed_dickinson
-    wide_75_certificate_cbdd_zed_dickinson wide_90_certificate_cbdd_zed_dickinson wide_95_certificate_cbdd_zed_dickinson
-    multithreaded_cbdd_zed_dickinson ceiling_pruned_dickinson sat_zed_dickinson clingo_sat_zed_dickinson fracessa_circular)
+    danninger_1990 hadeler_1983 dickinson_2019 dense_bitset_dickinson interval_recursive_dickinson bdd_dickinson zdd_dickinson
+    cardinality_bdd_dickinson cardinality_zdd_dickinson cbdd_dickinson upper_endpoint_cbdd_dickinson cbdd_dickinson_improved_1
+    wide_certificate_cbdd_dickinson
+    multithreaded_cbdd_dickinson ceiling_pruned_dickinson kernel_cone_dickinson affine_companion_dickinson
+    layered_singular_lift_dickinson
+    breadth_first_singular_lift_dickinson
+    czdd_dickinson sat_dickinson
+    wide_certificate_sat_dickinson
+    clingo_sat_dickinson
+    support_pruned_dickinson nullity_support_pruned_dickinson rhs_dickinson frank_wolfe_dickinson
+    one_step_frank_wolfe_dickinson pairwise_frank_wolfe_dickinson support_polished_frank_wolfe_dickinson
+    fracessa fracessa_circular zischg_hadeler zischg_dickinson zischg_fracessa)
 set(COPOSIT_COPOSITIVE_MODELS
     dutour_2018
     danninger_1990
@@ -131,75 +116,76 @@ set(COPOSIT_COPOSITIVE_MODELS
     adaptive_sponsel_copomatrix
     hadeler_1983
     dickinson_2019
-    dickinson_final
     dense_bitset_dickinson
-    cbdd_zed_dickinson
-    wide_certificate_cbdd_zed_dickinson
-    wide_75_certificate_cbdd_zed_dickinson
-    wide_90_certificate_cbdd_zed_dickinson
-    wide_95_certificate_cbdd_zed_dickinson
-    multithreaded_cbdd_zed_dickinson
+    interval_recursive_dickinson
+    bdd_dickinson
+    zdd_dickinson
+    cardinality_bdd_dickinson
+    cardinality_zdd_dickinson
+    cbdd_dickinson
+    upper_endpoint_cbdd_dickinson
+    cbdd_dickinson_improved_1
+    wide_certificate_cbdd_dickinson
+    multithreaded_cbdd_dickinson
     ceiling_pruned_dickinson
-    sat_zed_dickinson
-    clingo_sat_zed_dickinson
+    kernel_cone_dickinson
+    affine_companion_dickinson
+    layered_singular_lift_dickinson
+    breadth_first_singular_lift_dickinson
+    czdd_dickinson
+    sat_dickinson
+    wide_certificate_sat_dickinson
+    clingo_sat_dickinson
+    support_pruned_dickinson
+    nullity_support_pruned_dickinson
+    rhs_dickinson
+    frank_wolfe_dickinson
+    one_step_frank_wolfe_dickinson
+    pairwise_frank_wolfe_dickinson
+    support_polished_frank_wolfe_dickinson
     safi_2021
     bundfuss_2008
     sponsel_2012
+    fracessa
     fracessa_circular
+    zischg_hadeler
+    zischg_dickinson
+    zischg_fracessa
 )
-set(COPOSIT_CXX_ANALYSIS_MODELS
-    dutour_2018
-    danninger_1990
-    copomatrix_2011
-    adaptive_sponsel_copomatrix
-    hadeler_1983
-    dickinson_final
-    safi_2021
-    bundfuss_2008
-    sponsel_2012
-)
-
-set(COPOSIT_ANALYSIS_TARGETS)
+set(COPOSIT_MODEL_TARGETS)
 function(add_coposit_model_interfaces model_name)
     set(model_directory experiments/${model_name})
+    if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../models/hadeler-based/${model_name}/solver.cpp")
+        set(model_directory hadeler-based/${model_name})
+    endif()
     if(ARGC GREATER 1)
         set(model_directory ${ARGV1})
     endif()
 
-    if(COPOSIT_BUILD_APPS AND model_name IN_LIST COPOSIT_CXX_ANALYSIS_MODELS)
-        set(analysis_target coposit_analyze_${model_name})
-        add_executable(${analysis_target} model_main.cpp ../models/${model_directory}/solver.cpp)
-        set_target_properties(${analysis_target} PROPERTIES OUTPUT_NAME coposit-analyze-${model_name})
-        target_compile_definitions(${analysis_target} PRIVATE COPOSIT_ANALYSIS_COMPANION=1)
+    if(COPOSIT_BUILD_APPS)
+        set(model_target coposit_model_${model_name})
+        add_executable(${model_target} model_main.cpp ../models/${model_directory}/solver.cpp)
+        set_target_properties(${model_target} PROPERTIES OUTPUT_NAME coposit-${model_name})
         if(model_name IN_LIST COPOSIT_COMBINED_CLASSIFICATION_MODELS)
-            target_compile_definitions(${analysis_target} PRIVATE COPOSIT_HAS_COMBINED_CLASSIFICATION=1)
+            target_compile_definitions(${model_target} PRIVATE COPOSIT_HAS_COMBINED_CLASSIFICATION=1)
         endif()
+        target_compile_definitions(${model_target} PRIVATE COPOSIT_ENABLE_TIMEOUTS=1)
         if(model_name IN_LIST COPOSIT_COPOSITIVE_MODELS)
-            target_compile_definitions(${analysis_target} PRIVATE COPOSIT_SUPPORTS_COPOSITIVE=1)
+            target_compile_definitions(${model_target} PRIVATE COPOSIT_SUPPORTS_COPOSITIVE=1)
         endif()
-        target_link_libraries(${analysis_target} PRIVATE coposit_core)
-        list(APPEND COPOSIT_ANALYSIS_TARGETS ${analysis_target})
-        set(COPOSIT_ANALYSIS_TARGETS ${COPOSIT_ANALYSIS_TARGETS} PARENT_SCOPE)
+        if(model_name STREQUAL "wide_certificate_cbdd_dickinson" OR model_name STREQUAL "wide_certificate_sat_dickinson")
+            target_compile_definitions(${model_target} PRIVATE COPOSIT_HAS_MODEL_PARAMETER=1)
+        endif()
+        target_link_libraries(${model_target} PRIVATE coposit_core Threads::Threads)
+        if(model_name STREQUAL "sat_dickinson" OR model_name STREQUAL "wide_certificate_sat_dickinson")
+            target_link_libraries(${model_target} PRIVATE coposit_cadical)
+        elseif(model_name STREQUAL "clingo_sat_dickinson")
+            target_link_libraries(${model_target} PRIVATE libclingo)
+        endif()
+        list(APPEND COPOSIT_MODEL_TARGETS ${model_target})
+        set(COPOSIT_MODEL_TARGETS ${COPOSIT_MODEL_TARGETS} PARENT_SCOPE)
     endif()
 
-    if(COPOSIT_BUILD_PYTHON)
-        set(python_target coposit_${model_name}_core)
-        pybind11_add_module(${python_target} MODULE python_module.cpp ../models/${model_directory}/solver.cpp)
-        target_compile_definitions(${python_target} PRIVATE COPOSIT_ENABLE_TIMEOUTS=1 COPOSIT_PYTHON_MODULE=${python_target})
-        if(model_name IN_LIST COPOSIT_COMBINED_CLASSIFICATION_MODELS)
-            target_compile_definitions(${python_target} PRIVATE COPOSIT_HAS_COMBINED_CLASSIFICATION=1)
-        endif()
-        if(model_name IN_LIST COPOSIT_COPOSITIVE_MODELS)
-            target_compile_definitions(${python_target} PRIVATE COPOSIT_SUPPORTS_COPOSITIVE=1)
-        endif()
-        target_link_libraries(${python_target} PRIVATE coposit_core Threads::Threads)
-        if(model_name STREQUAL "sat_zed_dickinson")
-            target_link_libraries(${python_target} PRIVATE coposit_cadical)
-        elseif(model_name STREQUAL "clingo_sat_zed_dickinson")
-            target_link_libraries(${python_target} PRIVATE libclingo)
-        endif()
-        install(TARGETS ${python_target} LIBRARY DESTINATION . RUNTIME DESTINATION .)
-    endif()
 endfunction()
 
 add_coposit_model_interfaces(dutour_2018 baselines/dutour_2018)
@@ -207,30 +193,30 @@ add_coposit_model_interfaces(danninger_1990 baselines/danninger_1990)
 add_coposit_model_interfaces(copomatrix_2011 baselines/copomatrix_2011)
 add_coposit_model_interfaces(adaptive_dutour_danninger)
 add_coposit_model_interfaces(adaptive_dutour_copomatrix)
-add_coposit_model_interfaces(adaptive_sponsel_copomatrix adaptive_sponsel_copomatrix)
+add_coposit_model_interfaces(adaptive_sponsel_copomatrix)
 add_coposit_model_interfaces(adaptive_zischg_sponsel_copomatrix)
-add_coposit_model_interfaces(hadeler_1983 baselines/hadeler_1983)
-add_coposit_model_interfaces(dickinson_2019 baselines/dickinson_2019)
-add_coposit_model_interfaces(dickinson_final dickinson_final)
+add_coposit_model_interfaces(hadeler_1983)
+add_coposit_model_interfaces(dickinson_2019)
 add_coposit_model_interfaces(dense_bitset_dickinson)
 add_coposit_model_interfaces(interval_recursive_dickinson)
-add_coposit_model_interfaces(interval_bdd_dickinson)
-add_coposit_model_interfaces(interval_zdd_dickinson)
+add_coposit_model_interfaces(bdd_dickinson)
+add_coposit_model_interfaces(zdd_dickinson)
 add_coposit_model_interfaces(cardinality_bdd_dickinson)
 add_coposit_model_interfaces(cardinality_zdd_dickinson)
-add_coposit_model_interfaces(dickinson_zed)
-add_coposit_model_interfaces(bdd_zed_dickinson)
-add_coposit_model_interfaces(zdd_zed_dickinson)
-add_coposit_model_interfaces(cbdd_zed_dickinson)
-add_coposit_model_interfaces(wide_certificate_cbdd_zed_dickinson)
-add_coposit_model_interfaces(wide_75_certificate_cbdd_zed_dickinson)
-add_coposit_model_interfaces(wide_90_certificate_cbdd_zed_dickinson)
-add_coposit_model_interfaces(wide_95_certificate_cbdd_zed_dickinson)
-add_coposit_model_interfaces(multithreaded_cbdd_zed_dickinson)
+add_coposit_model_interfaces(cbdd_dickinson)
+add_coposit_model_interfaces(upper_endpoint_cbdd_dickinson)
+add_coposit_model_interfaces(cbdd_dickinson_improved_1)
+add_coposit_model_interfaces(wide_certificate_cbdd_dickinson)
+add_coposit_model_interfaces(multithreaded_cbdd_dickinson)
 add_coposit_model_interfaces(ceiling_pruned_dickinson)
-add_coposit_model_interfaces(czdd_zed_dickinson)
-add_coposit_model_interfaces(sat_zed_dickinson)
-add_coposit_model_interfaces(clingo_sat_zed_dickinson)
+add_coposit_model_interfaces(kernel_cone_dickinson)
+add_coposit_model_interfaces(affine_companion_dickinson)
+add_coposit_model_interfaces(layered_singular_lift_dickinson)
+add_coposit_model_interfaces(breadth_first_singular_lift_dickinson)
+add_coposit_model_interfaces(czdd_dickinson)
+add_coposit_model_interfaces(sat_dickinson)
+add_coposit_model_interfaces(wide_certificate_sat_dickinson)
+add_coposit_model_interfaces(clingo_sat_dickinson)
 add_coposit_model_interfaces(support_pruned_dickinson)
 add_coposit_model_interfaces(nullity_support_pruned_dickinson)
 add_coposit_model_interfaces(rhs_dickinson)
@@ -249,7 +235,21 @@ add_coposit_model_interfaces(zischg_dickinson)
 add_coposit_model_interfaces(zischg_fracessa)
 
 if(COPOSIT_BUILD_APPS)
-    add_dependencies(coposit_analyze ${COPOSIT_ANALYSIS_TARGETS})
+    file(GLOB COPOSIT_MODEL_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/../models/baselines/*/solver.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../models/experiments/*/solver.cpp"
+        "${CMAKE_CURRENT_SOURCE_DIR}/../models/hadeler-based/*/solver.cpp")
+    foreach(model_source IN LISTS COPOSIT_MODEL_SOURCES)
+        get_filename_component(model_directory "${model_source}" DIRECTORY)
+        get_filename_component(discovered_model "${model_directory}" NAME)
+        if(NOT TARGET coposit_model_${discovered_model})
+            message(FATAL_ERROR "Model ${discovered_model} has solver.cpp but is not registered with coposit")
+        endif()
+    endforeach()
+    add_dependencies(coposit ${COPOSIT_MODEL_TARGETS})
+endif()
+if(COPOSIT_BUILD_PYTHON)
+    install(TARGETS coposit ${COPOSIT_MODEL_TARGETS} RUNTIME DESTINATION pycoposit)
 endif()
 
 if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
@@ -286,8 +286,8 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
     add_test(NAME AdaptiveDutourCopomatrixModelTests COMMAND test_adaptive_dutour_copomatrix)
 
     add_executable(test_adaptive_sponsel_copomatrix
-        ../models/adaptive_sponsel_copomatrix/test_solver.cpp
-        ../models/adaptive_sponsel_copomatrix/solver.cpp)
+        ../models/experiments/adaptive_sponsel_copomatrix/test_solver.cpp
+        ../models/experiments/adaptive_sponsel_copomatrix/solver.cpp)
     target_compile_definitions(test_adaptive_sponsel_copomatrix
         PRIVATE COPOSIT_ADAPTIVE_SPONSEL_COPOMATRIX_TESTING=1)
     target_link_libraries(test_adaptive_sponsel_copomatrix PRIVATE coposit_core GTest::gtest_main)
@@ -301,201 +301,218 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
     target_link_libraries(test_adaptive_zischg_sponsel_copomatrix PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME AdaptiveZischgSponselCopomatrixModelTests COMMAND test_adaptive_zischg_sponsel_copomatrix)
 
-    add_executable(test_hadeler_1983 ../models/baselines/hadeler_1983/test_solver.cpp ../models/baselines/hadeler_1983/solver.cpp)
+    add_executable(test_hadeler_1983 ../models/hadeler-based/hadeler_1983/test_solver.cpp ../models/hadeler-based/hadeler_1983/solver.cpp)
     target_link_libraries(test_hadeler_1983 PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME Hadeler1983ModelTests COMMAND test_hadeler_1983)
 
-    add_executable(test_dickinson_2019 ../models/baselines/dickinson_2019/test_solver.cpp ../models/baselines/dickinson_2019/solver.cpp)
+    add_executable(test_dickinson_2019 ../models/hadeler-based/dickinson_2019/test_solver.cpp ../models/hadeler-based/dickinson_2019/solver.cpp)
     target_link_libraries(test_dickinson_2019 PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME Dickinson2019ModelTests COMMAND test_dickinson_2019)
 
-    add_executable(test_dickinson_final ../models/dickinson_final/test_solver.cpp ../models/dickinson_final/solver.cpp)
-    target_compile_definitions(test_dickinson_final PRIVATE COPOSIT_BASELINE_SOURCE_TRACE=1)
-    target_link_libraries(test_dickinson_final PRIVATE coposit_core GTest::gtest_main)
-    add_test(NAME DickinsonFinalModelTests COMMAND test_dickinson_final)
-
     add_executable(test_dense_bitset_dickinson
-        ../models/experiments/dense_bitset_dickinson/test_solver.cpp
-        ../models/experiments/dense_bitset_dickinson/solver.cpp)
+        ../models/hadeler-based/dense_bitset_dickinson/test_solver.cpp
+        ../models/hadeler-based/dense_bitset_dickinson/solver.cpp)
     target_compile_definitions(test_dense_bitset_dickinson
         PRIVATE COPOSIT_DENSE_BITSET_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
     target_link_libraries(test_dense_bitset_dickinson PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME DenseBitsetDickinsonModelTests COMMAND test_dense_bitset_dickinson)
 
     add_executable(test_interval_recursive_dickinson
-        ../models/experiments/interval_recursive_dickinson/test_solver.cpp
-        ../models/experiments/interval_recursive_dickinson/solver.cpp)
+        ../models/hadeler-based/interval_recursive_dickinson/test_solver.cpp
+        ../models/hadeler-based/interval_recursive_dickinson/solver.cpp)
     target_compile_definitions(test_interval_recursive_dickinson PRIVATE COPOSIT_INTERVAL_RECURSIVE_DICKINSON_TESTING=1)
     target_link_libraries(test_interval_recursive_dickinson PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME IntervalRecursiveDickinsonModelTests COMMAND test_interval_recursive_dickinson)
 
-    add_executable(test_interval_bdd_dickinson
-        ../models/experiments/interval_bdd_dickinson/test_solver.cpp
-        ../models/experiments/interval_bdd_dickinson/solver.cpp)
-    target_compile_definitions(test_interval_bdd_dickinson
-        PRIVATE COPOSIT_INTERVAL_BDD_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
-    target_link_libraries(test_interval_bdd_dickinson PRIVATE coposit_core GTest::gtest_main)
-    add_test(NAME IntervalBddDickinsonModelTests COMMAND test_interval_bdd_dickinson)
+    add_executable(test_bdd_dickinson
+        ../models/hadeler-based/bdd_dickinson/test_solver.cpp
+        ../models/hadeler-based/bdd_dickinson/solver.cpp)
+    target_compile_definitions(test_bdd_dickinson
+        PRIVATE COPOSIT_BDD_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_bdd_dickinson PRIVATE coposit_core GTest::gtest_main)
+    add_test(NAME BddDickinsonModelTests COMMAND test_bdd_dickinson)
 
-    add_executable(test_interval_zdd_dickinson
-        ../models/experiments/interval_zdd_dickinson/test_solver.cpp
-        ../models/experiments/interval_zdd_dickinson/solver.cpp)
-    target_compile_definitions(test_interval_zdd_dickinson
-        PRIVATE COPOSIT_INTERVAL_ZDD_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
-    target_link_libraries(test_interval_zdd_dickinson PRIVATE coposit_core GTest::gtest_main)
-    add_test(NAME IntervalZddDickinsonModelTests COMMAND test_interval_zdd_dickinson)
+    add_executable(test_zdd_dickinson
+        ../models/hadeler-based/zdd_dickinson/test_solver.cpp
+        ../models/hadeler-based/zdd_dickinson/solver.cpp)
+    target_compile_definitions(test_zdd_dickinson
+        PRIVATE COPOSIT_ZDD_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_zdd_dickinson PRIVATE coposit_core GTest::gtest_main)
+    add_test(NAME ZddDickinsonModelTests COMMAND test_zdd_dickinson)
 
     add_executable(test_cardinality_bdd_dickinson
-        ../models/experiments/cardinality_bdd_dickinson/test_solver.cpp
-        ../models/experiments/cardinality_bdd_dickinson/solver.cpp)
+        ../models/hadeler-based/cardinality_bdd_dickinson/test_solver.cpp
+        ../models/hadeler-based/cardinality_bdd_dickinson/solver.cpp)
     target_compile_definitions(test_cardinality_bdd_dickinson
         PRIVATE COPOSIT_CARDINALITY_BDD_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
     target_link_libraries(test_cardinality_bdd_dickinson PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME CardinalityBddDickinsonModelTests COMMAND test_cardinality_bdd_dickinson)
 
     add_executable(test_cardinality_zdd_dickinson
-        ../models/experiments/cardinality_zdd_dickinson/test_solver.cpp
-        ../models/experiments/cardinality_zdd_dickinson/solver.cpp)
+        ../models/hadeler-based/cardinality_zdd_dickinson/test_solver.cpp
+        ../models/hadeler-based/cardinality_zdd_dickinson/solver.cpp)
     target_compile_definitions(test_cardinality_zdd_dickinson
         PRIVATE COPOSIT_CARDINALITY_ZDD_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
     target_link_libraries(test_cardinality_zdd_dickinson PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME CardinalityZddDickinsonModelTests COMMAND test_cardinality_zdd_dickinson)
 
-    add_executable(test_dickinson_zed
-        ../models/experiments/dickinson_zed/test_solver.cpp
-        ../models/experiments/dickinson_zed/solver.cpp)
-    target_compile_definitions(test_dickinson_zed PRIVATE COPOSIT_DICKINSON_ZED_TESTING=1)
-    target_link_libraries(test_dickinson_zed PRIVATE coposit_core GTest::gtest_main)
-    add_test(NAME DickinsonZedModelTests COMMAND test_dickinson_zed)
+    add_executable(test_cbdd_dickinson
+        ../models/hadeler-based/cbdd_dickinson/test_solver.cpp
+        ../models/hadeler-based/cbdd_dickinson/solver.cpp)
+    target_compile_definitions(test_cbdd_dickinson
+        PRIVATE COPOSIT_CBDD_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_cbdd_dickinson PRIVATE coposit_core GTest::gtest_main)
+    add_test(NAME CbddDickinsonModelTests COMMAND test_cbdd_dickinson)
 
-    add_executable(test_bdd_zed_dickinson
-        ../models/experiments/bdd_zed_dickinson/test_solver.cpp
-        ../models/experiments/bdd_zed_dickinson/solver.cpp)
-    target_compile_definitions(test_bdd_zed_dickinson
-        PRIVATE COPOSIT_BDD_ZED_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
-    target_link_libraries(test_bdd_zed_dickinson PRIVATE coposit_core GTest::gtest_main)
-    add_test(NAME BddZedDickinsonModelTests COMMAND test_bdd_zed_dickinson)
+    add_executable(test_upper_endpoint_cbdd_dickinson
+        ../models/hadeler-based/upper_endpoint_cbdd_dickinson/test_solver.cpp
+        ../models/hadeler-based/upper_endpoint_cbdd_dickinson/solver.cpp)
+    target_compile_definitions(test_upper_endpoint_cbdd_dickinson
+        PRIVATE COPOSIT_UPPER_ENDPOINT_CBDD_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_upper_endpoint_cbdd_dickinson PRIVATE coposit_core GTest::gtest_main)
+    add_test(NAME UpperEndpointCbddDickinsonModelTests COMMAND test_upper_endpoint_cbdd_dickinson)
 
-    add_executable(test_zdd_zed_dickinson
-        ../models/experiments/zdd_zed_dickinson/test_solver.cpp
-        ../models/experiments/zdd_zed_dickinson/solver.cpp)
-    target_compile_definitions(test_zdd_zed_dickinson
-        PRIVATE COPOSIT_ZDD_ZED_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
-    target_link_libraries(test_zdd_zed_dickinson PRIVATE coposit_core GTest::gtest_main)
-    add_test(NAME ZddZedDickinsonModelTests COMMAND test_zdd_zed_dickinson)
+    add_executable(test_cbdd_dickinson_improved_1
+        ../models/hadeler-based/cbdd_dickinson_improved_1/test_solver.cpp
+        ../models/hadeler-based/cbdd_dickinson_improved_1/solver.cpp)
+    target_compile_definitions(test_cbdd_dickinson_improved_1
+        PRIVATE COPOSIT_CBDD_DICKINSON_IMPROVED_1_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_cbdd_dickinson_improved_1 PRIVATE coposit_core GTest::gtest_main)
+    add_test(NAME CbddDickinsonImproved1ModelTests COMMAND test_cbdd_dickinson_improved_1)
 
-    add_executable(test_cbdd_zed_dickinson
-        ../models/experiments/cbdd_zed_dickinson/test_solver.cpp
-        ../models/experiments/cbdd_zed_dickinson/solver.cpp)
-    target_compile_definitions(test_cbdd_zed_dickinson
-        PRIVATE COPOSIT_CBDD_ZED_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
-    target_link_libraries(test_cbdd_zed_dickinson PRIVATE coposit_core GTest::gtest_main)
-    add_test(NAME CbddZedDickinsonModelTests COMMAND test_cbdd_zed_dickinson)
+    add_executable(test_wide_certificate_cbdd_dickinson
+        ../models/hadeler-based/wide_certificate_cbdd_dickinson/test_solver.cpp
+        ../models/hadeler-based/wide_certificate_cbdd_dickinson/solver.cpp)
+    target_compile_definitions(test_wide_certificate_cbdd_dickinson
+        PRIVATE COPOSIT_CBDD_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_wide_certificate_cbdd_dickinson PRIVATE coposit_core GTest::gtest_main)
+    add_test(NAME WideCertificateCbddDickinsonModelTests COMMAND test_wide_certificate_cbdd_dickinson)
 
-    add_executable(test_wide_certificate_cbdd_zed_dickinson
-        ../models/experiments/wide_certificate_cbdd_zed_dickinson/test_solver.cpp
-        ../models/experiments/wide_certificate_cbdd_zed_dickinson/solver.cpp)
-    target_compile_definitions(test_wide_certificate_cbdd_zed_dickinson
-        PRIVATE COPOSIT_CBDD_ZED_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
-    target_link_libraries(test_wide_certificate_cbdd_zed_dickinson PRIVATE coposit_core GTest::gtest_main)
-    add_test(NAME WideCertificateCbddZedDickinsonModelTests COMMAND test_wide_certificate_cbdd_zed_dickinson)
-
-    foreach(percentage IN ITEMS 75 90 95)
-        add_executable(test_wide_${percentage}_certificate_cbdd_zed_dickinson
-            ../models/experiments/wide_${percentage}_certificate_cbdd_zed_dickinson/test_solver.cpp
-            ../models/experiments/wide_${percentage}_certificate_cbdd_zed_dickinson/solver.cpp)
-        target_compile_definitions(test_wide_${percentage}_certificate_cbdd_zed_dickinson
-            PRIVATE COPOSIT_CBDD_ZED_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
-        target_link_libraries(test_wide_${percentage}_certificate_cbdd_zed_dickinson PRIVATE coposit_core GTest::gtest_main)
-        add_test(NAME Wide${percentage}CertificateCbddZedDickinsonModelTests
-            COMMAND test_wide_${percentage}_certificate_cbdd_zed_dickinson)
-    endforeach()
-
-    add_executable(test_multithreaded_cbdd_zed_dickinson
-        ../models/experiments/multithreaded_cbdd_zed_dickinson/test_solver.cpp
-        ../models/experiments/multithreaded_cbdd_zed_dickinson/solver.cpp)
-    target_compile_definitions(test_multithreaded_cbdd_zed_dickinson
-        PRIVATE COPOSIT_MULTITHREADED_CBDD_ZED_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
-    target_link_libraries(test_multithreaded_cbdd_zed_dickinson PRIVATE coposit_core GTest::gtest_main Threads::Threads)
-    add_test(NAME MultithreadedCbddZedDickinsonModelTests COMMAND test_multithreaded_cbdd_zed_dickinson)
+    add_executable(test_multithreaded_cbdd_dickinson
+        ../models/hadeler-based/multithreaded_cbdd_dickinson/test_solver.cpp
+        ../models/hadeler-based/multithreaded_cbdd_dickinson/solver.cpp)
+    target_compile_definitions(test_multithreaded_cbdd_dickinson
+        PRIVATE COPOSIT_MULTITHREADED_CBDD_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_multithreaded_cbdd_dickinson PRIVATE coposit_core GTest::gtest_main Threads::Threads)
+    add_test(NAME MultithreadedCbddDickinsonModelTests COMMAND test_multithreaded_cbdd_dickinson)
 
     add_executable(test_ceiling_pruned_dickinson
-        ../models/experiments/ceiling_pruned_dickinson/test_solver.cpp
-        ../models/experiments/ceiling_pruned_dickinson/solver.cpp)
+        ../models/hadeler-based/ceiling_pruned_dickinson/test_solver.cpp
+        ../models/hadeler-based/ceiling_pruned_dickinson/solver.cpp)
     target_compile_definitions(test_ceiling_pruned_dickinson
         PRIVATE COPOSIT_CEILING_PRUNED_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
     target_link_libraries(test_ceiling_pruned_dickinson PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME CeilingPrunedDickinsonModelTests COMMAND test_ceiling_pruned_dickinson)
 
-    add_executable(test_czdd_zed_dickinson
-        ../models/experiments/czdd_zed_dickinson/test_solver.cpp
-        ../models/experiments/czdd_zed_dickinson/solver.cpp)
-    target_compile_definitions(test_czdd_zed_dickinson
-        PRIVATE COPOSIT_CZDD_ZED_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
-    target_link_libraries(test_czdd_zed_dickinson PRIVATE coposit_core GTest::gtest_main)
-    add_test(NAME CzddZedDickinsonModelTests COMMAND test_czdd_zed_dickinson)
+    add_executable(test_kernel_cone_dickinson
+        ../models/hadeler-based/kernel_cone_dickinson/test_solver.cpp
+        ../models/hadeler-based/kernel_cone_dickinson/solver.cpp)
+    target_compile_definitions(test_kernel_cone_dickinson
+        PRIVATE COPOSIT_KERNEL_CONE_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_kernel_cone_dickinson PRIVATE coposit_core GTest::gtest_main)
+    add_test(NAME KernelConeDickinsonModelTests COMMAND test_kernel_cone_dickinson)
 
-    add_executable(test_sat_zed_dickinson
-        ../models/experiments/sat_zed_dickinson/test_solver.cpp
-        ../models/experiments/sat_zed_dickinson/solver.cpp)
-    target_compile_definitions(test_sat_zed_dickinson
-        PRIVATE COPOSIT_SAT_ZED_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
-    target_link_libraries(test_sat_zed_dickinson PRIVATE coposit_core coposit_cadical GTest::gtest_main)
-    add_test(NAME SatZedDickinsonModelTests COMMAND test_sat_zed_dickinson)
+    add_executable(test_affine_companion_dickinson
+        ../models/hadeler-based/affine_companion_dickinson/test_solver.cpp
+        ../models/hadeler-based/affine_companion_dickinson/solver.cpp)
+    target_compile_definitions(test_affine_companion_dickinson
+        PRIVATE COPOSIT_AFFINE_COMPANION_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_affine_companion_dickinson PRIVATE coposit_core GTest::gtest_main)
+    add_test(NAME AffineCompanionDickinsonModelTests COMMAND test_affine_companion_dickinson)
 
-    add_executable(test_clingo_sat_zed_dickinson
-        ../models/experiments/clingo_sat_zed_dickinson/test_solver.cpp
-        ../models/experiments/clingo_sat_zed_dickinson/solver.cpp)
-    target_compile_definitions(test_clingo_sat_zed_dickinson
-        PRIVATE COPOSIT_CLINGO_SAT_ZED_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
-    target_link_libraries(test_clingo_sat_zed_dickinson PRIVATE coposit_core libclingo GTest::gtest_main)
-    add_test(NAME ClingoSatZedDickinsonModelTests COMMAND test_clingo_sat_zed_dickinson)
+    add_executable(test_layered_singular_lift_dickinson
+        ../models/hadeler-based/layered_singular_lift_dickinson/test_solver.cpp
+        ../models/hadeler-based/layered_singular_lift_dickinson/solver.cpp)
+    target_compile_definitions(test_layered_singular_lift_dickinson
+        PRIVATE COPOSIT_LAYERED_SINGULAR_LIFT_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_layered_singular_lift_dickinson PRIVATE coposit_core GTest::gtest_main)
+    add_test(NAME LayeredSingularLiftDickinsonModelTests COMMAND test_layered_singular_lift_dickinson)
+
+    add_executable(test_breadth_first_singular_lift_dickinson
+        ../models/hadeler-based/breadth_first_singular_lift_dickinson/test_solver.cpp
+        ../models/hadeler-based/breadth_first_singular_lift_dickinson/solver.cpp)
+    target_compile_definitions(test_breadth_first_singular_lift_dickinson
+        PRIVATE COPOSIT_BREADTH_FIRST_SINGULAR_LIFT_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_breadth_first_singular_lift_dickinson PRIVATE coposit_core GTest::gtest_main)
+    add_test(NAME BreadthFirstSingularLiftDickinsonModelTests COMMAND test_breadth_first_singular_lift_dickinson)
+
+    add_executable(test_czdd_dickinson
+        ../models/hadeler-based/czdd_dickinson/test_solver.cpp
+        ../models/hadeler-based/czdd_dickinson/solver.cpp)
+    target_compile_definitions(test_czdd_dickinson
+        PRIVATE COPOSIT_CZDD_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_czdd_dickinson PRIVATE coposit_core GTest::gtest_main)
+    add_test(NAME CzddDickinsonModelTests COMMAND test_czdd_dickinson)
+
+    add_executable(test_sat_dickinson
+        ../models/hadeler-based/sat_dickinson/test_solver.cpp
+        ../models/hadeler-based/sat_dickinson/solver.cpp)
+    target_compile_definitions(test_sat_dickinson
+        PRIVATE COPOSIT_SAT_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_sat_dickinson PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME SatDickinsonModelTests COMMAND test_sat_dickinson)
+
+    add_executable(test_wide_certificate_sat_dickinson
+        ../models/hadeler-based/wide_certificate_sat_dickinson/test_solver.cpp
+        ../models/hadeler-based/wide_certificate_sat_dickinson/solver.cpp)
+    target_compile_definitions(test_wide_certificate_sat_dickinson
+        PRIVATE COPOSIT_WIDE_CERTIFICATE_SAT_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_wide_certificate_sat_dickinson PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME WideCertificateSatDickinsonModelTests COMMAND test_wide_certificate_sat_dickinson)
+
+    add_executable(test_clingo_sat_dickinson
+        ../models/hadeler-based/clingo_sat_dickinson/test_solver.cpp
+        ../models/hadeler-based/clingo_sat_dickinson/solver.cpp)
+    target_compile_definitions(test_clingo_sat_dickinson
+        PRIVATE COPOSIT_CLINGO_SAT_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_clingo_sat_dickinson PRIVATE coposit_core libclingo GTest::gtest_main)
+    add_test(NAME ClingoSatDickinsonModelTests COMMAND test_clingo_sat_dickinson)
 
     add_executable(test_support_pruned_dickinson
-        ../models/experiments/support_pruned_dickinson/test_solver.cpp
-        ../models/experiments/support_pruned_dickinson/solver.cpp)
+        ../models/hadeler-based/support_pruned_dickinson/test_solver.cpp
+        ../models/hadeler-based/support_pruned_dickinson/solver.cpp)
     target_link_libraries(test_support_pruned_dickinson PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME SupportPrunedDickinsonModelTests COMMAND test_support_pruned_dickinson)
 
     add_executable(test_nullity_support_pruned_dickinson
-        ../models/experiments/nullity_support_pruned_dickinson/test_solver.cpp
-        ../models/experiments/nullity_support_pruned_dickinson/solver.cpp)
+        ../models/hadeler-based/nullity_support_pruned_dickinson/test_solver.cpp
+        ../models/hadeler-based/nullity_support_pruned_dickinson/solver.cpp)
     target_compile_definitions(test_nullity_support_pruned_dickinson
         PRIVATE COPOSIT_NULLITY_SUPPORT_PRUNED_DICKINSON_TESTING=1)
     target_link_libraries(test_nullity_support_pruned_dickinson PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME NullitySupportPrunedDickinsonModelTests COMMAND test_nullity_support_pruned_dickinson)
 
-    add_executable(test_rhs_dickinson ../models/experiments/rhs_dickinson/test_solver.cpp ../models/experiments/rhs_dickinson/solver.cpp)
+    add_executable(test_rhs_dickinson ../models/hadeler-based/rhs_dickinson/test_solver.cpp ../models/hadeler-based/rhs_dickinson/solver.cpp)
     target_compile_definitions(test_rhs_dickinson PRIVATE COPOSIT_RHS_DICKINSON_TESTING=1)
     target_link_libraries(test_rhs_dickinson PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME RhsDickinsonModelTests COMMAND test_rhs_dickinson)
 
     add_executable(test_frank_wolfe_dickinson
-        ../models/experiments/frank_wolfe_dickinson/test_solver.cpp
-        ../models/experiments/frank_wolfe_dickinson/solver.cpp)
+        ../models/hadeler-based/frank_wolfe_dickinson/test_solver.cpp
+        ../models/hadeler-based/frank_wolfe_dickinson/solver.cpp)
     target_compile_definitions(test_frank_wolfe_dickinson PRIVATE COPOSIT_FRANK_WOLFE_DICKINSON_TESTING=1)
     target_link_libraries(test_frank_wolfe_dickinson PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME FrankWolfeDickinsonModelTests COMMAND test_frank_wolfe_dickinson)
 
     add_executable(test_one_step_frank_wolfe_dickinson
-        ../models/experiments/one_step_frank_wolfe_dickinson/test_solver.cpp
-        ../models/experiments/one_step_frank_wolfe_dickinson/solver.cpp)
+        ../models/hadeler-based/one_step_frank_wolfe_dickinson/test_solver.cpp
+        ../models/hadeler-based/one_step_frank_wolfe_dickinson/solver.cpp)
     target_compile_definitions(test_one_step_frank_wolfe_dickinson
         PRIVATE COPOSIT_ONE_STEP_FRANK_WOLFE_DICKINSON_TESTING=1)
     target_link_libraries(test_one_step_frank_wolfe_dickinson PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME OneStepFrankWolfeDickinsonModelTests COMMAND test_one_step_frank_wolfe_dickinson)
 
     add_executable(test_pairwise_frank_wolfe_dickinson
-        ../models/experiments/pairwise_frank_wolfe_dickinson/test_solver.cpp
-        ../models/experiments/pairwise_frank_wolfe_dickinson/solver.cpp)
+        ../models/hadeler-based/pairwise_frank_wolfe_dickinson/test_solver.cpp
+        ../models/hadeler-based/pairwise_frank_wolfe_dickinson/solver.cpp)
     target_compile_definitions(test_pairwise_frank_wolfe_dickinson
         PRIVATE COPOSIT_PAIRWISE_FRANK_WOLFE_DICKINSON_TESTING=1)
     target_link_libraries(test_pairwise_frank_wolfe_dickinson PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME PairwiseFrankWolfeDickinsonModelTests COMMAND test_pairwise_frank_wolfe_dickinson)
 
     add_executable(test_support_polished_frank_wolfe_dickinson
-        ../models/experiments/support_polished_frank_wolfe_dickinson/test_solver.cpp
-        ../models/experiments/support_polished_frank_wolfe_dickinson/solver.cpp)
+        ../models/hadeler-based/support_polished_frank_wolfe_dickinson/test_solver.cpp
+        ../models/hadeler-based/support_polished_frank_wolfe_dickinson/solver.cpp)
     target_compile_definitions(test_support_polished_frank_wolfe_dickinson
         PRIVATE COPOSIT_SUPPORT_POLISHED_FRANK_WOLFE_DICKINSON_TESTING=1)
     target_link_libraries(test_support_polished_frank_wolfe_dickinson PRIVATE coposit_core GTest::gtest_main)
@@ -522,7 +539,7 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
         test_safi_2021
         test_bundfuss_2008
         test_sponsel_2012)
-        target_compile_definitions(${target} PRIVATE COPOSIT_BASELINE_SOURCE_TRACE=1)
+        target_compile_definitions(${target} PRIVATE COPOSIT_BASELINE_SOURCE_DIAGNOSTICS=1)
     endforeach()
 
     add_executable(test_frank_wolfe_sponsel
@@ -532,29 +549,29 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
     target_link_libraries(test_frank_wolfe_sponsel PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME FrankWolfeSponselModelTests COMMAND test_frank_wolfe_sponsel)
 
-    add_executable(test_fracessa ../models/experiments/fracessa/test_solver.cpp ../models/experiments/fracessa/solver.cpp)
+    add_executable(test_fracessa ../models/hadeler-based/fracessa/test_solver.cpp ../models/hadeler-based/fracessa/solver.cpp)
     target_link_libraries(test_fracessa PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME FracessaModelTests COMMAND test_fracessa)
 
     add_executable(test_fracessa_circular
-        ../models/experiments/fracessa_circular/test_solver.cpp
-        ../models/experiments/fracessa_circular/solver.cpp)
+        ../models/hadeler-based/fracessa_circular/test_solver.cpp
+        ../models/hadeler-based/fracessa_circular/solver.cpp)
     target_link_libraries(test_fracessa_circular PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME FracessaCircularModelTests COMMAND test_fracessa_circular)
 
-    add_executable(test_zischg_hadeler ../models/experiments/zischg_hadeler/test_solver.cpp ../models/experiments/zischg_hadeler/solver.cpp)
+    add_executable(test_zischg_hadeler ../models/hadeler-based/zischg_hadeler/test_solver.cpp ../models/hadeler-based/zischg_hadeler/solver.cpp)
     target_compile_definitions(test_zischg_hadeler PRIVATE COPOSIT_ZISCHG_LEVEL_TWO_TESTING=1)
     target_link_libraries(test_zischg_hadeler PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME ZischgHadelerModelTests COMMAND test_zischg_hadeler)
 
     add_executable(test_zischg_dickinson
-        ../models/experiments/zischg_dickinson/test_solver.cpp
-        ../models/experiments/zischg_dickinson/solver.cpp)
+        ../models/hadeler-based/zischg_dickinson/test_solver.cpp
+        ../models/hadeler-based/zischg_dickinson/solver.cpp)
     target_compile_definitions(test_zischg_dickinson PRIVATE COPOSIT_ZISCHG_LEVEL_TWO_TESTING=1)
     target_link_libraries(test_zischg_dickinson PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME ZischgDickinsonModelTests COMMAND test_zischg_dickinson)
 
-    add_executable(test_zischg_fracessa ../models/experiments/zischg_fracessa/test_solver.cpp ../models/experiments/zischg_fracessa/solver.cpp)
+    add_executable(test_zischg_fracessa ../models/hadeler-based/zischg_fracessa/test_solver.cpp ../models/hadeler-based/zischg_fracessa/solver.cpp)
     target_compile_definitions(test_zischg_fracessa PRIVATE COPOSIT_ZISCHG_LEVEL_TWO_TESTING=1)
     target_link_libraries(test_zischg_fracessa PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME ZischgFracessaModelTests COMMAND test_zischg_fracessa)
@@ -603,108 +620,76 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
     target_link_libraries(test_component_pipeline PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME ComponentPipelineTests COMMAND test_component_pipeline)
 
-    add_executable(test_safe tests/test_safe.cpp)
-    target_link_libraries(test_safe PRIVATE coposit::safe GTest::gtest_main)
-    add_test(NAME SafeApiTests COMMAND test_safe)
-
-    add_executable(test_progress tests/test_progress.cpp)
-    target_link_libraries(test_progress PRIVATE coposit_core GTest::gtest_main)
-    add_test(NAME ProgressTests COMMAND test_progress)
+    add_executable(test_diagnostics tests/test_diagnostics.cpp)
+    target_link_libraries(test_diagnostics PRIVATE coposit_core GTest::gtest_main)
+    add_test(NAME DiagnosticsTests COMMAND test_diagnostics)
 
     if(COPOSIT_BUILD_APPS)
     add_executable(test_companion_launcher tests/test_companion_launcher.cpp)
     target_link_libraries(test_companion_launcher PRIVATE Threads::Threads)
     add_test(NAME CompanionLauncherTimeoutTest COMMAND test_companion_launcher ${CMAKE_COMMAND})
 
-    add_test(NAME CliFastSmokeTest COMMAND coposit fast strict ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/identity_2.txt)
-    set_tests_properties(CliFastSmokeTest PROPERTIES PASS_REGULAR_EXPRESSION "^true")
+    add_test(NAME CliStrictSmokeTest COMMAND coposit
+        --model dickinson_2019 --mode strict ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/identity_2.txt)
+    set_tests_properties(CliStrictSmokeTest PROPERTIES PASS_REGULAR_EXPRESSION "^true")
 
-    add_test(NAME CliSafeSmokeTest COMMAND coposit safe strict ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/identity_2.txt)
-    set_tests_properties(CliSafeSmokeTest PROPERTIES PASS_REGULAR_EXPRESSION "^true")
+    add_test(NAME CliDiagnosticsSmokeTest COMMAND coposit
+        --model dickinson_2019 --mode strict --diagnostics ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/identity_2.txt)
+    set_tests_properties(CliDiagnosticsSmokeTest PROPERTIES PASS_REGULAR_EXPRESSION "true")
 
-    add_test(NAME CliProgressSmokeTest COMMAND coposit safe strict --progress ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/identity_2.txt)
-    set_tests_properties(CliProgressSmokeTest PROPERTIES PASS_REGULAR_EXPRESSION "true")
-
-    add_test(NAME CliTimeoutOptionSmokeTest
-        COMMAND coposit safe strict --timeout 2 ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/identity_2.txt)
-    set_tests_properties(CliTimeoutOptionSmokeTest PROPERTIES PASS_REGULAR_EXPRESSION "^true")
-
-    add_test(NAME CliMatrixMarketTest COMMAND coposit safe strict ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/identity_2.mtx)
+    add_test(NAME CliMatrixMarketTest COMMAND coposit
+        --model dickinson_2019 --mode strict ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/identity_2.mtx)
     set_tests_properties(CliMatrixMarketTest PROPERTIES PASS_REGULAR_EXPRESSION "^true")
 
-    add_test(NAME CliDirectMatrixTest COMMAND coposit safe non-strict "2#1,-1,1")
+    add_test(NAME CliDirectMatrixTest COMMAND coposit --model dickinson_2019 --mode non-strict "2#1,-1,1")
     set_tests_properties(CliDirectMatrixTest PROPERTIES PASS_REGULAR_EXPRESSION "^true")
 
-    add_test(NAME CliFastNonStrictModeTest
-        COMMAND coposit fast non-strict ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/boundary_2.txt)
-    set_tests_properties(CliFastNonStrictModeTest PROPERTIES PASS_REGULAR_EXPRESSION "^true")
-
-    add_test(NAME CliSafeNonStrictModeTest
-        COMMAND coposit safe non-strict ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/boundary_2.txt)
-    set_tests_properties(CliSafeNonStrictModeTest PROPERTIES PASS_REGULAR_EXPRESSION "^true")
-
-    add_test(NAME CliSafeCombinedModeTest
-        COMMAND coposit safe both ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/boundary_2.txt)
-    set_tests_properties(CliSafeCombinedModeTest PROPERTIES
-        PASS_REGULAR_EXPRESSION "copositive=true[\r\n]+strictly_copositive=false")
-
-    add_test(NAME CliFastCombinedModeRejectedTest
-        COMMAND coposit fast both ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/identity_2.txt)
-    set_tests_properties(CliFastCombinedModeRejectedTest PROPERTIES WILL_FAIL TRUE)
-
-    add_test(NAME CliAnalyzePreprocessingOffTest COMMAND coposit_analyze
+    add_test(NAME CliPreprocessingOffTest COMMAND coposit
         --model bundfuss_2008 --mode strict --preprocessing off
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/identity_2.txt)
-    set_tests_properties(CliAnalyzePreprocessingOffTest PROPERTIES PASS_REGULAR_EXPRESSION "^true")
+    set_tests_properties(CliPreprocessingOffTest PROPERTIES PASS_REGULAR_EXPRESSION "^true")
 
-    add_test(NAME CliAnalyzeDuTourTest COMMAND coposit_analyze
+    add_test(NAME CliDuTourTest COMMAND coposit
         --model dutour_2018 --mode non-strict --preprocessing off
         ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/boundary_2.txt)
-    set_tests_properties(CliAnalyzeDuTourTest PROPERTIES PASS_REGULAR_EXPRESSION "^true")
+    set_tests_properties(CliDuTourTest PROPERTIES PASS_REGULAR_EXPRESSION "^true")
 
-    add_test(NAME CliAnalyzeTimeoutOptionSmokeTest COMMAND coposit_analyze
-        --model dickinson_final --mode strict --timeout 2 ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/identity_2.txt)
-    set_tests_properties(CliAnalyzeTimeoutOptionSmokeTest PROPERTIES PASS_REGULAR_EXPRESSION "^true")
+    add_test(NAME CliTimeoutOptionSmokeTest COMMAND coposit
+        --model dickinson_2019 --mode strict --timeout 2 ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/identity_2.txt)
+    set_tests_properties(CliTimeoutOptionSmokeTest PROPERTIES PASS_REGULAR_EXPRESSION "^true")
 
-    add_test(NAME CliAnalyzeCombinedTest COMMAND coposit_analyze
-        --model dickinson_final --mode both ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/boundary_2.txt)
-    set_tests_properties(CliAnalyzeCombinedTest PROPERTIES
+    add_test(NAME CliCombinedTest COMMAND coposit
+        --model dickinson_2019 --mode both ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/boundary_2.txt)
+    set_tests_properties(CliCombinedTest PROPERTIES
         PASS_REGULAR_EXPRESSION "copositive=true[\r\n]+strictly_copositive=false")
 
-    add_test(NAME CliAnalyzeUnknownModelTest COMMAND coposit_analyze --model unknown --mode strict "1#1")
-    set_tests_properties(CliAnalyzeUnknownModelTest PROPERTIES WILL_FAIL TRUE)
+    add_test(NAME CliUnknownModelTest COMMAND coposit --model unknown --mode strict "1#1")
+    set_tests_properties(CliUnknownModelTest PROPERTIES WILL_FAIL TRUE)
 
-    add_test(NAME CliAnalyzeExcludedExperimentTest COMMAND coposit_analyze --model frank_wolfe_dickinson --mode strict "1#1")
-    set_tests_properties(CliAnalyzeExcludedExperimentTest PROPERTIES WILL_FAIL TRUE)
+    add_test(NAME CliExperimentTest COMMAND coposit --model frank_wolfe_dickinson --mode strict "1#1")
+    set_tests_properties(CliExperimentTest PROPERTIES PASS_REGULAR_EXPRESSION "^true")
 
-    add_test(NAME CliAnalyzeUnsupportedCombinedModeTest COMMAND coposit_analyze --model bundfuss_2008 --mode both "1#1")
-    set_tests_properties(CliAnalyzeUnsupportedCombinedModeTest PROPERTIES WILL_FAIL TRUE)
+    add_test(NAME CliUnsupportedCombinedModeTest COMMAND coposit --model bundfuss_2008 --mode both "1#1")
+    set_tests_properties(CliUnsupportedCombinedModeTest PROPERTIES WILL_FAIL TRUE)
 
-    add_test(NAME CliFastStrictBoundaryTest
-        COMMAND coposit fast strict ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/boundary_2.txt)
-    set_tests_properties(CliFastStrictBoundaryTest PROPERTIES PASS_REGULAR_EXPRESSION "^false")
+    add_test(NAME CliMissingModelTest COMMAND coposit --mode strict "1#1")
+    set_tests_properties(CliMissingModelTest PROPERTIES WILL_FAIL TRUE)
 
-    add_test(NAME CliSafeStrictBoundaryTest
-        COMMAND coposit safe strict ${CMAKE_CURRENT_SOURCE_DIR}/tests/data/boundary_2.txt)
-    set_tests_properties(CliSafeStrictBoundaryTest PROPERTIES PASS_REGULAR_EXPRESSION "^false")
+    add_test(NAME CliDefaultCombinedModeTest COMMAND coposit --model dickinson_2019 "1#1")
+    set_tests_properties(CliDefaultCombinedModeTest PROPERTIES
+        PASS_REGULAR_EXPRESSION "copositive=true[\r\n]+strictly_copositive=true")
 
-    add_test(NAME CliFastIdentityTest COMMAND coposit_fast_solver --help)
-    set_tests_properties(CliFastIdentityTest PROPERTIES PASS_REGULAR_EXPRESSION "Adaptive Sponsel-COPOMATRIX")
+    add_test(NAME CliMissingUnsupportedModeTest COMMAND coposit --model bundfuss_2008 "1#1")
+    set_tests_properties(CliMissingUnsupportedModeTest PROPERTIES WILL_FAIL TRUE)
 
-    add_test(NAME CliSafeIdentityTest COMMAND coposit_safe_solver --help)
-    set_tests_properties(CliSafeIdentityTest PROPERTIES PASS_REGULAR_EXPRESSION "Dickinson Final")
+    add_test(NAME CliParameterizedWideCertificateTest COMMAND coposit
+        --model wide_certificate_cbdd_dickinson --model-parameter 75 "1#1")
+    set_tests_properties(CliParameterizedWideCertificateTest PROPERTIES
+        PASS_REGULAR_EXPRESSION "copositive=true[\r\n]+strictly_copositive=true")
 
-    add_test(NAME CliMissingMethodTest COMMAND coposit)
-    set_tests_properties(CliMissingMethodTest PROPERTIES WILL_FAIL TRUE)
-
-    add_test(NAME CliUnknownMethodTest COMMAND coposit unknown)
-    set_tests_properties(CliUnknownMethodTest PROPERTIES WILL_FAIL TRUE)
-
-    add_test(NAME CliMissingPredicateTest COMMAND coposit fast)
-    set_tests_properties(CliMissingPredicateTest PROPERTIES WILL_FAIL TRUE)
-
-    add_test(NAME CliUnknownPredicateTest COMMAND coposit fast copositive)
-    set_tests_properties(CliUnknownPredicateTest PROPERTIES WILL_FAIL TRUE)
+    add_test(NAME CliMissingWideCertificateParameterTest COMMAND coposit
+        --model wide_certificate_cbdd_dickinson "1#1")
+    set_tests_properties(CliMissingWideCertificateParameterTest PROPERTIES WILL_FAIL TRUE)
     endif()
 
     if(COPOSIT_BUILD_PYTHON)

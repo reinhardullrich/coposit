@@ -1,9 +1,11 @@
 # Full Code Review — Open Findings
 
 Date: 2026-08-12
-Status: **current open review**
-Scope: current public C++ interface, shared parsers and preprocessing, exact factorization, all maintained model targets, progress
-reporting, Python wrappers and multiprocessing, CMake/package boundaries, corpus/result integrity, tests, and resource behavior.
+Status: **historical** as of 2026-08-15; the reviewed `fast` and `safe` public interfaces were subsequently removed during the
+renewed experimentation phase.
+Scope at review time: the then-current public C++ interface, shared parsers and preprocessing, exact factorization, all maintained
+model targets, diagnostics reporting, Python wrappers and multiprocessing, CMake/package boundaries, corpus/result integrity, tests,
+and resource behavior.
 
 This is a review, not a repair pass. No solver or interface source was changed. Findings are ordered by practical priority; a lower
 priority does not mean that the item is mathematically unsafe.
@@ -182,7 +184,7 @@ line edits. The mathematical descriptions do not need rewriting.
 ## Improvement Opportunity — Reduce Adaptive Peak Memory Without Changing the Algorithm
 
 This is not a correctness defect and should follow the P1/P2 work. In
-[`models/adaptive_sponsel_copomatrix/solver.cpp`](../models/adaptive_sponsel_copomatrix/solver.cpp), around lines 370–383,
+[`models/experiments/adaptive_sponsel_copomatrix/solver.cpp`](../models/experiments/adaptive_sponsel_copomatrix/solver.cpp), around lines 370–383,
 `sponsel_split` constructs both full dense children before the first child is checked. The parent and both children therefore coexist,
 and the second child is constructed even when the first rejects immediately.
 
@@ -202,10 +204,10 @@ measured.
 ### Current Build And Runtime Checks
 
 - Release build completed successfully.
-- All 52 current CTest checks passed, including model, parser, preprocessing, public CLI, progress, and Python wrapper tests.
+- All 52 current CTest checks passed, including model, parser, preprocessing, public CLI, diagnostics, and Python wrapper tests.
 - ASan/UBSan build completed successfully.
 - All 52 ASan/UBSan checks passed with the sanitizer runtimes preloaded; no sanitizer finding was emitted.
-- The progress-only source changes that landed during this review were included in both final builds.
+- The diagnostics-only source changes that landed during this review were included in both final builds.
 
 ### Exact Cross-Model Checks
 
@@ -218,7 +220,7 @@ Random symmetric integer matrices were compared against Dickinson Final:
 - 200 matrices, orders 1–7: all four combined-capable models compared combined classification with separate CP/SCP calls, 2,400
   calls, zero inconsistency.
 
-Progress weights and counters are gated telemetry and do not participate in the exact decisions.
+Diagnostics weights and counters are gated telemetry and do not participate in the exact decisions.
 
 ### Corpus And Result Integrity
 
@@ -240,7 +242,7 @@ uses iterative staircase traversal and reports its configured node limit instead
 - The 3,184 empty Hadeler binary hashes are an explicit legacy schema exception; newer rows are hashed.
 - Historical timeout, node-limit, and error rows are evidence, not classifications.
 - Algorithm duplication between model directories is intentional isolation under the project rules.
-- Progress coverage is a named search-space metric, not an ETA.
+- Diagnostics coverage is a named search-space metric, not an ETA.
 
 ## Recommended Order
 

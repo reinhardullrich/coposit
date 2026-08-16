@@ -18,7 +18,8 @@ $p\geq0$, the cross term is harmless and $A$ is copositive exactly when $B$ is c
 both modes use the same $B$ and $aB-pp^T$ children, primitive rays, staircase triangulation, and depth-first order. The exact
 order-one through order-three base criteria use non-strict or strict comparisons according to the selected mode.
 
-The default remains `strictly_copositive`. `solve(A, mode)` answers one selected predicate. `classify(A)` follows the non-strict
+The low-level Boolean `solve(A, mode)` defaults to `strictly_copositive` and answers one selected predicate. Analysis and reference
+interfaces default to `classify(A)`, which follows the non-strict
 recursion once and returns both `is_copositive` and `is_strictly_copositive`; it does not run two recursion trees. The only possible
 pairs are `{false, false}`, `{true, false}`, and `{true, true}` because strict copositivity implies non-strict copositivity.
 
@@ -276,6 +277,6 @@ plus-before-minus traversal, and the Hadeler-based order-three shortcut are the 
 the complete article or original program they must not be presented as line-for-line source fidelity. The model adds no pivot
 heuristic, Dutour split, SNC slice, graph reduction, or other mathematical solver rule.
 
-Timed native-module builds observe a shared signal flag at traversal and matrix-row boundaries and return a distinct timeout
+Timed model-companion builds observe a shared signal flag at traversal and matrix-row boundaries and return a distinct timeout
 outcome. Standalone model and test builds compile those checkpoints to no-ops, so the reconstruction has no timer thread, clock read,
 signal handler, or changed untimed traversal.

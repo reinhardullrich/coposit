@@ -1,6 +1,6 @@
 #include <coposit/model.hpp>
 
-#include "../source_trace.hpp"
+#include "../source_diagnostics.hpp"
 
 #include <gtest/gtest.h>
 
@@ -46,11 +46,11 @@ TEST(Bundfuss2008ModelTest, UsesFractionalBundfussSplit)
 
 TEST(Bundfuss2008ModelTest, SourceTraceRetainsFiveTwelfthsSplit)
 {
-    baseline_source_trace::clear();
+    baseline_source_diagnostics::clear();
     EXPECT_TRUE(model::solve(symmetric_matrix(3, {2, -1, 1, 5, -2, 3})));
-    ASSERT_GE(baseline_source_trace::events.size(), 2U);
-    EXPECT_EQ(baseline_source_trace::events[0], (baseline_source_trace::event{"split", 1, 2}));
-    EXPECT_EQ(baseline_source_trace::events[1], (baseline_source_trace::event{"lambda", 5, 12}));
+    ASSERT_GE(baseline_source_diagnostics::events.size(), 2U);
+    EXPECT_EQ(baseline_source_diagnostics::events[0], (baseline_source_diagnostics::event{"split", 1, 2}));
+    EXPECT_EQ(baseline_source_diagnostics::events[1], (baseline_source_diagnostics::event{"lambda", 5, 12}));
 }
 
 TEST(Bundfuss2008ModelTest, FindsNegativeDirectionAfterPartitioning)

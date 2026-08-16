@@ -72,10 +72,10 @@ use this equivalence to obtain exact matrices with varied coefficient scales.
 | Dickinson Case 9 | 3 | 6 | 10245-10247 | exact family points |
 | Hildebrand-Afonin matrices outside \(K_6^{(1)}\) | 3 | 6 | 10248-10250 | exact nearby points from the proved component |
 | Laurent-Vargas direct sums | 7 | 6-45 | 10251-10257 | exact finite sample of an unbounded construction |
-| Hildebrand circulant support-\(n-2\) family | 47 | 7-25 | 10258-10304 | exact family points |
+| Hildebrand circulant support-\(n-2\) family | 41 | 7-25 | 10258-10287, 13024-13034 | exact family points |
 | Dannenberg-Schurmann perfect lifts | 200 | 3-104 | 10305-10504 | two printed seeds and 198 theorem-backed lifts |
 
-The total is 850 source occurrences represented by 849 distinct matrices. Dickinson-de Zeeuw occurrence 10132 is a simultaneous
+The total is 844 source occurrences represented by 843 distinct matrices. Dickinson-de Zeeuw occurrence 10132 is a simultaneous
 row-and-column permutation of Kostyukova-Tchemisova matrix 9957, so the maintained corpus stores only ID 9957 with both origins. The
 construction groups are fewer than the database's family labels because the two Dannenberg-Schurmann components
 and several order-6 subfamilies are most naturally explained together.
@@ -597,8 +597,10 @@ only in odd order, then constructs explicit extremal examples for every order at
 The paper calls characterization of all positive coefficient polynomials satisfying the angle conditions difficult and says only limited
 results are known. It does not make a general solver-runtime claim for the resulting matrices.
 
-IDs 10258-10304 contain 47 exact parameter points at orders 7-25. Multiple points at the same order vary \(\theta\) and \(\alpha\); the
-finite parameter grid is local.
+The current corpus contains 30 original parameter points at orders 7-14 and IDs 13024-13034, exactly one point at every order 15-25.
+The higher-order representatives come from the low-digit portion of a finite exact rational grid, but the selection deliberately varies
+\(\theta\) and \(\alpha\) rather than repeating one mechanically minimal parameter pattern. The dated migration records every choice,
+checks the theorem conditions and an exact zero, and preserves the original 17-point panel only through its historical generator.
 
 Source: [Hildebrand 2017](../research/papers/Hildebrand_2016_circulant_zero_pattern.pdf).
 

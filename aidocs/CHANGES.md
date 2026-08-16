@@ -2,6 +2,334 @@
 
 This append-only file records meaningful decisions, results, and evidence that are not clear from Git. Do not log routine edits here.
 
+## 2026-08-16 — Upper-endpoint CBDD Dickinson experiment
+
+- Added `upper_endpoint_cbdd_dickinson` as an isolated copy of CBDD Dickinson. Before activating a new interval `[L,U]`, it probes
+  each distinct strict upper endpoint `U` once, solves `A_Uv=1` only when `A_U` is nonsingular, and activates the resulting exact
+  Dickinson interval before the root interval. The lookahead never recurses; singular endpoints retain the ordinary traversal.
+- Kept exact CP/SCP combined classification and added separate probe-certificate diagnostics plus a focused positive-definite
+  example where the covered upper endpoint yields new ceiling coverage.
+
+## 2026-08-16 — Benchmark sets refreshed after Motzkin--Straus preprocessing
+
+- Removed all 21 newly preprocessing-complete Smoke members and all 226 newly preprocessing-complete Core members, then restored the
+  curated sizes to 49 and 512 using unresolved matrices with established truth.
+- Smoke now contains 23 strict and 26 boundary matrices. No known non-copositive matrix of order at most 100 survives preprocessing,
+  so a model-reaching Smoke set cannot retain that outcome. Core contains 242 strict, 251 boundary, and all 19 known non-copositive
+  matrices that still reach a model; family-diversified selection avoids letting the Hoffman-Pereira catalog dominate the refill.
+- Kept N ≤ 100 comprehensive rather than padding it: it now contains all 754 unresolved matrices of orders at most 100. The generated
+  higher-order literature-solved set is empty because preprocessing resolves all 75 higher-order rows carrying a completed-solve
+  claim. Recorded the guarded exact assignment in
+  `testdata/archive/refresh_benchmark_sets_after_motzkin_straus_2026_08_16.sql`.
+
+## 2026-08-16 — Current preprocessing flag refreshed on the complete corpus
+
+- Ran only the current depth-2 combined preprocessing pipeline on all 3,513 retained matrices, using a five-second pass followed by a
+  60-second retry of its 61 timeouts. The passes took 62.343 and 480.238 seconds respectively.
+- Completely classified 2,708 matrices: 705 strictly copositive, 1,025 copositive-boundary, and 978 non-copositive. Another 758
+  returned only partial facts or no decision, and 47 timed out. Every exact fact agreed with available corpus truth.
+- Replaced the 2,115-row `preprocessing_solved` assignment by the resulting 2,708-row set, adding 593 matrices and removing none.
+  Stored Smoke/Core memberships are unchanged in this step; their effective selections now contain 28 and 286 unresolved matrices
+  until the curated sets are refreshed.
+
+## 2026-08-16 — Open MCS replaces the initial Motzkin--Straus clique engine
+
+- Replaced the locally written maximum-clique search in the exact Motzkin--Straus classifier with a focused adaptation of Darren
+  Strash's Open MCS commit `735788af066fc8589f577036af521f22f45c2731`. The integration retains MCR initial ordering, static-order
+  traversal, greedy coloring bounds, and MCS recoloring while using coposit's packed adjacency, `size_t` indices, cooperative timeout,
+  diagnostics, and exact CP/SCP threshold termination.
+- Audited the unmodified upstream implementation against brute force on every graph through order six and 6,000 deterministic random
+  graphs of orders 7 through 12: all 39,867 maximum-clique sizes and returned clique witnesses matched. The maintained regression
+  test independently exhausts all 32,768 graphs of order six and tests incomplete threshold termination separately.
+- The exact negative-entry graph of corpus matrix 9651 is byte-for-byte the bundled Open MCS `MANN_a27` graph. Unmodified Open MCS
+  found its order-126 maximum clique in 0.204 seconds on one core. The integrated threshold search resolved matrix 9651 after 248
+  branch nodes; boundary matrix 9647 and strict matrix 9630 retained their exact classifications after 46 and 126 nodes respectively.
+
+## 2026-08-16 — Exact Motzkin--Straus preprocessing classifier
+
+- Replaced the former Motzkin--Straus bypass in the shared maximal-Z stage with a complete exact classifier for matrices whose
+  diagonal and non-edge value is one common $d\geq0$ and whose remaining off-diagonal entries are one common $q<0$.
+- The classifier searches the negative-entry graph for its maximum clique using packed multiword supports, greedy-color upper bounds,
+  lazily allocated retained per-depth workspaces, exact integer threshold comparisons, and query-specific early termination.
+  Recognized matrices skip maximal-Z enumeration; every other matrix follows the unchanged Z-matrix path.
+- Exhaustive tests over every nonempty graph on five vertices and every integral threshold from two through five match brute-force
+  clique enumeration. Focused cases cover a nonintegral exact threshold, combined equality classification, and order 65 without a
+  fixed-width support limit.
+- The motivating order-45 MANN/Steiner matrix 9647 now completes in preprocessing as copositive but not strictly copositive after
+  2,338 branch nodes and with no model delegation. The order-70 strict Motzkin--Straus matrix 9630 completes after 126 branch nodes.
+
+## 2026-08-16 — Hadeler-based model grouping
+
+- Moved all 33 models inheriting the Hadeler, Dickinson, or FracESSA principal-support approach into the canonical
+  `models/hadeler-based/` directory. The move changes only source organization: model identifiers, command-line and Python names,
+  mathematical implementations, and stored result identities remain unchanged.
+- Added a compact lineage inventory in `models/hadeler-based/README.md` and taught CMake discovery, application targets, and focused
+  tests to use the new location. Other literature baselines remain in `models/baselines/`; unrelated coposit-created models remain in
+  `models/experiments/`.
+
+## 2026-08-16 — One low-level execution interface
+
+- `coposit --model MODEL --mode strict|non-strict|both` is now the sole low-level execution interface and exposes every literature
+  baseline and experiment through an isolated one-model companion.
+- Python now invokes the same `coposit` interface instead of importing one pybind11 extension per model. Reference rows hash the exact
+  selected companion, retain cooperative timeouts and diagnostics, and do not mix model implementations in one executable.
+- Removed the pybind11 build dependency and the duplicate native-extension execution path. There are still no `fast`, `safe`, or
+  implicit model-selection aliases during the experimentation phase.
+
+## 2026-08-16 — Affine-companion Dickinson experiment
+
+- Added `affine_companion_dickinson` as an isolated copy of Kernel-Cone Dickinson. At every singular root it decides exact
+  consistency of $A_Ix=\mathbf1$ from a complete nullspace basis and reuses the retained singular fraction-free LDLT factorization
+  to recover one particular solution without refactoring.
+- For nullity one, the model intersects all outside inequalities into one exact rational interval and selects a feasible coordinate
+  breakpoint with the most simultaneous zeros, which is a minimum-support member of that affine line. For higher nullity it tests
+  only the deterministic particular solution, then retains the ordinary homogeneous and complete Dickinson fallback.
+- Kernel-Cone Dickinson now removes zero and positively proportional projected inequalities before active-set enumeration. Its
+  nullity-two path uses an exact angular sweep and scans full feasibility only at the true planar cone boundaries while preserving
+  every strict-zero test performed by the former generic path.
+- For higher nullity, both models retain opposite inequalities for feasibility but enumerate their shared equality hyperplane only
+  once. Affine-Companion also defers the outside-by-nullspace product until a consistent affine line or the later homogeneous search
+  actually needs it.
+- Focused tests cover singular consistent solves, inconsistency, factorization coordinate operations, affine support reduction,
+  higher-nullity particular solutions, lazy projected-product construction, antipodal active-hyperplane reduction, planar boundary
+  search, and combined CP/SCP outcomes.
+
+## 2026-08-16 — Direct kernel-cone Dickinson experiment
+
+- Added `kernel_cone_dickinson` as an isolated copy of Ceiling-Pruned Dickinson. At a singular root with nullity greater than one it
+  constructs an exact basis $Z$ of $\ker A_I$ and the projected outside matrix $G=A_{[n]\setminus I,I}Z$ instead of traversing a graph
+  of singular principal supersets.
+- If $\ker G\ne\{0\}$, the model extracts a small dependent full-column circuit and emits its exact full-kernel ceiling certificate.
+  If $\ker G=\{0\}$, it enumerates independent rank-$(q-1)$ active outside-row sets, normalizes and deduplicates their projective rays,
+  and verifies both orientations exactly in $\{y:Gy\geq0\}$.
+- A failed cone search falls back to the unchanged Dickinson traversal. New certificates remain pending until the next root
+  cardinality, combined CP/SCP classification stays one-pass, and no empirical relation between $d$, $n$, and $k$ is assumed.
+- Focused tests cover a persistent kernel of dimension two, pointed-cone ray discovery, an empty nonzero cone, projective ray
+  deduplication for $q=2$, and all three possible combined-classification outcomes.
+
+## 2026-08-16 — Breadth-first singular-lift Dickinson experiment
+
+- Added `breadth_first_singular_lift_dickinson` as an isolated traversal variant of Layered Singular-Lift Dickinson. Its FIFO queue
+  processes every reachable singular support at one lifted cardinality before the next cardinality, while preserving the outer
+  cardinality barrier, exact certificate tests, first-nullity-one stop, and call-wide support deduplication.
+- Added current and maximum lift-frontier diagnostics. The separate model and native-module identity ensure stored analyses cannot
+  mix breadth-first and depth-first results.
+- The focused traversal test proves nondecreasing lifted cardinalities on an all-singular support graph. Exhaustive combined,
+  no-preprocessing classification over all 59,808 symmetric matrices of orders one through four with entries in
+  $\{-1,0,1\}$ matched the depth-first model exactly.
+- On matrix 9647, a 30-second no-preprocessing probe found six ceiling certificates with
+  $(\text{root }k,\text{lifted }k,|U|,|L|)=(3,10,45,6)$. It stayed far shallower than depth first, but accumulated about
+  15.07 million seen supports and a 10.52-million-support FIFO frontier, confirming the expected memory cost.
+
+## 2026-08-16 — Layered singular-lift Dickinson experiment
+
+- Added `layered_singular_lift_dickinson` as an isolated copy of Ceiling-Pruned Dickinson. A high-nullity singular outer support now
+  starts a depth-first search through singular principal supersets; a first-reached nullity-one state tests both signs of its unique
+  exact kernel ray and retains only full-upper-endpoint Dickinson certificates.
+- The stored forbidden set is the final vector support $L=\operatorname{supp}(u)$, not the root or lifted principal support. Pending
+  lowers are minimized as an antichain and become active only after every root of the current outer cardinality has been processed.
+- A call-wide packed-support cache expands each lifted state and all of its one-index children exactly once, independent of the route
+  used to reach it. An earlier layer's active lower also suppresses covered lifted states; pending lowers remain frozen until their
+  layer ends. The focused tests cover the high-nullity-to-nullity-one lift, the final-vector lower cardinality, layer-delayed activation,
+  CP/SCP classification, and supports above 64 indices.
+- A first 60-second combined, no-preprocessing diagnostic run on order-45 MANN/Steiner matrix 9647 timed out inside the lift started
+  from outer cardinality three: 1,255 outer supports had been visited, 859,696 exact outer-or-lifted systems had been processed, and
+  no ceiling certificate had yet been retained. This is the intended unbounded experiment, but the initial evidence shows that full
+  singular-graph exploration can dominate the outer Dickinson traversal before reaching the motivating order-eight certificates.
+- Split the lift telemetry into outer and lifted systems, duplicate and covered lift routes, cache state, and current and maximum
+  lifted cardinality and depth. Certificate diagnostics now store
+  `(root_k,lifted_k,|U|,|L|,count)` instead of conflating the root cardinality with the support where the vector was obtained.
+- A corrected rerun found its first certificate at about 72 seconds with $(\text{root }k,\text{lifted }k,|U|,|L|)=(3,25,45,6)$.
+  The search had nevertheless reached lifted $k=45$ in its first second, proving that the previous maximum-lift field described a
+  different explored branch rather than the successful certificate.
+
+## 2026-08-16 — Clingo Dickinson certificates persist across cardinality solves
+
+- Fixed `clingo_sat_dickinson`: callback clauses still prune the active clasp backtracking search immediately, while each generated
+  Dickinson interval is now also installed through Clingo's backend before the next cardinality solve.
+- The previous enumeration-assumption setting did not provide the claimed global interval family. A focused partial-interval test now
+  proves that a singleton certificate suppresses its covered pair across the solve boundary without suppressing uncovered pairs.
+
+## 2026-08-16 — Fastest-result cache restricted to the full maintained workflow
+
+- Reset `matrices.fastest_elapsed_ns` and `matrices.fastest_result_ref` from the diagnostics database. Eligible timings now require
+  one-pass combined `both` classification, `ok` status, and agreement with every known corpus truth; preprocessing is optional.
+- Predicate-only measurements can no longer populate or replace the cache. The serialized result writer enforces the same rule for
+  future runs, and the dated SQL migration verifies every reconstructed cache row.
+
+## 2026-08-16 — One diversified low-digit Hildebrand representative per higher order
+
+- Replaced all 17 Hildebrand circulant parameter points at orders 15–25 by one exact representative at each order. The choices stay
+  near the low-digit frontier of the searched rational grid but deliberately vary both half-angle parameters; maximum entry length is
+  294 digits at order 15 and 2,423 digits at order 25.
+- Removed 2,833 obsolete diagnostic results, 68 preprocessing results, and four old Matrix Market payloads. The eleven new matrices
+  have new IDs 13024--13034 and no inherited timing; orders 23--25 use three exact symmetric Matrix Market payloads.
+- Preserved Core and Stress at 512 rows and its 256/175/81 classification split by adding six existing boundary matrices at the same
+  duplicate orders. The corpus now has 3,513 matrices, N ≤ 100 has 1,162, and all 11 orders 15–25 occur exactly once in this family.
+- Added the guarded, idempotent migration `testdata/archive/replace_hildebrand_circulants_2026_08_16.py`; its exact generation,
+  copied-database rehearsal, payload counts, and both SQLite integrity checks passed.
+
+## 2026-08-16 — Benchmark sets now require model traversal
+
+- Excluded all 2,115 `preprocessing_solved` matrices from every named benchmark selector. Generated N ≤ 100 and higher-order
+  literature-solved membership now includes `preprocessing_solved = 0`; the runner applies the same gate to stored and derived sets.
+- Kept Smoke at 49 and Core and Stress at 512 by replacing their 29 and 201 preprocessing-complete members with classified matrices
+  of the closest available order and similar provenance. Smoke retains its 23/14/12 strict/boundary/non-copositive split. Core and
+  Stress is 256/175/81 because only 63 eligible known non-copositive replacements existed for 64 removed slots.
+- The generated sets now contain 1,168 N ≤ 100 matrices and 17 higher-order literature-solved matrices. Added the guarded migration
+  `testdata/archive/exclude_preprocessing_solved_from_benchmarks_2026_08_16.py` and a runner regression check.
+
+## 2026-08-16 — Current-preprocessing solved flag
+
+- Added `matrices.preprocessing_solved`, default false, and marked all 2,115 retained matrices completely classified by the new
+  maintained depth-2 combined preprocessing workflow in the five-second corpus run or its sixty-second timeout continuation.
+- The flagged rows comprise 615 strictly copositive, 584 copositive-boundary, and 916 non-copositive classifications. Excluded every
+  partial fact, unresolved return, and timeout.
+
+## 2026-08-16 — Persistent preprocessing reduction diagnostics
+
+- Added a persistent diagnostics summary for the original matrix: completion state, connected-component split and sizes, unresolved
+  component count and largest size, bounded reduction-child checks and decisions, maximum reduction depth, and actual model delegations.
+- The summary survives delegation into model diagnostics. Interrupted preprocessing remains explicitly `running`; only a completed pass
+  is reported as `resolved` or `pending`, so partial timeout telemetry cannot be mistaken for a preprocessing decision.
+
+## 2026-08-16 — Depth-2 preprocessing timeout diagnostics
+
+- Reran the 107 still-retained matrices from the original depth-2 five-second timeout cohort for up to 60 seconds each, with
+  one-second preprocessing diagnostics preserved per matrix. The other 13 original timeout rows had been removed with the
+  precheck-trivial generated stress panel.
+- Preprocessing returned on 49 matrices: three complete non-copositivity classifications, 25 exact `not strictly copositive` partial
+  facts, and 21 unresolved results. The other 58 timed out again: 41 in exact factorization, 15 in principal-submatrix checks, and
+  two in the maximal-Z-matrix scan.
+- Retained the raw merged CSV, a compact 107-row diagnostic index, and all individual logs under
+  `experiments/preprocessing_depth_2026-08-15/results/`; full interpretation is in the experiment README.
+
+## 2026-08-16 — Retired Scale and Timeout benchmark flags
+
+- Removed `scale_set` and `timeout_5s_strict_set` from the maintained corpus schema and reference runner. Their frozen definitions and
+  historical result reports remain under the dated archive and reference documents.
+- The maintained matrix selectors are now Smoke, Core and Stress Test, N ≤ 100, and higher-order literature-solved. The first two are
+  stored curated flags; the last two are generated from current matrix data.
+- Added `testdata/archive/retire_scale_and_timeout_sets_2026_08_16.sql`, guarded against the final 184-row Scale membership, 105-row
+  Timeout membership, and 3,519-row corpus before dropping the columns.
+
+## 2026-08-16 — Removed the precheck-trivial generated stress panel
+
+- Removed all 150 deterministic project-generated matrices: 75 sparse and 75 dense, evenly divided among strict, boundary, and
+  non-copositive constructions. Exact definiteness or an explicit two-coordinate witness classified every row in preprocessing, so
+  normal runs never exercised the selected model.
+- A ten-second no-preprocessing `cbdd_dickinson` check solved only four rows and timed out on 146. This confirmed that the panel can
+  create artificial raw-model work, but certifying known positive-definite or positive-semidefinite constructions is not a useful
+  target for the maintained hard-case corpus.
+- Removed 21 external matrix files, 1,456 dependent benchmark rows, 240 preprocessing-result rows, and the two unreferenced local
+  generator sources. The corpus now contains 3,519 matrices and 96 sources; Scale has 184 rows and Timeout 5s Strict has 105.
+- Preserved the dated generators and migrations as historical material and added the guarded removal migration
+  `testdata/archive/remove_generated_stress_2026_08_16.py`.
+
+## 2026-08-16 — Benchmark diagnostics enabled by default
+
+- Made diagnostics capture unconditional in `python/run_results.py` for every benchmark, comparison, corpus, reference, and diagnostic
+  campaign. Each active row is snapshotted once per second, and final diagnostics plus any model-supplied certificate distribution are
+  persisted for completed and unresolved outcomes.
+- Removed the runner's opt-in `--certificate-joint-distribution` flag and its model/preprocessing restrictions. Direct C++ and Python
+  calls remain opt-in because they are not necessarily benchmark runs.
+- Recorded the temporary project-wide policy in `AGENTS.md` so every coposit session uses the same default until Reinhard explicitly
+  changes it.
+
+## 2026-08-16 — Representative Core and Stress fused into one benchmark flag
+
+- Replaced the separate `representative_core` and `stress_test` columns with `core_and_stress_test`. Their post-reshape union had 518
+  rows; excluding six precheck-trivial generated rows already in the former Core gives the current 512-row set.
+- Kept all 150 controlled sparse/dense matrices from sources 93 and 94 exclusively in Scale. They exercise parsing, matrix scanning,
+  exact LDLT, dimension, and density rather than model search: preprocessing proves the strict and boundary constructions by exact
+  definiteness and finds every non-copositive construction's two-coordinate negative witness.
+- Recorded the guarded schema/data change in `testdata/archive/fuse_core_and_stress_test_2026_08_16.sql`. The former 524-matrix
+  reference report remains a historical snapshot and is not presented as a result for the new set.
+
+## 2026-08-16 — Preprocessing depth-3 comparison
+
+- Extended the existing 3,669-matrix preprocessing-only experiment with maximum reduction depth 3, using the same Release binary,
+  five-second cutoff, CPU 2 coordinator, and workers on CPUs 3–9 as the depth-1 and depth-2 passes.
+- Depth 3 completed 2,263 full CP/SCP classifications in 116.747 seconds wall time: 34 more than depth 1 and 14 more than depth 2.
+  Its material additional gain was eleven order-25 BPQY decisions. Three near-cutoff cases at orders 331, 725, and 769 timed out.
+- Relative to depth 1, depth 3 used 2.02% more wall time and had a +0.85% paired median time difference over the 3,546 matrices that
+  completed at all three depths. No exact results conflict, and all known corpus truth agrees. The maintained depth remains fixed at
+  two; depth 3 is experiment-only, with no settings file or supported runtime option.
+
+## 2026-08-16 — Literature solve evidence now requires a complete classification
+
+- Tightened `references_solved`: a paper must establish the matrix's full stored CP/SCP classification. A negative witness remains a
+  solve, but a nonnegative heuristic screen, an undecidable stationary point, or merely `not strictly copositive` does not.
+- Removed 49 partial or heuristic claims: 32 positive screens from Keys, Ferreira, and Aragón-Artacho, plus 17 Brás claims that did
+  not establish ordinary copositivity status. The 30 decisive negative-witness claims from the three one-sided methods remain.
+- Moved only the explicitly inconclusive positive runs to `references_unsolved`: five Ferreira rows described as guesses and 17
+  Aragón-Artacho boundary rows explicitly declared undecidable. Keys's ten Horn screens and non-failing partial Brás outputs are in
+  neither array; explicit Brás failures were already recorded as unsolved.
+- The audited corpus now has 629 solved claims on 430 matrices and 256 unsolved claims on 197 matrices.
+
+## 2026-08-16 — Full-corpus CBDD Dickinson classification reference
+
+- Ran `cbdd_dickinson` on all 3,669 matrices in combined classification mode with both preprocessing stages, a five-second cutoff,
+  dispatcher and database writer on CPU 2, and seven persistent workers on CPUs 3–9. Native SHA-256 is
+  `c08c26b6165356360b51f78876a0125374b8cdf6082b043bc42a4f385be2d729`.
+- The run completed 3,195 classifications and timed out on 474 matrices in 393.911 seconds observed wall time. Completed results were
+  967 strictly copositive, 1,222 copositive but not strictly copositive, and 1,006 not copositive. All 2,944 completed rows with known
+  corpus truth agree; there are no mismatches, errors, or node limits.
+- Completion-time distribution was 2,569 at or below 1 ms, 516 above 1 ms through 100 ms, 110 above 100 ms through 5 s, and 474
+  unresolved after the cutoff. Five-second-substituted one-core work is 2,489.874230 seconds; completed native-time median is
+  0.049166 ms.
+- Restricted the matrix timing cache to results that establish the matrix's relevant truth category. A combined result is eligible;
+  an SCP-only result must be positive; and a CP-only result must be negative or positively confirm a known copositive-boundary matrix.
+  In particular, an SCP-negative result cannot stand in for a non-copositivity classification.
+- Rebuilding both cache fields from all stored rows populated 3,271 matrices and left 398 without an eligible classification. The
+  selected minima comprise 855 combined results, 894 SCP-positive results, 854 CP-positive boundary results, and 668 CP-negative
+  results. Every reference resolves to an `ok` row, agrees with all known truth, and satisfies the eligibility rule.
+
+## 2026-08-16 — Wide-certificate thresholds consolidated into one runtime-parameterized model
+
+- Replaced the copied 75%, 90%, and 95% wide-certificate CBDD Dickinson models with one
+  `wide_certificate_cbdd_dickinson` implementation. Its integer percentage parameter applies exactly to the remaining width $n-k$
+  and is required.
+- Added `--model-parameter VALUE` to `coposit-analyze` and the final `model_parameter` argument to the Python analysis paths. Reference
+  rows store the configured run as `wide_certificate_cbdd_dickinson@VALUE`, keeping parameter values distinct without separate model
+  sources or binaries.
+
+## 2026-08-16 — Z-matrix checking centralized in preprocessing
+
+- Removed the maximal-Z-matrix scan, its switches, and its diagnostics counters from every model. The one shared preprocessing stage
+  is now the sole owner of that check.
+- Renamed the remaining affected experiments by removing `zed`: `cbdd_dickinson`, `czdd_dickinson`, `sat_dickinson`,
+  `clingo_sat_dickinson`, `multithreaded_cbdd_dickinson`, and the four `wide*_certificate_cbdd_dickinson` variants.
+- Deleted three models that became exact duplicates after extraction: `dickinson_zed` duplicates the strict path of
+  `dickinson_2019`, `bdd_zed_dickinson` duplicates `bdd_dickinson`, and `zdd_zed_dickinson` duplicates `zdd_dickinson`.
+  Historical benchmark rows retain their original model identifiers and binary hashes.
+
+## 2026-08-15 — Returned to explicit experiment interfaces and diagnostics terminology
+
+- Removed the duplicate `dickinson_final` model and the `coposit` `fast`/`safe` launcher, their internal companions, and the
+  `coposit::safe` convenience library. The underlying `dickinson_2019` baseline and `adaptive_sponsel_copomatrix` experiment remain.
+- Retained `coposit-analyze` as the C++ experiment command. It requires explicit model and mode selection; its Dickinson entry is now
+  `dickinson_2019`. Python and reference runs continue to require an explicit model identifier.
+- Renamed optional runtime activity reporting from progress to diagnostics throughout current C++, Python, tests, flags, and
+  documentation. The only CLI flag is now `--diagnostics`, the Python argument is `diagnostics=True`, and test-only source events use
+  source-diagnostics names. No compatibility aliases were retained.
+
+## 2026-08-15 — Adaptive Sponsel–COPOMATRIX moved under experiments
+
+- Moved the unchanged `adaptive_sponsel_copomatrix` directory to `models/experiments/`. Its model identifier, selected `fast`
+  integration, Python module, tests, and algorithm remain unchanged.
+
+## 2026-08-15 — Unresolved connected components preserved for model delegation
+
+- Replaced preprocessing's lossy aggregate-only return with component records carrying partial ordinary/strict facts and retaining a
+  matrix only while a requested fact remains unresolved. The dispatcher now calls the selected model only for those pending component
+  matrices and combines the completed records with logical AND.
+- A connected input is borrowed directly. Each proper principal component is materialized once, moved into owned storage, and never
+  copied afterward. Resolved components carry no matrix storage.
+- Danninger and COPOMATRIX remain bounded certificate-only attempts: inconclusive generated descendants are discarded and their
+  unchanged parent component becomes the pending work item. Focused CP, strict, combined, ownership, early-stop, and reduction-fallback
+  tests pass; all 85 Release tests pass after relinking every companion.
+
 ## 2026-08-15 — Generated stress corpus shifted below order 1,000
 
 - Removed the 120 project-generated sparse/dense stress matrices above order 1,000, their 120 external payloads, and 1,973 dependent

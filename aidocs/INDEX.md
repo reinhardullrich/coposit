@@ -4,11 +4,9 @@ This file routes to every other Markdown document under `aidocs/` without duplic
 
 ## Current
 
-- `BENCHMARK_SETS.md` — **current** — composition, guarded selection rules, overlap, and SQL access for the seven corpus benchmark
-  flags: Smoke, Representative Core, Stress, Scale, Timeout 5s Strict, N ≤ 100, and higher-order literature-solved.
-- `CODE_REVIEW_2026-08-12.md` — **current** — prioritized open review of correctness, public preprocessing cost, progress,
-  distribution, parser resources, model targets, Python/process overhead, tests, and documentation.
-- `PROJECT.md` — **current** — concise maintained structure, public contract, processing pipeline, model inventory, interfaces,
+- `BENCHMARK_SETS.md` — **current** — composition, guarded selection rules, overlap, and SQL access for the four corpus benchmark
+  flags: Smoke, Core and Stress Test, N ≤ 100, and higher-order literature-solved.
+- `PROJECT.md` — **current** — concise maintained structure, experiment contract, processing pipeline, model inventory, interfaces,
   dependencies, corpus, and ownership boundary.
 - `REFERENCE_RESULTS_N_1_TO_100.md` — **current** — five-second non-strict and strict results for all eight literature baselines on
   every retained matrix through order 100, plus the preserved 2,078-row strict-only comparison of all earlier variants and cutoffs.
@@ -18,17 +16,19 @@ This file routes to every other Markdown document under `aidocs/` without duplic
   higher-order matrix with a literature-reported solve.
 - `REFERENCE_RESULTS_LITERATURE_UNSOLVED.md` — **current** — ten-second strict ZDD-Zed, CBDD-Zed, and CZDD-Zed results on every
   matrix carrying an explicit literature failure claim.
-- `REFERENCE_RESULTS_REPRESENTATIVE_CORE_AND_STRESS.md` — **current** — five-second non-strict and strict results for all eight
-  literature baselines plus a separate mode-explicit section for selected coposit-created models on Representative Core and Stress.
 - `REFERENCE_RESULTS_BAD26_ORIGINAL_CONE_30S.md` — **current** — targeted 30-second results for the six historical or source-derived
   cone baselines on the 26 matrices unsolved by every five-second cone run.
 
 ## Research
 
+- `SINGULAR_LIFT_DICKINSON_RESEARCH.md` — **research finding** — exact border and root-cone lifting theorems, completeness and
+  accessibility counterexamples, BFS/A* guarantees, safe pruning rules, direct kernel-space alternatives, and order-45 evidence.
+- `ORDINARY_DICKINSON_CERTIFICATE_ENGINE_RESEARCH.md` — **research finding** — transfer of singular-support results to bounded
+  Dickinson intervals, exact stacked-flat and affine searches, activation-loss counterexamples, and staged certificate-engine proposals.
 - `BPQY_DICKINSON_CERTIFICATE_GEOMETRY.md` — **research finding** — designated-zero support size, Dickinson interval width, exact
-  digit-growth evidence, ten-second outcomes, and the order-25 matrix-12580 progress trace.
+  digit-growth evidence, ten-second outcomes, and the order-25 matrix-12580 diagnostics trace.
 - `PREPROCESSING_PIPELINE_DESIGN.md` — **current implementation** — complete root-check, component, ordinary-check,
-  bounded-reduction, child-pipeline, single-switch, outcome, scan-reuse, and progress specification.
+  bounded-reduction, child-pipeline, single-switch, outcome, scan-reuse, and diagnostics specification.
 - `KUZMANOVIC_100000_MATRIX_SCREEN.md` — **completed screen** — exact reconstruction, complete ordinary-copositivity results,
   timing, published-label audit, and the evidence for removing the separate 100,000-row staging table.
 - `LITERATURE_SOLVED_REFERENCES.md` — **current evidence audit** — semantics, inclusion boundary, qualifications, exclusions, and
@@ -43,6 +43,12 @@ This file routes to every other Markdown document under `aidocs/` without duplic
 ## Historical
 
 - `CHANGES.md` — **historical** — searchable history of meaningful decisions, results, and evidence that are not clear from Git.
+- `REFERENCE_RESULTS_REPRESENTATIVE_CORE_AND_STRESS.md` — **historical** — five-second results for the former 524-matrix union of
+  Representative Core and Stress; it predates the current 512-matrix fused flag.
+- `REFERENCE_RESULTS_HADELER_BASED.md` — **current** — in-progress five-second Smoke and 512-matrix Core/Stress comparison of every
+  model in the Hadeler, Dickinson, and FracESSA inheritance group.
+- `CODE_REVIEW_2026-08-12.md` — **historical** — dated review whose public-interface findings were superseded when the `fast` and
+  `safe` layers were removed; its remaining observations are retained as review evidence.
 - `CODE_REVIEW_2026-08-11.md` — **historical** — completed predecessor review of preprocessing mathematics, model wiring, corpus
   storage, runner behavior, result provenance, resource handling, tests, and documentation.
 - `history/COPOSITIVITY_CHECKER_EXTRACTION_HANDOFF.md` — **historical** — completed extraction map, inherited mathematical contract,

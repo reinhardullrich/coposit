@@ -990,7 +990,7 @@ The first claim is proved by the cone covers and minimization identities above. 
 
 ### Cooperative interruption
 
-Timed native-module builds observe a shared signal flag at explicit checkpoints. A set flag throws `timeout_requested`, which the
+Timed model-companion builds observe a shared signal flag at explicit checkpoints. A set flag throws `timeout_requested`, which the
 native boundary reports as an unresolved timeout. Checkpoints occur:
 
 - when the model starts;

@@ -9,13 +9,18 @@ coposit is licensed under GPL-3.0-or-later.
 | FLINT | Exact integer arithmetic and matrices | LGPL-3.0-or-later | <https://github.com/flintlib/flint> |
 | GMP | FLINT dependency | LGPL-3.0-only OR GPL-2.0-only | <https://gmplib.org/> |
 | MPFR | FLINT dependency | LGPL-3.0-or-later | <https://www.mpfr.org/> |
-| pybind11 3.0.4 | Python extension binding fetched by CMake | BSD-3-Clause | <https://github.com/pybind/pybind11/tree/v3.0.4> |
 | GoogleTest 1.14.0 | Test-only dependency fetched by CMake | BSD-3-Clause | <https://github.com/google/googletest/tree/v1.14.0> |
-| CaDiCaL 2.2.1 | Incremental SAT engine for the `sat_zed_dickinson` experiment | MIT | <https://github.com/arminbiere/cadical/tree/rel-2.2.1> |
-| clingo 5.8.2 with clasp 3.4.1 | Backtracking support enumeration for `clingo_sat_zed_dickinson` | MIT | <https://github.com/potassco/clingo/tree/v5.8.2> |
+| CaDiCaL 2.2.1 | Incremental SAT engine for the `sat_dickinson` experiment | MIT | <https://github.com/arminbiere/cadical/tree/rel-2.2.1> |
+| clingo 5.8.2 with clasp 3.4.1 | Backtracking support enumeration for `clingo_sat_dickinson` | MIT | <https://github.com/potassco/clingo/tree/v5.8.2> |
+| Open MCS | MCS maximum-clique search adapted for the Motzkin--Straus pre-check | GPL-3.0-or-later | <https://github.com/darrenstrash/open-mcs/tree/735788af066fc8589f577036af521f22f45c2731> |
 
 The immediate-integer Bareiss update in `cpp/include/coposit/fraction_free_ldlt.hpp` is adapted from Fredrik Johansson's
 `fmpz_mat_fflu` implementation in FLINT and retains its LGPL-3.0-or-later notice in the header.
+
+`cpp/include/coposit/open_mcs.hpp` adapts Darren Strash's Open MCS implementation at commit
+`735788af066fc8589f577036af521f22f45c2731`. It retains the MCR initial ordering, greedy coloring bound, static-order traversal, and
+MCS recoloring rule. The coposit integration replaces the executable and container machinery with its packed adjacency, cooperative
+timeout, diagnostics, unrestricted-size index type, and exact decision-threshold stop.
 
 The `dutour_2018` model is an independent FLINT-integer adaptation of the mathematics in Mathieu Dutour Sikirić's
 `PairDecomposition` and `TestStrictCopositivity` in Polyhedral Common. It was verified against commit

@@ -1,7 +1,7 @@
 #pragma once
 
 #include <coposit/matrix_integer.hpp>
-#include <coposit/progress.hpp>
+#include <coposit/diagnostics.hpp>
 #include <coposit/small_copositivity.hpp>
 #include <coposit/support.hpp>
 #include <coposit/timeout.hpp>
@@ -168,7 +168,7 @@ inline matrix_scan_result scan_matrix(const matrix_integer& matrix, const matrix
 
     for (size_t row = 0; row < dimension; ++row) {
         timeout_checkpoint();
-        progress::advance_preprocessing(row + 1, dimension);
+        diagnostics::advance_preprocessing(row + 1, dimension);
         for (size_t column = row + 1; column < dimension; ++column) {
             matrix_scan_detail::observe_off_diagonal(result, requirements, row, column, matrix(row, column), matrix(row, row),
                                                       matrix(column, column));
@@ -192,7 +192,7 @@ inline scanned_principal_matrix scan_principal_matrix(const matrix_integer& sour
 
     for (size_t row = 0; row < dimension; ++row) {
         timeout_checkpoint();
-        progress::advance_preprocessing(row + 1, dimension);
+        diagnostics::advance_preprocessing(row + 1, dimension);
         const size_t source_row = indices[row];
         result.matrix(row, row) = source(source_row, source_row);
         matrix_scan_detail::observe_diagonal(result.scan, requirements, row, result.matrix(row, row));

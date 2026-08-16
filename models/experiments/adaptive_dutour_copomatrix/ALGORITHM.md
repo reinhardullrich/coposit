@@ -12,7 +12,7 @@ This model combines two exact geometric operations:
 - **Dutour subdivision** keeps the current matrix order and covers the current cone by two smaller cones.
 - **COPOMATRIX projection** removes one coordinate and creates one or more problems whose order is one smaller.
 
-COPOMATRIX gives useful guaranteed progress, but a row containing many positive and negative entries can make it create a
+COPOMATRIX gives useful guaranteed diagnostics, but a row containing many positive and negative entries can make it create a
 combinatorial number of children. Dutour always creates only two children, but it may keep subdividing at the same order for an
 unbounded time.
 
@@ -370,7 +370,7 @@ Along every root-to-leaf branch:
 - each COPOMATRIX Vmatrix decomposition has a finite number of children.
 
 Therefore the complete recursion tree is finite for every finite input matrix. The theoretical tree can still be extremely large:
-the cutoff guarantees eventual progress, not practical speed or memory use. External timeout, process failure, or memory exhaustion
+the cutoff guarantees eventual diagnostics, not practical speed or memory use. External timeout, process failure, or memory exhaustion
 remains an unresolved resource outcome rather than a negative classification.
 
 ## Source Behavior And coposit Changes

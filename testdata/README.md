@@ -5,11 +5,11 @@
 It contains corpus and reference data plus a two-column cache of the fastest eligible local diagnostic result. Mutable benchmark
 measurements remain in the ignored local `experiments/diagnostics.sqlite3` database.
 
-- Matrices: 3,669
+- Matrices: 3,513
 - Dimensions: 1 through 5,000
-- Strictly copositive: 922
-- Copositive but not strictly copositive: 1,387
-- Not copositive: 895
+- Strictly copositive: 872
+- Copositive but not strictly copositive: 1,331
+- Not copositive: 845
 - Copositive with strict status not yet established: 0
 - Strict and non-strict copositivity not yet established: 465
 - Schema: the `sources` and `matrices` tables, with no views, triggers, or manually created indexes
@@ -20,14 +20,17 @@ One-time construction and migration material is retained under `archive/`.
 
 `matrices` stores the stable ID, dimension, exact matrix data, nullable strict and non-strict copositivity results,
 optional free-form source text, normalized primary `source_id`, the `additional_source_ids` bibliography, the `references_solved`
-and `references_unsolved` literature-claim arrays, optional family, and seven
+and `references_unsolved` literature-claim arrays, optional family, and four
 independent Boolean benchmark flags:
-`smoke_set`, `representative_core`, `stress_test`,
-`scale_set`, `timeout_5s_strict_set`, `n_le_100`, and `n_gt_100_solved`. The first five are curated stored memberships and default
+`smoke_set`, `core_and_stress_test`, `n_le_100`, and `n_gt_100_solved`. The first two are curated stored memberships and default
 off. `n_le_100` is generated directly from `dimension <= 100`; `n_gt_100_solved` is generated from order above 100 plus a nonempty
-`references_solved` array. Neither generated membership can drift, and both automatically include future qualifying rows. A known
+`references_solved` array. Both generated definitions also require `preprocessing_solved = 0`. Neither generated membership can
+drift, and both automatically include future qualifying rows. A known
 strict-positive result requires a known non-strict-positive result. `NULL` in either truth column means that result has not been
 established; it must not be read as false.
+`preprocessing_solved` is true for every retained matrix completely classified by the new maintained depth-2 combined preprocessing
+workflow in the five-second corpus run or its sixty-second timeout continuation. Partial CP/SCP facts do not qualify. Every benchmark
+set excludes these rows so a selected benchmark measures model traversal rather than an exact preprocessing decision.
 Small matrices keep their comma-separated upper triangle inline. Large rows contain `file:matrices/<matrix_id>.mtx`, resolved relative
 to the database directory, and `file_sha256` binds each reference to the SHA-256 of its exact file bytes. Inline rows keep that column
 `NULL`. The hash is retained for occasional explicit integrity audits; normal solver and benchmark runs do not recompute it. Those
@@ -36,14 +39,23 @@ files use whichever standard Matrix Market
 `coordinate integer symmetric` representation is smaller in bytes. Symmetric array order and sorted symmetric coordinates both encode
 the lower triangle; coordinate files omit zeros. The archived `externalize_large_matrices.py` records the completed conversion that
 selected the smaller exact representation for every external file and compacted the database. The archived
-`assign_benchmark_sets_2026_08_10.sql` preserves the guarded pre-consensus assignment procedure; the stored flags remain unchanged
-after the non-strict classifications were completed. `assign_timeout_5s_strict_set_2026_08_12.sql` freezes the separate common-timeout
-set. `aidocs/BENCHMARK_SETS.md` explains both assignments and their current composition.
-`add_n_le_100_set_2026_08_14.sql` records the generated comprehensive order-at-most-100 membership.
-`add_n_gt_100_solved_set_2026_08_14.sql` records the generated higher-order literature-solved membership.
+`assign_benchmark_sets_2026_08_10.sql` preserves the guarded original Core and Stress assignments;
+`fuse_core_and_stress_test_2026_08_16.sql` records their current union without the precheck-trivial generated panel.
+`retire_scale_and_timeout_sets_2026_08_16.sql` removes the two retired stored flags. `aidocs/BENCHMARK_SETS.md` explains the
+current assignments and composition.
+`add_preprocessing_solved_2026_08_16.sql` records the original guarded 2,115-row preprocessing result flag. The current depth-2
+refresh flags 2,708 matrices; its exact run evidence is retained in `experiments/preprocessing_depth_2026-08-15/`.
+`exclude_preprocessing_solved_from_benchmarks_2026_08_16.py` records the initial guarded curated replacements and current generated-set
+definitions. `refresh_benchmark_sets_after_motzkin_straus_2026_08_16.sql` removes the additional preprocessing-complete members and
+restores Smoke to 49 and Core and Stress to 512 with unresolved, known-truth replacements; comprehensive N ≤ 100 now contains 754
+matrices. The older `add_n_le_100_set_2026_08_14.sql` and `add_n_gt_100_solved_set_2026_08_14.sql` files preserve their original
+pre-preprocessing definitions.
+`replace_hildebrand_circulants_2026_08_16.py` replaces the 17 order-15–25 Hildebrand parameter points by one diversified low-digit
+exact representative per order, removes their obsolete diagnostics, and refills six boundary Core slots at the same orders.
 `fastest_elapsed_ns` stores the shortest eligible completed native time, and `fastest_result_ref` identifies its exact diagnostic row
-by model, mode, preprocessing, and binary SHA-256. Only `ok` rows agreeing with every known corpus truth are eligible; the reference
-runner refreshes affected cache rows in the same serialized batch transaction used to write diagnostics.
+by model, mode, preprocessing, and binary SHA-256. An eligible row must be `ok`, use combined `both` classification, and agree with
+every known corpus truth. Its preprocessing selection may be `none` or `both`; predicate-only measurements never enter this cache.
+The reference runner refreshes affected cache rows in the same serialized batch transaction used to write diagnostics.
 Free-form source strings preserve the provenance of the stored occurrence; every retained representative also preserves the origins
 of projectively equivalent matrices removed on 2026-08-09 and 2026-08-14. `source_id` points to the earliest located paper, archive, repository, or
 reproducible local generator for the matrix. `additional_source_ids` is a compact JSON list of other sources that explicitly print,
@@ -63,10 +75,10 @@ may occur in both arrays when different methods in that paper have different out
 claim. See `aidocs/LITERATURE_UNSOLVED_REFERENCES.md` for the conservative inclusion rule and deliberate exclusions.
 The `sources` table deliberately has only authors, title,
 earliest documented public year, bibliographic reference, and an optional provenance comment. The year records the first located
-public appearance, including a preprint, public archive, or repository when that predates a journal issue. Its 98 rows comprise
+public appearance, including a preprint, public archive, or repository when that predates a journal issue. Its 96 rows comprise
 literature, collection, repository, and local-generator sources. Some literature rows are prepared for later
 imports; a later use or repository location is also retained in `comment`. All 15 extracted families are preserved. Twenty-one added
-exceptional/equality family labels cover 849 distinct literature and derived matrices, including the previously unlabeled Horn and
+exceptional/equality family labels cover 843 distinct literature and derived matrices, including the previously unlabeled Horn and
 Hoffman-Pereira rows.
 
 The corpus collapses only direct positive whole-matrix scalings
@@ -84,8 +96,9 @@ moved between coordinate orderings or scales. Positive diagonal congruences `DAD
 
 The local diagnostics database's `results` table stores one benchmark result per matrix, lowercase model ID, requested decision mode,
 preprocessing choice, and exact native-extension SHA-256. It keeps the stop status, classifications, elapsed time, cutoff, timestamp,
-failure message, optional full progress diagnostics, and optional sparse certificate joint distribution. A temporary `running` row is
-updated once per second during diagnostic campaigns, then replaced by the final `ok`, `parse_error`, `timeout`, `node_limit`, or
+failure message, full diagnostic text, and any sparse certificate joint distribution supplied by the model. Every `run_results.py`
+campaign enables this capture automatically. A temporary `running` row is updated once per second, then replaced by the final
+`ok`, `parse_error`, `timeout`, `node_limit`, or
 `error` row. This preserves the last diagnostic state even when a native worker cannot return within the cooperative timeout grace.
 Hadeler rows predating 2026-08-11 may retain an empty legacy hash because their producing binary cannot be reconstructed; the runner
 no longer creates such rows.
@@ -123,11 +136,14 @@ IDs 10161 through 10244 append 84 more Johnson-Reams generalized Horn matrices w
 odd orders begin 163, 175, 181, and 199, then follow an irregular roughly-ten-dimension spacing through 999.
 `archive/import_literature_extremes_2026_08_07.py` regenerates all 284 rows from both batches.
 
-IDs 10245 through 10304 add 60 exact matrices from a third literature pass: three Dickinson order-6 Case-9 extreme forms, three
+IDs 10245 through 10304 originally added 60 exact matrices in a third literature pass: three Dickinson order-6 Case-9 extreme forms, three
 Hildebrand-Afonin order-6 forms outside Parrilo's first sum-of-squares level, seven Laurent-Vargas direct sums outside every level
 of that hierarchy, and 47 Hildebrand circulant extreme forms of orders 7 through 25 whose minimal zeros have support `n-2`.
 All 47 circulant forms exceeded the 250 ms Dutour screen; representatives at orders 7, 8, 9, 11, 15, and 25 exceeded five seconds.
 `archive/import_hard_literature_matrices_2026_08_07.py` verifies every theorem condition and zero exactly before reproducing the rows.
+The current family keeps the 30 original order-7--14 points and IDs 13024--13034, one exact order-15--25 representative per order.
+The latter were selected from the low-digit part of a finite rational grid while deliberately varying the two construction parameters;
+no timing from a removed parameter point was transferred to a replacement.
 
 IDs 10305 through 10504 add 200 strict perfect copositive matrices from Dannenberg-Schürmann: the printed indefinite order-3 seed
 `I` and every lift through order 102, followed by the printed exceptional order-5 certificate `E` and every lift through order 104.
@@ -137,15 +153,9 @@ vector with final coordinate at least two across every lift. Representative Duto
 `I` family and already at order 10 for the exceptional family. The paper's rational scale `E/3` is stored as its primitive integer
 numerator because positive scaling does not change strict copositivity.
 
-The two deterministic project-generated stress families contain 75 sparse and 75 dense matrices: one copositive boundary, one
-strictly copositive, and one explicitly non-copositive matrix at each of 25 shared irregular dimensions from 43 through 952. The
-sparse construction uses two seeded signed Hamiltonian cycles and entries of absolute value at most 10. The dense construction uses
-unique seeded eight-coordinate fingerprints in `{-2,-1,1,2}` and entries of absolute value at most 60. Both boundary constructions
-have an exact two-coordinate nonnegative zero, both strict constructions are positive definite, and both failing constructions have
-an exact two-coordinate negative witness despite a positive diagonal. The original rows through order 952 remain in their historical
-ID ranges; the 90 lower-order additions are IDs 13024 through 13113. The archived sparse and dense generators reproduce all 150
-current rows, and `archive/reshape_generated_stress_2026_08_15.py` records the removal of the 120 rows above order 1,000 and the
-lower-order additions.
+The 150 deterministic project-generated sparse/dense matrices were removed from the maintained corpus on 2026-08-16. Exact
+definiteness or their explicit two-coordinate witness resolved every row during preprocessing, so they did not exercise a selected
+model in normal runs. Their dated generators, reshape migration, and guarded removal script remain under `archive/`.
 
 The byte-exact 2026-08-07 FracESSA source database is preserved as
 `testdata/archive/copos_testdata.original.sqlite3.xz`. Its decompressed SHA-256 is

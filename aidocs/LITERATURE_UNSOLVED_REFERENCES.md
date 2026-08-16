@@ -1,6 +1,6 @@
 # Literature-Reported Unsolved Cases
 
-**Status:** current evidence audit, 2026-08-14  
+**Status:** current evidence audit, 2026-08-16
 **Database field:** `matrices.references_unsolved`
 
 ## Meaning
@@ -26,6 +26,7 @@ A claim was entered only when the paper identifies the matrix or an all-member g
 
 - a time or memory limit without the required result;
 - numerical failure or an inconclusive result;
+- a nonnegative heuristic outcome that the paper explicitly calls a guess or undecidable;
 - failure to prove the claimed global optimum, even when a negative upper bound still happened to prove non-copositivity; or
 - a result that the paper's known answer shows is wrong.
 
@@ -36,7 +37,7 @@ change under scaling. Claims already attached to occurrences merged by corpus de
 
 ## Populated evidence
 
-The 173 nonempty rows contain 232 matrix–paper failure claims from 11 sources:
+The 197 nonempty rows contain 256 matrix–paper failure claims from 14 sources:
 
 | Source | Matrices | Explicit evidence |
 |---:|---:|---|
@@ -47,9 +48,11 @@ The 173 nonempty rows contain 232 matrix–paper failure claims from 11 sources:
 | 39 | 6 | Liuzzi et al. binary-branching variants ran out of memory on all six order-500 density-0.25 instances |
 | 44 | 76 | Gondzio–Yıldırım all-member failures in ST100, ST200, ST500, ST1000, DIMACS1, and BSU orders 10–24 |
 | 47 | 12 | Safi et al. report that BD failed where SNC completed |
+| 48 | 5 | Ferreira et al. obtained only nonnegative randomized heuristic outputs, which the paper says permit a guess but not a decision |
 | 49 | 24 | Júdice et al. time, memory, and numerical failures plus three wrong B&B boundary classifications |
 | 71 | 4 | Dobre–Vera SDP hierarchy levels hit memory or 8,000-second limits |
 | 72 | 17 | Xia et al. StableQP and Scozzari–Tardella solver timeouts |
+| 97 | 17 | Aragón-Artacho et al. reached critical points on the copositive boundary, an outcome their test explicitly declares undecidable |
 
 The three explicitly wrong outcomes are Júdice et al.'s benchmark B&B results for the boundary matrices derived from
 `c-fat200-1`, `c-fat200-2`, and `c-fat200-5`. The paper's proposed Algorithm 4 correctly solved those same matrices, so source 49 is
@@ -67,6 +70,8 @@ present in both arrays with different comments.
 - Hou et al.'s large random failures have no reproducible seed or matching stored array. Nishijima et al.'s failures concern complete
   positivity rather than copositivity of the stored input.
 - General statements such as “most matrices were classified” and single-failure aggregate counts with no named row were excluded.
+- Keys–Zhou–Lange's positive Horn table is an approximation experiment on matrices already known to be copositive, not an explicitly
+  failed decision, so it is neither solved nor unsolved.
 
 ## Reproduction and checks
 
@@ -74,3 +79,6 @@ present in both arrays with different comments.
 3,157-matrix, 94-source corpus, validates every object and source, and runs the foreign-key check. A second dry run reports zero
 pending rows. The completed database has no duplicate `(matrix_id, source_id)` pair, no malformed object, and passes
 `PRAGMA integrity_check`.
+
+`testdata/archive/correct_literature_reference_semantics_2026_08_16.py` adds the explicitly inconclusive Ferreira and
+Aragón-Artacho rows while leaving screens, mentions, and unattempted cases out of both arrays.

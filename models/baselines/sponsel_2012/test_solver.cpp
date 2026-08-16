@@ -1,6 +1,6 @@
 #include <coposit/model.hpp>
 
-#include "../source_trace.hpp"
+#include "../source_diagnostics.hpp"
 
 #include <gtest/gtest.h>
 
@@ -46,10 +46,10 @@ TEST(Sponsel2012ModelTest, AcceptsStrictHCertificate)
 
 TEST(Sponsel2012ModelTest, SourceTraceConfirmsHCertificateAcceptance)
 {
-    baseline_source_trace::clear();
+    baseline_source_diagnostics::clear();
     EXPECT_TRUE(model::solve(symmetric_matrix(3, {2, -1, 5, 2, 5, 2})));
-    const std::vector<baseline_source_trace::event> expected{{"h-accept"}};
-    EXPECT_EQ(baseline_source_trace::events, expected);
+    const std::vector<baseline_source_diagnostics::event> expected{{"h-accept"}};
+    EXPECT_EQ(baseline_source_diagnostics::events, expected);
 }
 
 TEST(Sponsel2012ModelTest, RetainsFractionalBundfussSplit)
