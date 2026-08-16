@@ -18,6 +18,10 @@ This file routes to every other Markdown document under `aidocs/` without duplic
   matrix carrying an explicit literature failure claim.
 - `REFERENCE_RESULTS_BAD26_ORIGINAL_CONE_30S.md` — **current** — targeted 30-second results for the six historical or source-derived
   cone baselines on the 26 matrices unsolved by every five-second cone run.
+- `REFERENCE_RESULTS_ALL_MODELS_FOR_HUMANS.md` — **current** — compact grouped Core/Stress results across all completed maintained
+  models in the current campaign.
+- `REFERENCE_RESULTS_BASELINES_AND_EXPERIMENTS.md` — **current** — five-second ordinary-copositivity Smoke and Core/Stress results
+  for the literature cone baselines and completed coposit-created cone experiments.
 
 ## Research
 
@@ -45,7 +49,7 @@ This file routes to every other Markdown document under `aidocs/` without duplic
 - `CHANGES.md` — **historical** — searchable history of meaningful decisions, results, and evidence that are not clear from Git.
 - `REFERENCE_RESULTS_REPRESENTATIVE_CORE_AND_STRESS.md` — **historical** — five-second results for the former 524-matrix union of
   Representative Core and Stress; it predates the current 512-matrix fused flag.
-- `REFERENCE_RESULTS_HADELER_BASED.md` — **current** — in-progress five-second Smoke and 512-matrix Core/Stress comparison of every
+- `REFERENCE_RESULTS_HADELER_BASED.md` — **current** — completed five-second Smoke and 512-matrix Core/Stress comparison of every
   model in the Hadeler, Dickinson, and FracESSA inheritance group.
 - `CODE_REVIEW_2026-08-12.md` — **historical** — dated review whose public-interface findings were superseded when the `fast` and
   `safe` layers were removed; its remaining observations are retained as review evidence.

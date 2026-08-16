@@ -1,10 +1,11 @@
 # Adaptive Zischg–Sponsel–COPOMATRIX
 
-Classification: coposit-created experimental strict-copositivity comparison retained for reproducibility. It combines an adaptive
+Classification: coposit-created experimental CP/SCP predicate comparison retained for reproducibility. It combines an adaptive
 Sponsel–COPOMATRIX traversal with Zischg–Bomze negative-graph decomposition after projection.
 
-Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
-`solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
+Public mode boundary: `solve(A, copositivity_mode::copositive)` tests copositivity (CP), while
+`solve(A, copositivity_mode::strictly_copositive)` tests strict copositivity (SCP). The model does not implement combined `both`
+classification; callers that need both predicates must select them separately.
 
 ## Idea In Plain Language
 
@@ -14,7 +15,7 @@ This model combines three exact ideas:
   troublesome edge into two child simplices.
 - **COPOMATRIX projection** removes one coordinate and creates one or more lower-order problems.
 - **Zischg–Bomze decomposition** splits a projected matrix into the connected components of its negative-entry graph. Cross-component
-  entries are nonnegative, so strict copositivity is exactly the conjunction of the smaller component problems.
+  entries are nonnegative, so CP and SCP are each exactly the conjunction of their smaller component problems.
 
 COPOMATRIX guarantees a dimension decrease, but a pivot row with many positive and negative entries can create a combinatorial
 number of children. Sponsel normally creates only two children and may certify a complete simplex without splitting, but repeated
@@ -23,7 +24,7 @@ same-order subdivision has no useful finite bound on boundary inputs.
 The adaptive rule is:
 
 1. Use the first COPOMATRIX pivot producing at most two immediate children.
-2. If no such pivot exists, apply Sponsel's strict `H` certificate and exact Bundfuss edge split.
+2. If no such pivot exists, apply Sponsel's mode-aware `H` certificate and exact Bundfuss edge split.
 3. After 10,000 consecutive Sponsel splits on one branch, force COPOMATRIX at pivot zero even when it creates more children.
 4. Before adaptively restarting on any matrix created by COPOMATRIX, split its negative-entry graph into components and solve those
    components independently.
@@ -46,7 +47,7 @@ Its inherited subdivision comes from:
 > Stefan Bundfuss and Mirjam Dür, “Algorithmic Copositivity Detection by Simplicial Partition,” *Linear Algebra and its
 > Applications* 428(7), 1511–1523 (2008), [DOI 10.1016/j.laa.2007.09.035](https://doi.org/10.1016/j.laa.2007.09.035).
 
-The maintained exact reconstruction and strict `H` adaptation are documented in
+The maintained exact reconstruction and mode-aware `H` adaptation are documented in
 [`../../baselines/sponsel_2012/ALGORITHM.md`](../../baselines/sponsel_2012/ALGORITHM.md).
 
 The COPOMATRIX mathematics comes from:
@@ -55,7 +56,7 @@ The COPOMATRIX mathematics comes from:
 > 2784–2792 (2011), [DOI 10.1016/j.laa.2011.04.038](https://doi.org/10.1016/j.laa.2011.04.038), retained as
 > [`xu_yao_2011_copomatrix.pdf`](../../../research/papers/xu_yao_2011_copomatrix.pdf).
 
-Its maintained exact strict adaptation is documented in
+Its maintained exact CP/SCP adaptation is documented in
 [`../../baselines/copomatrix_2011/ALGORITHM.md`](../../baselines/copomatrix_2011/ALGORITHM.md). The adaptive routing and cutoff follow
 the structure of [`../adaptive_dutour_copomatrix/`](../adaptive_dutour_copomatrix/), with Sponsel replacing Dutour as the
 same-order operation.
@@ -73,15 +74,15 @@ rule, its narrow-pivot routing, or its 10,000-split cutoff.
 
 ## Public Decision Problem
 
-For a nonempty square symmetric integer matrix $A$, the model decides
+For a nonempty square symmetric integer matrix $A$, the selected mode decides either
 
 \[
-x^TAx>0
-\qquad\text{for every nonzero }x\geq0.
+x^TAx\geq0\quad\text{for every }x\geq0\qquad\text{(CP)},
 \]
 
-Equality rejects. The input parser supplies a nonempty square exactly symmetric matrix; the model assumes that contract without
-revalidating it. A cooperative timeout remains unresolved and is never converted to `false`.
+or \(x^TAx>0\) for every nonzero \(x\geq0\) (SCP). Equality is accepted by CP and rejected by SCP. The input parser supplies a
+nonempty square exactly symmetric matrix; the model assumes that contract without revalidating it. A cooperative timeout remains
+unresolved and is never converted to `false`.
 
 ## Node State
 
@@ -113,7 +114,7 @@ after every required child passes.
 For a node $G$ of order $n$:
 
 1. Apply exact direct criteria when $n\leq3$.
-2. Reject if any diagonal entry is nonpositive.
+2. Reject a negative diagonal in CP mode or a nonpositive diagonal in SCP mode.
 3. Scan rows in index order and choose the first COPOMATRIX pivot producing at most two immediate children.
 4. If such a pivot exists, apply COPOMATRIX, component-decompose each projected child, and reset all child counters.
 5. If no pivot is narrow and `sponsel_streak >= 10000`, force COPOMATRIX at pivot zero, component-decompose each projected child,
@@ -121,13 +122,13 @@ For a node $G$ of order $n$:
 6. Otherwise apply the Sponsel certificate and, if still unresolved, one Sponsel/Bundfuss split.
 
 ```text
-check(G, streak):
+check(G, streak, mode):
     checkpoint
 
     if order(G) <= 3:
-        return direct_strict_test(G)
+        return direct_mode_test(G)
 
-    if any diagonal entry is <= 0:
+    if any diagonal entry fails mode (< 0 for CP, <= 0 for SCP):
         return false
 
     pivot := first COPOMATRIX pivot with at most two children
@@ -152,7 +153,9 @@ Thus a branch can contain exactly 10,000 consecutive Sponsel splits. The next no
 
 ## Direct Criteria Through Order Three
 
-Order zero is internally true, although public input cannot be empty. Order one passes exactly when its sole diagonal is positive.
+Order zero is internally true, although public input cannot be empty. The shared exact low-order checker uses non-strict
+comparisons for CP and strict comparisons for SCP. In particular, order one requires a nonnegative diagonal for CP and a positive
+diagonal for SCP.
 
 For
 
@@ -160,7 +163,8 @@ For
 G=\begin{pmatrix}a&b\\b&c\end{pmatrix},
 \]
 
-order two passes exactly when $a,c>0$ and either $b\geq0$ or $ac-b^2>0$.
+order two passes CP exactly when \(a,c\geq0\) and either \(b\geq0\) or \(ac-b^2\geq0\). The same formula with strict diagonal and
+determinant comparisons decides SCP.
 
 Order three applies that rule to every principal pair and then uses the exact determinant/adjugate form of Hadeler's order-three
 criterion. These are the same integer-only direct rules owned by the existing adaptive models.
@@ -174,7 +178,7 @@ G=\begin{pmatrix}
 a&p^T\\
 p&B
 \end{pmatrix},
-\qquad a>0.
+\qquad a\geq0\text{ in CP mode and }a>0\text{ in SCP mode}.
 \]
 
 For a nonnegative vector $(t,y)$,
@@ -183,8 +187,10 @@ For a nonnegative vector $(t,y)$,
 q(t,y)=at^2+2t\,p^Ty+y^TBy.
 \]
 
-The principal child $B$ is always required. Completing the square shows that the additional problem uses the division-free Schur
-matrix
+The principal child $B$ is always required. If \(a=0\), which can occur only in CP mode, any negative entry of \(p\) gives an
+immediate negative witness; if \(p\geq0\), CP of the parent is exactly CP of \(B\), so no Schur child is formed.
+
+For \(a>0\), completing the square shows that the additional problem uses the division-free Schur matrix
 
 \[
 S=aB-pp^T
@@ -200,12 +206,14 @@ y\geq0,
 Therefore
 
 \[
-\operatorname{strict}(G)
+\operatorname{P}(G)
 \iff
-\operatorname{strict}(B)
+\operatorname{P}(B)
 \land
-\left[y^TSy>0\text{ for every nonzero }y\geq0\text{ with }p^Ty\leq0\right].
+\left[y^TSy\mathrel{\bowtie}0\text{ for every eligible }y\geq0\text{ with }p^Ty\leq0\right],
 \]
+
+where \(P\) is CP with \(\bowtie=\geq\), or SCP with \(\bowtie=>\) and nonzero \(y\).
 
 ### Sign classes and child count
 
@@ -281,33 +289,33 @@ x^TMx
 Every cross term in the second sum is nonnegative. Therefore:
 
 \[
-M\text{ is strictly copositive}
+M\text{ satisfies }P
 \iff
-M[C_k,C_k]\text{ is strictly copositive for every }k.
+M[C_k,C_k]\text{ satisfies }P\text{ for every }k,
 \]
 
-The forward implication follows by padding a component vector with zeros. For the reverse implication, every nonzero $x\geq0$ has
-at least one nonzero component restriction; its component quadratic term is strictly positive, all other component terms are
-nonnegative, and all cross terms are nonnegative. This proof applies unchanged to principal blocks, division-free Schur matrices,
-and transformed Schur Gram matrices because it uses only the exact entries of the child being tested.
+for either \(P=\mathrm{CP}\) or \(P=\mathrm{SCP}\). The forward implication follows by padding a component vector with zeros. For
+the reverse implication, every component quadratic term and every cross term is nonnegative in CP mode. In SCP mode, every nonzero
+\(x\geq0\) has at least one nonzero component restriction whose component term is strictly positive. This proof applies unchanged
+to principal blocks, division-free Schur matrices, and transformed Schur Gram matrices.
 
-The implementation first rejects a nonpositive diagonal. It then discovers components in increasing order of their smallest
+The implementation first applies the mode-aware diagonal test. It then discovers components in increasing order of their smallest
 unvisited coordinate using a depth-first scan of exact negative signs:
 
 \[
 \texttt{projected\_check}(M):
 \begin{cases}
-\text{reject}, & \exists i:m_{ii}\leq0,\\
+\text{reject}, & \exists i:m_{ii}<0\text{ in CP, or }m_{ii}\leq0\text{ in SCP},\\
 \texttt{check}(M,0), & G^-(M)\text{ is connected},\\
 \bigwedge_k\texttt{check}(M[C_k,C_k],0), & G^-(M)\text{ is disconnected}.
 \end{cases}
 \]
 
-Singleton components need no recursive call after the positive-diagonal check. If there are no negative edges, all components are
-singletons and the child passes immediately; this is exactly the former positive-diagonal, entrywise-nonnegative shortcut.
+Singleton components need no recursive call after the diagonal check. If there are no negative edges, all components are
+singletons and the child passes immediately; this is exactly the entrywise-nonnegative shortcut for the selected mode.
 
 The rule is deliberately applied only to matrices produced by a COPOMATRIX projection. It does not decompose the original matrix or
-non-strict Sponsel children. Thus the experiment measures whether dimension reduction exposes useful disconnected structure without
+same-order Sponsel children. Thus the experiment measures whether dimension reduction exposes useful disconnected structure without
 changing the base model's same-order Sponsel routing.
 
 ## The Sponsel Operation
@@ -332,7 +340,7 @@ The model selects the numerically smallest negative off-diagonal entry $g_{ij}$,
 \gamma=g_{ij}<0.
 \]
 
-If no negative entry exists, positive diagonal and entrywise nonnegativity certify the node.
+If no negative entry exists, entrywise nonnegativity certifies CP; after the strict diagonal test it also certifies SCP.
 
 If
 
@@ -340,9 +348,9 @@ If
 \gamma^2\geq\alpha\beta,
 \]
 
-the two-vertex edge contains a nonpositive direction and the model rejects. Equality rejects because the decision is strict.
+the two-vertex edge contains a nonpositive direction. A strict reverse inequality rejects CP and SCP; equality rejects only SCP.
 
-### Strict `H` certificate
+### Mode-aware `H` certificate
 
 If the selected edge passes, construct $S_H(G)$ by retaining the diagonal and every negative off-diagonal entry while replacing
 every positive off-diagonal entry with zero. Then
@@ -353,20 +361,22 @@ G=S_H(G)+N^+(G),
 
 where $N^+(G)$ is entrywise nonnegative.
 
-If
+The implementation accepts if exact fraction-free LDLT proves
 
 \[
-S_H(G)\succ0,
+S_H(G)\succeq0\quad\text{in CP mode},
+\qquad
+S_H(G)\succ0\quad\text{in SCP mode}.
 \]
 
-then for every nonzero $y\geq0$,
+The entrywise-nonnegative remainder preserves the corresponding inequality. In the strict case, for every nonzero $y\geq0$,
 
 \[
 y^TGy=y^TS_H(G)y+y^TN^+(G)y>0.
 \]
 
-The complete simplex is accepted. Positive definiteness is checked by exact fraction-free LDLT. Failure is not rejection; it only
-means subdivision is required.
+The complete simplex is accepted. Failure of the selected sufficient certificate is not rejection; it only means subdivision is
+required.
 
 ### Exact edge point and children
 
@@ -417,16 +427,17 @@ the second, and both inherit `sponsel_streak + 1`.
 
 The model rejects when:
 
-- a diagonal entry is nonpositive;
+- a diagonal entry is negative in CP mode or nonpositive in SCP mode;
 - a direct low-order criterion fails;
-- a selected Sponsel edge satisfies $\gamma^2\geq\alpha\beta$;
+- a selected Sponsel edge satisfies \(\gamma^2>\alpha\beta\), or equality in SCP mode;
+- a CP zero-diagonal COPOMATRIX pivot has a negative off-diagonal entry;
 - any connected component of a principal or transformed Schur child rejects.
 
 It accepts when:
 
 - a direct criterion passes;
-- a node is entrywise nonnegative with positive diagonal;
-- the strict Sponsel `H` certificate passes;
+- a node is entrywise nonnegative and its diagonal passes the selected mode;
+- the mode-aware Sponsel `H` certificate passes;
 - every connected component of a projected child passes;
 - or every child in an exact Sponsel cover or COPOMATRIX projection passes.
 
@@ -481,11 +492,12 @@ Source-derived Zischg–Bomze behavior:
 
 - the graph edge rule $m_{ij}<0$;
 - exact decomposition into negative-graph components;
-- conjunction of component copositivity decisions, extended here to the strict decision by the same quadratic-form identity.
+- conjunction of component CP decisions, extended here to SCP by the same quadratic-form identity.
 
 coposit-created choices:
 
-- strict positive definiteness instead of the paper's non-strict positive-semidefinite `H` certificate;
+- positive-semidefinite `H` acceptance for CP and positive-definite `H` acceptance for SCP;
+- mode-aware equality boundaries, including the zero-pivot CP reduction;
 - direct criteria through order three;
 - first narrow COPOMATRIX pivot across all rows;
 - Sponsel only when no narrow pivot exists;
@@ -493,7 +505,7 @@ coposit-created choices:
 - forced pivot zero;
 - counter reset after every order reduction;
 - recursive adaptive restart in every child;
-- applying negative-graph decomposition after every COPOMATRIX projection but not at the public root or non-strict Sponsel nodes;
+- applying negative-graph decomposition after every COPOMATRIX projection but not at the public root or same-order Sponsel nodes;
 - skipping singleton component calls after their positive diagonal has been verified;
 - checking the child replacing the first selected endpoint to completion before its sibling;
 - omission of the standalone Sponsel open-node limit.
@@ -516,7 +528,7 @@ side blocks and leaves almost all downstream work unchanged.
 
 ### Decomposition appears only after projection
 
-The model intentionally does not split the input or non-strict Sponsel children. A matrix whose useful negative components disappear
+The model intentionally does not split the input or same-order Sponsel children. A matrix whose useful negative components disappear
 under the chosen Schur or ray congruence receives no benefit, and a matrix already decomposable at the root must first reach a
 COPOMATRIX operation before the rule can act.
 
@@ -560,11 +572,11 @@ The complete implementation is local to [`solver.cpp`](solver.cpp).
 | `adaptive_zischg_sponsel_copomatrix_checker::check` | Apply direct tests, narrow routing, forced cutoff, and Sponsel fallback. |
 | `first_narrow_copomatrix_pivot` | Return the first row whose COPOMATRIX projection has at most two children. |
 | `check_copomatrix` | Build and visit the principal and negative-side Schur problems. |
-| `check_projection` | Reject a bad diagonal, split a projected negative graph, and restart connected blocks at streak zero. |
+| `check_projection` | Apply the mode-aware diagonal test, split a projected negative graph, and restart connected blocks at streak zero. |
 | `negative_components` | Discover exact negative-entry connected components without storing an adjacency matrix. |
 | `check_negative_staircase` | Generate Xu–Yao Schur simplices depth-first. |
 | `make_principal_block`, `make_schur_block` | Construct the exact lower-order projection matrices. |
 | `coordinate_ray`, `pair_ray`, `transform` | Build sparse integer rays and form $R^TMR$. |
 | `check_sponsel` | Select/test the minimum edge, apply `H`, and recurse into two exact split children. |
-| `passes_strict_h_certificate` | Strip positive off-diagonal entries and test exact positive definiteness. |
+| `passes_h_certificate` | Strip positive off-diagonal entries and test exact positive semidefiniteness for CP or definiteness for SCP. |
 | `calculate_lambda`, `sponsel_split` | Select the exact Bundfuss edge point and construct denominator-cleared children. |

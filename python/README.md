@@ -28,8 +28,6 @@ dense_bitset_dickinson
 interval_recursive_dickinson
 bdd_dickinson
 zdd_dickinson
-cardinality_bdd_dickinson
-cardinality_zdd_dickinson
 cbdd_dickinson
 upper_endpoint_cbdd_dickinson
 cbdd_dickinson_improved_1
@@ -56,7 +54,6 @@ bundfuss_2008
 sponsel_2012
 frank_wolfe_sponsel
 fracessa
-fracessa_circular
 zischg_hadeler
 zischg_dickinson
 zischg_fracessa

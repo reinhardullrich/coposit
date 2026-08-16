@@ -38,6 +38,17 @@ TEST(AdaptiveZischgSponselCopomatrixModelTest, UsesDirectStopsThroughOrderThree)
     EXPECT_FALSE(model::solve(symmetric_matrix(3, {1, -1, 0, 1, 0, 1})));
 }
 
+TEST(AdaptiveZischgSponselCopomatrixModelTest, SupportsNonStrictBoundaryCases)
+{
+    constexpr auto cp = model::copositivity_mode::copositive;
+    constexpr auto scp = model::copositivity_mode::strictly_copositive;
+    const matrix_integer boundary = symmetric_matrix(4, {1, -1, 0, 0, 1, 0, 0, 1, 0, 1});
+
+    EXPECT_TRUE(model::solve(boundary, cp));
+    EXPECT_FALSE(model::solve(boundary, scp));
+    EXPECT_FALSE(model::solve(symmetric_matrix(4, {0, -1, 0, 0, 1, 0, 0, 1, 0, 1}), cp));
+}
+
 TEST(AdaptiveZischgSponselCopomatrixModelTest, UsesNarrowCopomatrixReductions)
 {
     matrix_integer identity;

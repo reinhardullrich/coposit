@@ -46,6 +46,18 @@ TEST(FrankWolfeSponselModelTest, RetainsSponselCertificatesAndSplits)
     EXPECT_TRUE(model::solve(symmetric_matrix(3, {2, -1, 1, 5, -2, 3})));
 }
 
+TEST(FrankWolfeSponselModelTest, SupportsNonStrictBoundaryCases)
+{
+    constexpr auto cp = model::copositivity_mode::copositive;
+    constexpr auto scp = model::copositivity_mode::strictly_copositive;
+    const matrix_integer boundary = symmetric_matrix(2, {1, -1, 1});
+
+    EXPECT_TRUE(model::solve(boundary, cp));
+    EXPECT_FALSE(model::solve(boundary, scp));
+    EXPECT_TRUE(model::solve(symmetric_matrix(2, {0, 0, 1}), cp));
+    EXPECT_FALSE(model::solve(symmetric_matrix(2, {0, -1, 1}), cp));
+}
+
 TEST(FrankWolfeSponselModelTest, PreservesArbitraryPrecisionScaling)
 {
     integer scale;

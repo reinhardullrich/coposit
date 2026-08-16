@@ -1,9 +1,10 @@
 # Adaptive Dutour–COPOMATRIX
 
-Classification: coposit-created experimental strict-copositivity model.
+Classification: coposit-created experimental CP/SCP predicate model.
 
-Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
-`solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
+Public mode boundary: `solve(A, copositivity_mode::copositive)` tests copositivity (CP), while
+`solve(A, copositivity_mode::strictly_copositive)` tests strict copositivity (SCP). The model does not implement combined `both`
+classification; callers that need both predicates must select them separately.
 
 ## Idea In Plain Language
 
@@ -52,14 +53,13 @@ The direct low-order rules and adaptive routing start from coposit's maintained
 
 ## Public Decision Problem
 
-For a nonempty square symmetric integer matrix (A), the model decides whether
+For a nonempty square symmetric integer matrix (A), the selected mode decides either
 
 \[
-x^TAx>0
-\qquad\text{for every }x\in\mathbb R_+^n\setminus\{0\}.
+x^TAx\geq0\quad\text{for every }x\geq0\qquad\text{(CP)},
 \]
 
-This is **strict copositivity**. Equality rejects: one nonzero (x\geq0) satisfying (x^TAx=0) makes the result false.
+or strict copositivity, \(x^TAx>0\) for every nonzero \(x\geq0\) (SCP). Equality is accepted by CP and rejected by SCP.
 
 The input parser supplies a nonempty square exactly symmetric matrix; the model assumes that contract without revalidating it. A
 cooperative timeout remains unresolved and is never returned as `false`.
@@ -84,12 +84,12 @@ The counter is the number of consecutive Dutour splits on the current root-to-no
 starts at zero, increases by one in both Dutour children, and resets to zero in every COPOMATRIX child. It is not a global node count
 and activity in one sibling does not change another sibling.
 
-Every transformation is an exact conjunction:
+For either selected predicate \(P\in\{\operatorname{CP},\operatorname{SCP}\}\), every transformation is an exact conjunction:
 
 \[
-\operatorname{strict}(C)
+\operatorname{P}(C)
 \iff
-\operatorname{strict}(C_1)\land\cdots\land\operatorname{strict}(C_k).
+\operatorname{P}(C_1)\land\cdots\land\operatorname{P}(C_k).
 \]
 
 The solver returns false on the first failed child and true only after every required child passes.
@@ -99,7 +99,7 @@ The solver returns false on the first failed child and true only after every req
 For a node (C) of order (n):
 
 1. Apply the exact direct criterion when (n\leq3).
-2. Reject if any diagonal entry is nonpositive.
+2. Reject a negative diagonal in CP mode or a nonpositive diagonal in SCP mode.
 3. Scan pivot rows (0,1,\ldots,n-1) and choose the first row whose COPOMATRIX projection has at most two immediate children.
 4. If such a row exists, apply COPOMATRIX with that pivot and reset the counter in all children.
 5. Otherwise, if `dutour_streak >= 100`, force COPOMATRIX with pivot row zero and reset the counter in all children.
@@ -111,13 +111,13 @@ can occur.
 Exact control-flow pseudocode is:
 
 ```text
-check(C, streak):
+check(C, streak, mode):
     checkpoint
 
     if order(C) <= 3:
-        return direct_strict_test(C)
+        return direct_mode_test(C)
 
-    if any diagonal entry of C is <= 0:
+    if any diagonal entry fails mode (< 0 for CP, <= 0 for SCP):
         return false
 
     pivot := first row whose COPOMATRIX child count is <= 2
@@ -137,7 +137,8 @@ check(C, streak):
 
 Order zero is treated internally as vacuously true, although public input cannot be empty.
 
-For order one, strict copositivity is exactly (c_{11}>0).
+The shared exact low-order checker uses non-strict comparisons for CP and strict comparisons for SCP. In particular, order one
+requires \(c_{11}\geq0\) for CP and \(c_{11}>0\) for SCP.
 
 For order two,
 
@@ -145,7 +146,8 @@ For order two,
 C=\begin{pmatrix}a&b\\b&c\end{pmatrix}
 \]
 
-passes exactly when (a>0), (c>0), and either (b\geq0) or (ac-b^2>0).
+passes CP exactly when \(a,c\geq0\) and either \(b\geq0\) or \(ac-b^2\geq0\). Replacing those three non-strict comparisons by strict
+diagonal and determinant comparisons gives SCP.
 
 For order three, the model first applies that exact rule to all three principal pairs. It then uses the determinant and adjugate form
 of Hadeler's order-three criterion, exactly as in the existing adaptive model. All comparisons include equality correctly and use
@@ -160,7 +162,7 @@ C=\begin{pmatrix}
 a&p^T\\
 p&B
 \end{pmatrix},
-\qquad a>0.
+\qquad a\geq0\text{ in CP mode and }a>0\text{ in SCP mode}.
 \]
 
 For a nonnegative vector ((t,y)),
@@ -169,7 +171,11 @@ For a nonnegative vector ((t,y)),
 q(t,y)=at^2+2t\,p^Ty+y^TBy.
 \]
 
-The principal child (B) is always required because (t=0) is allowed. Completing the square gives
+The principal child (B) is always required because (t=0) is allowed. If \(a=0\), which can occur only in CP mode after the
+diagonal test, any \(p_i<0\) gives a negative value for \(e_0+\varepsilon e_i\) with sufficiently small \(\varepsilon>0\).
+If instead \(p\geq0\), CP of \(C\) is exactly CP of \(B\), so the implementation checks \(B\) and creates no Schur child.
+
+For \(a>0\), completing the square gives
 
 \[
 q(t,y)
@@ -184,7 +190,7 @@ S=aB-pp^T.
 \]
 
 When (p^Ty\geq0), the minimum over (t\geq0) occurs at (t=0), which the principal child covers. When (p^Ty\leq0), the feasible
-minimum occurs at (t=-p^Ty/a), so (S) must be strictly positive on
+minimum occurs at (t=-p^Ty/a), so (S) must satisfy the selected CP or SCP inequality on
 
 \[
 \{y\geq0:p^Ty\leq0\}.
@@ -193,12 +199,14 @@ minimum occurs at (t=-p^Ty/a), so (S) must be strictly positive on
 Therefore
 
 \[
-\operatorname{strict}(C)
+\operatorname{P}(C)
 \iff
-\operatorname{strict}(B)
+\operatorname{P}(B)
 \land
-\left[y^TSy>0\text{ for every nonzero }y\geq0\text{ with }p^Ty\leq0\right].
+\left[y^TSy\mathrel{\bowtie}0\text{ for every eligible }y\geq0\text{ with }p^Ty\leq0\right],
 \]
+
+where \(P\) is CP with \(\bowtie=\geq\), or SCP with \(\bowtie=>\) and nonzero \(y\).
 
 ### Pivot sign classes
 
@@ -208,8 +216,8 @@ In the reduced coordinate order, let:
 - (N) contain positions where (p_i<0);
 - (Z) contain positions where (p_i=0).
 
-Let (s=|P|) and (t=|N|). Positive diagonal scaling changes every nonzero (p_i) to its sign without changing strict
-copositivity. In this normalized geometry, the negative half-simplex has:
+Let (s=|P|) and (t=|N|). Positive diagonal scaling changes every nonzero (p_i) to its sign without changing CP or SCP. In this
+normalized geometry, the negative half-simplex has:
 
 - each negative coordinate ray (e_j), (j\in N);
 - a midpoint of every positive-negative edge.
@@ -281,24 +289,24 @@ permutation before applying the same projection theorem. Only the adaptive route
 
 ### Recursive restart
 
-Every principal or transformed Schur child has order (n-1). If its diagonal is positive and all its off-diagonal entries are
-nonnegative, it passes immediately. Otherwise it re-enters the complete adaptive algorithm with `dutour_streak = 0`; it does not
-continue as pure COPOMATRIX automatically.
+Every principal or transformed Schur child has order (n-1). If it is entrywise nonnegative, it passes CP immediately; it also
+passes SCP when its diagonal is positive. Otherwise it re-enters the complete adaptive algorithm with `dutour_streak = 0`; it does
+not continue as pure COPOMATRIX automatically.
 
 ## Dutour Split
 
 When no COPOMATRIX pivot is narrow and the cutoff has not been reached, the model examines every negative entry (c_{ij}).
 
-Positive diagonal entries are already known. On the two-generator face spanned by the current rays (v_i,v_j), strict positivity
-requires
+On the two-generator face spanned by the current rays (v_i,v_j), the selected predicate requires
 
 \[
-c_{ij}^2<c_{ii}c_{jj}
-\qquad\text{when }c_{ij}<0.
+c_{ij}^2\leq c_{ii}c_{jj}\quad\text{for CP},
+\qquad
+c_{ij}^2<c_{ii}c_{jj}\quad\text{for SCP},
 \]
 
-If equality or the reverse inequality holds, the current two-generator face contains a nonpositive witness and the model returns
-false immediately.
+when \(c_{ij}<0\). A strict reverse inequality gives a negative witness and rejects both modes. Equality gives a zero witness and
+rejects only SCP.
 
 Otherwise it selects the first pair maximizing
 
@@ -306,8 +314,8 @@ Otherwise it selects the first pair maximizing
 \rho_{ij}=\frac{c_{ij}^2}{c_{ii}c_{jj}}.
 \]
 
-Ratios are compared exactly by cross multiplication. If no negative entry exists, positive diagonal and entrywise nonnegativity
-prove strict copositivity and the node returns true.
+Ratios are compared exactly by cross multiplication. If no negative entry exists, entrywise nonnegativity proves CP; after the
+strict diagonal test it also proves SCP.
 
 For the selected (i<j), Dutour covers the current cone by replacing one endpoint at a time with the sum ray (v_i+v_j):
 
@@ -326,17 +334,18 @@ with all unaffected entries unchanged. The two children have the same order as t
 
 ## Acceptance, Rejection, And Witnesses
 
-The model rejects when any of the following exact events occurs:
+The model rejects when any of the following exact events fails the selected mode:
 
-- a diagonal entry is nonpositive, witnessed by a coordinate ray;
+- a diagonal entry is negative for CP or nonpositive for SCP, witnessed by a coordinate ray;
 - a direct order-two or order-three criterion fails;
-- a negative Dutour pair satisfies (c_{ij}^2\geq c_{ii}c_{jj}), giving a witness on that two-ray face;
+- a negative Dutour pair satisfies \(c_{ij}^2>c_{ii}c_{jj}\), or equality in SCP mode;
+- a CP zero-diagonal row contains a negative off-diagonal entry;
 - any required principal or Schur child rejects.
 
 It accepts a node when:
 
 - a direct low-order criterion passes;
-- positive diagonal and no negative off-diagonal entry give the entrywise-nonnegative certificate;
+- no negative entry gives the entrywise-nonnegative CP certificate, and positive diagonal strengthens it to SCP;
 - or every child in the exact cone cover or projection conjunction passes.
 
 The current API returns only the Boolean classification. It does not reconstruct a witness in original input coordinates.
@@ -354,8 +363,8 @@ The implementation uses:
 - no full generator-history matrix;
 - no whole-child content normalization.
 
-Positive scaling of a ray and positive diagonal congruence preserve strict copositivity, which is why primitive integer midpoint
-rays are exact replacements for the paper's normalized rational midpoints.
+Positive scaling of a ray and positive diagonal congruence preserve both CP and SCP, which is why primitive integer midpoint rays
+are exact replacements for the paper's normalized rational midpoints.
 
 ## Termination
 
@@ -377,7 +386,7 @@ remains an unresolved resource outcome rather than a negative classification.
 
 Source-derived behavior retained locally:
 
-- Dutour's strict two-ray rejection, maximum-ratio choice, first-tie rule, unscaled sum ray, child construction, and child order;
+- Dutour's two-ray rejection, maximum-ratio choice, first-tie rule, unscaled sum ray, child construction, and child order;
 - COPOMATRIX's principal child, division-free Schur form, sign normalization, normalized midpoint geometry, and Xu–Yao Vmatrix
   decomposition;
 - exact depth-first conjunction with immediate short-circuit rejection.
@@ -385,6 +394,7 @@ Source-derived behavior retained locally:
 coposit-created mathematical and control-flow choices:
 
 - direct exact terminal criteria through order three;
+- mode-aware equality boundaries, including the zero-pivot CP reduction;
 - scanning every row and taking the first COPOMATRIX pivot with at most two children;
 - using one Dutour split when no narrow COPOMATRIX pivot exists;
 - the branch-local cutoff of 100 consecutive Dutour splits;
@@ -451,7 +461,7 @@ The complete implementation is local to [`solver.cpp`](solver.cpp).
 | `adaptive_dutour_copomatrix_checker::check` | Apply direct tests, diagonal rejection, narrow routing, forced cutoff, and Dutour fallback. |
 | `first_narrow_copomatrix_pivot` | Find the first row whose COPOMATRIX projection creates at most two children. |
 | `check_copomatrix` | Build the principal and Schur problems for the selected pivot and reset descendant streaks. |
-| `check_projection` | Reject a nonpositive diagonal, accept an entrywise-nonnegative child, or restart the adaptive recursion. |
+| `check_projection` | Apply the mode-aware diagonal test, accept an eligible entrywise-nonnegative child, or restart the adaptive recursion. |
 | `check_negative_staircase` | Generate the Xu–Yao negative-half-simplex triangulation depth-first. |
 | `make_principal_block` | Delete the chosen pivot row and column. |
 | `make_schur_block` | Form (aB-pp^T) exactly. |

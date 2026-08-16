@@ -1,90 +1,17 @@
 #include <coposit/model.hpp>
+#include <coposit/open_node_limit.hpp>
+#include <coposit/small_copositivity.hpp>
 #include <coposit/timeout.hpp>
 
 #include <array>
 #include <cstddef>
 #include <stdexcept>
+#include <utility>
 #include <vector>
 
 namespace coposit::model {
 
 namespace {
-
-bool is_strictly_copositive_1x1(integer::const_reference b11) noexcept
-{
-    return b11.sign() > 0;
-}
-
-bool is_strictly_copositive_2x2(integer::const_reference b11, integer::const_reference b12,
-                                integer::const_reference b22) noexcept
-{
-    if (b11.sign() <= 0 || b22.sign() <= 0) return false;
-    if (b12.sign() >= 0) return true;
-
-    integer determinant;
-    determinant.set_product(b11, b22);
-    determinant.submul(b12, b12);
-    return determinant.sign() > 0;
-}
-
-bool is_strictly_copositive_3x3(integer::const_reference b11, integer::const_reference b12,
-                                integer::const_reference b13, integer::const_reference b22,
-                                integer::const_reference b23, integer::const_reference b33) noexcept
-{
-    if (b11.sign() <= 0 || b22.sign() <= 0 || b33.sign() <= 0) return false;
-
-    integer work;
-    if (b12.sign() < 0) {
-        work.set_product(b11, b22);
-        work.submul(b12, b12);
-        if (work.sign() <= 0) return false;
-    }
-    if (b13.sign() < 0) {
-        work.set_product(b11, b33);
-        work.submul(b13, b13);
-        if (work.sign() <= 0) return false;
-    }
-    if (b23.sign() < 0) {
-        work.set_product(b22, b33);
-        work.submul(b23, b23);
-        if (work.sign() <= 0) return false;
-    }
-
-    integer determinant;
-    determinant.set_product(b11, b22);
-    fmpz_mul(determinant.native_handle(), determinant.native_handle(), b33.native_handle());
-    work.set_product(b12, b13);
-    fmpz_mul(work.native_handle(), work.native_handle(), b23.native_handle());
-    work.multiply(2);
-    determinant += work;
-    work.set_product(b23, b23);
-    determinant.submul(b11, work);
-    work.set_product(b13, b13);
-    determinant.submul(b22, work);
-    work.set_product(b12, b12);
-    determinant.submul(b33, work);
-
-    if (determinant.sign() > 0) return true;
-
-    work.set_product(b22, b33);
-    work.submul(b23, b23);
-    if (work.sign() <= 0) return true;
-    work.set_product(b11, b33);
-    work.submul(b13, b13);
-    if (work.sign() <= 0) return true;
-    work.set_product(b11, b22);
-    work.submul(b12, b12);
-    if (work.sign() <= 0) return true;
-    work.set_product(b13, b23);
-    work.submul(b12, b33);
-    if (work.sign() <= 0) return true;
-    work.set_product(b12, b23);
-    work.submul(b13, b22);
-    if (work.sign() <= 0) return true;
-    work.set_product(b12, b13);
-    work.submul(b11, b23);
-    return work.sign() <= 0;
-}
 
 struct sparse_ray {
     std::array<size_t, 2> indices{};
@@ -101,42 +28,55 @@ struct sparse_ray {
  */
 class adaptive_dutour_danninger_checker {
 public:
+    explicit adaptive_dutour_danninger_checker(copositivity_mode mode) : mode_(mode) {}
+
     bool check(const matrix_integer& matrix)
     {
-        timeout_checkpoint();
+        std::vector<matrix_integer> pending;
+        pending.push_back(matrix);
+        while (!pending.empty()) {
+            timeout_checkpoint();
+            matrix_integer current(std::move(pending.back()));
+            pending.pop_back();
+            if (!check_node(current, pending)) return false;
+        }
+        return true;
+    }
+
+private:
+    bool check_node(const matrix_integer& matrix, std::vector<matrix_integer>& pending)
+    {
         bool result;
         if (decide_small(matrix, result)) return result;
 
         const size_t dimension = matrix.rows();
         for (size_t i = 0; i < dimension; ++i) {
-            if (matrix(i, i).sign() <= 0) return false;
+            const int diagonal_sign = matrix(i, i).sign();
+            if (diagonal_sign < (mode_ == copositivity_mode::copositive ? 0 : 1)) return false;
+            if (diagonal_sign == 0) {
+                std::vector<size_t> remaining;
+                remaining.reserve(dimension - 1);
+                for (size_t j = 0; j < dimension; ++j) {
+                    if (j == i) continue;
+                    if (matrix(i, j).sign() < 0) return false;
+                    remaining.push_back(j);
+                }
+                enforce_open_node_limit(pending.size() + 1);
+                pending.push_back(make_principal_block(matrix, remaining));
+                return true;
+            }
         }
 
         const size_t pivot = first_narrow_danninger_pivot(matrix);
-        if (pivot != dimension) return check_danninger(matrix, pivot);
-        return check_dutour(matrix);
+        if (pivot != dimension) return check_danninger(matrix, pivot, pending);
+        return check_dutour(matrix, pending);
     }
 
-private:
-    static bool decide_small(const matrix_integer& matrix, bool& result)
+    bool decide_small(const matrix_integer& matrix, bool& result) const
     {
-        switch (matrix.rows()) {
-            case 0:
-                result = true;
-                return true;
-            case 1:
-                result = is_strictly_copositive_1x1(matrix(0, 0));
-                return true;
-            case 2:
-                result = is_strictly_copositive_2x2(matrix(0, 0), matrix(0, 1), matrix(1, 1));
-                return true;
-            case 3:
-                result = is_strictly_copositive_3x3(
-                    matrix(0, 0), matrix(0, 1), matrix(0, 2), matrix(1, 1), matrix(1, 2), matrix(2, 2));
-                return true;
-            default:
-                return false;
-        }
+        if (matrix.rows() > 3) return false;
+        result = matrix.rows() == 0 || small_copositivity::check(matrix, mode_);
+        return true;
     }
 
     static size_t first_narrow_danninger_pivot(const matrix_integer& matrix)
@@ -158,7 +98,7 @@ private:
         return dimension;
     }
 
-    bool check_danninger(const matrix_integer& matrix, size_t pivot_index)
+    bool check_danninger(const matrix_integer& matrix, size_t pivot_index, std::vector<matrix_integer>& pending)
     {
         const size_t dimension = matrix.rows();
         const size_t child_dimension = dimension - 1;
@@ -186,8 +126,16 @@ private:
             }
         }
 
-        if (negative.empty()) return check(make_principal_block(matrix, remaining));
-        if (positive.empty()) return check(make_schur_block(matrix, pivot_index, remaining, p));
+        if (negative.empty()) {
+            enforce_open_node_limit(pending.size() + 1);
+            pending.push_back(make_principal_block(matrix, remaining));
+            return true;
+        }
+        if (positive.empty()) {
+            enforce_open_node_limit(pending.size() + 1);
+            pending.push_back(make_schur_block(matrix, pivot_index, remaining, p));
+            return true;
+        }
 
         matrix_integer block = make_principal_block(matrix, remaining);
         matrix_integer schur = make_schur_block(matrix, pivot_index, remaining, p);
@@ -198,16 +146,21 @@ private:
         for (const size_t index : zero) rays.push_back(coordinate_ray(index));
         rays.push_back(coordinate_ray(positive.front()));
         rays.push_back(mixed_ray);
-        if (!check(transform(block, rays))) return false;
+        matrix_integer first_child = transform(block, rays);
 
         rays.clear();
         for (const size_t index : zero) rays.push_back(coordinate_ray(index));
         rays.push_back(coordinate_ray(negative.front()));
         rays.push_back(mixed_ray);
-        return check(transform(schur, rays));
+        matrix_integer second_child = transform(schur, rays);
+
+        enforce_open_node_limit(pending.size() + 2);
+        pending.push_back(std::move(second_child));
+        pending.push_back(std::move(first_child));
+        return true;
     }
 
-    bool check_dutour(const matrix_integer& matrix)
+    bool check_dutour(const matrix_integer& matrix, std::vector<matrix_integer>& pending)
     {
         const size_t dimension = matrix.rows();
         size_t split_i = dimension;
@@ -227,7 +180,9 @@ private:
 
                 numerator.set_product(entry, entry);
                 denominator.set_product(matrix(i, i), matrix(j, j));
-                if (numerator.compare(denominator) >= 0) return false;
+                const int edge_comparison = numerator.compare(denominator);
+                if (edge_comparison > 0
+                    || (edge_comparison == 0 && mode_ == copositivity_mode::strictly_copositive)) return false;
 
                 bool take_pair = split_i == dimension;
                 if (!take_pair) {
@@ -250,8 +205,10 @@ private:
         matrix_integer second_child(matrix);
         replace_generator_with_sum(first_child, split_i, split_j);
         replace_generator_with_sum(second_child, split_j, split_i);
-        if (!check(first_child)) return false;
-        return check(second_child);
+        enforce_open_node_limit(pending.size() + 2);
+        pending.push_back(std::move(second_child));
+        pending.push_back(std::move(first_child));
+        return true;
     }
 
     static matrix_integer make_principal_block(const matrix_integer& matrix, const std::vector<size_t>& remaining)
@@ -349,16 +306,15 @@ private:
         return result;
     }
 
+    const copositivity_mode mode_;
 };
 
 } // namespace
 
 bool solve(const matrix_integer& matrix, copositivity_mode mode)
 {
-    require_strict_mode(mode);
     timeout_checkpoint();
-    const size_t dimension = matrix.rows();
-    adaptive_dutour_danninger_checker checker;
+    adaptive_dutour_danninger_checker checker(mode);
     return checker.check(matrix);
 }
 

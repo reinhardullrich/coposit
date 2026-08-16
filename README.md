@@ -83,8 +83,6 @@ native model interface. Model algorithm code is intentionally copied rather than
 The `fracessa` model decides
 whether the simplex minimum is positive from exact first-order candidate payoff signs for `-A`, stopping at the first nonnegative
 payoff. Its supports use the shared packed representation with `ceil(n / 64)` machine words, so it has no fixed-width dimension limit.
-The separate `fracessa_circular` experiment assumes a circular-symmetric input and applies FracESSA's direct bracelet generation,
-complete rotation/reflection orbit pruning, and exact affine-multiplier reduction while classifying both CP and SCP.
 
 ## C++ Analysis Interface
 

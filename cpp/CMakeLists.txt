@@ -98,7 +98,7 @@ endif()
 
 set(COPOSIT_COMBINED_CLASSIFICATION_MODELS
     danninger_1990 hadeler_1983 dickinson_2019 dense_bitset_dickinson interval_recursive_dickinson bdd_dickinson zdd_dickinson
-    cardinality_bdd_dickinson cardinality_zdd_dickinson cbdd_dickinson upper_endpoint_cbdd_dickinson cbdd_dickinson_improved_1
+    cbdd_dickinson upper_endpoint_cbdd_dickinson cbdd_dickinson_improved_1
     wide_certificate_cbdd_dickinson
     multithreaded_cbdd_dickinson ceiling_pruned_dickinson kernel_cone_dickinson affine_companion_dickinson
     layered_singular_lift_dickinson
@@ -108,20 +108,21 @@ set(COPOSIT_COMBINED_CLASSIFICATION_MODELS
     clingo_sat_dickinson
     support_pruned_dickinson nullity_support_pruned_dickinson rhs_dickinson frank_wolfe_dickinson
     one_step_frank_wolfe_dickinson pairwise_frank_wolfe_dickinson support_polished_frank_wolfe_dickinson
-    fracessa fracessa_circular zischg_hadeler zischg_dickinson zischg_fracessa)
+    fracessa zischg_hadeler zischg_dickinson zischg_fracessa)
 set(COPOSIT_COPOSITIVE_MODELS
     dutour_2018
     danninger_1990
     copomatrix_2011
+    adaptive_dutour_danninger
+    adaptive_dutour_copomatrix
     adaptive_sponsel_copomatrix
+    adaptive_zischg_sponsel_copomatrix
     hadeler_1983
     dickinson_2019
     dense_bitset_dickinson
     interval_recursive_dickinson
     bdd_dickinson
     zdd_dickinson
-    cardinality_bdd_dickinson
-    cardinality_zdd_dickinson
     cbdd_dickinson
     upper_endpoint_cbdd_dickinson
     cbdd_dickinson_improved_1
@@ -146,8 +147,8 @@ set(COPOSIT_COPOSITIVE_MODELS
     safi_2021
     bundfuss_2008
     sponsel_2012
+    frank_wolfe_sponsel
     fracessa
-    fracessa_circular
     zischg_hadeler
     zischg_dickinson
     zischg_fracessa
@@ -201,8 +202,6 @@ add_coposit_model_interfaces(dense_bitset_dickinson)
 add_coposit_model_interfaces(interval_recursive_dickinson)
 add_coposit_model_interfaces(bdd_dickinson)
 add_coposit_model_interfaces(zdd_dickinson)
-add_coposit_model_interfaces(cardinality_bdd_dickinson)
-add_coposit_model_interfaces(cardinality_zdd_dickinson)
 add_coposit_model_interfaces(cbdd_dickinson)
 add_coposit_model_interfaces(upper_endpoint_cbdd_dickinson)
 add_coposit_model_interfaces(cbdd_dickinson_improved_1)
@@ -229,7 +228,6 @@ add_coposit_model_interfaces(bundfuss_2008 baselines/bundfuss_2008)
 add_coposit_model_interfaces(sponsel_2012 baselines/sponsel_2012)
 add_coposit_model_interfaces(frank_wolfe_sponsel)
 add_coposit_model_interfaces(fracessa)
-add_coposit_model_interfaces(fracessa_circular)
 add_coposit_model_interfaces(zischg_hadeler)
 add_coposit_model_interfaces(zischg_dickinson)
 add_coposit_model_interfaces(zischg_fracessa)
@@ -339,22 +337,6 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
         PRIVATE COPOSIT_ZDD_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
     target_link_libraries(test_zdd_dickinson PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME ZddDickinsonModelTests COMMAND test_zdd_dickinson)
-
-    add_executable(test_cardinality_bdd_dickinson
-        ../models/hadeler-based/cardinality_bdd_dickinson/test_solver.cpp
-        ../models/hadeler-based/cardinality_bdd_dickinson/solver.cpp)
-    target_compile_definitions(test_cardinality_bdd_dickinson
-        PRIVATE COPOSIT_CARDINALITY_BDD_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
-    target_link_libraries(test_cardinality_bdd_dickinson PRIVATE coposit_core GTest::gtest_main)
-    add_test(NAME CardinalityBddDickinsonModelTests COMMAND test_cardinality_bdd_dickinson)
-
-    add_executable(test_cardinality_zdd_dickinson
-        ../models/hadeler-based/cardinality_zdd_dickinson/test_solver.cpp
-        ../models/hadeler-based/cardinality_zdd_dickinson/solver.cpp)
-    target_compile_definitions(test_cardinality_zdd_dickinson
-        PRIVATE COPOSIT_CARDINALITY_ZDD_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
-    target_link_libraries(test_cardinality_zdd_dickinson PRIVATE coposit_core GTest::gtest_main)
-    add_test(NAME CardinalityZddDickinsonModelTests COMMAND test_cardinality_zdd_dickinson)
 
     add_executable(test_cbdd_dickinson
         ../models/hadeler-based/cbdd_dickinson/test_solver.cpp
@@ -552,12 +534,6 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
     add_executable(test_fracessa ../models/hadeler-based/fracessa/test_solver.cpp ../models/hadeler-based/fracessa/solver.cpp)
     target_link_libraries(test_fracessa PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME FracessaModelTests COMMAND test_fracessa)
-
-    add_executable(test_fracessa_circular
-        ../models/hadeler-based/fracessa_circular/test_solver.cpp
-        ../models/hadeler-based/fracessa_circular/solver.cpp)
-    target_link_libraries(test_fracessa_circular PRIVATE coposit_core GTest::gtest_main)
-    add_test(NAME FracessaCircularModelTests COMMAND test_fracessa_circular)
 
     add_executable(test_zischg_hadeler ../models/hadeler-based/zischg_hadeler/test_solver.cpp ../models/hadeler-based/zischg_hadeler/solver.cpp)
     target_compile_definitions(test_zischg_hadeler PRIVATE COPOSIT_ZISCHG_LEVEL_TWO_TESTING=1)

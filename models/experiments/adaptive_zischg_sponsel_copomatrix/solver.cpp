@@ -1,5 +1,6 @@
 #include <coposit/fraction_free_ldlt.hpp>
 #include <coposit/model.hpp>
+#include <coposit/small_copositivity.hpp>
 #include <coposit/timeout.hpp>
 
 #include <array>
@@ -17,82 +18,6 @@ constexpr size_t sponsel_streak_limit = 10000;
 #ifdef COPOSIT_ADAPTIVE_ZISCHG_SPONSEL_COPOMATRIX_TESTING
 size_t component_decomposition_count = 0;
 #endif
-
-bool is_strictly_copositive_1x1(integer::const_reference b11) noexcept
-{
-    return b11.sign() > 0;
-}
-
-bool is_strictly_copositive_2x2(integer::const_reference b11, integer::const_reference b12,
-                                integer::const_reference b22) noexcept
-{
-    if (b11.sign() <= 0 || b22.sign() <= 0) return false;
-    if (b12.sign() >= 0) return true;
-
-    integer determinant;
-    determinant.set_product(b11, b22);
-    determinant.submul(b12, b12);
-    return determinant.sign() > 0;
-}
-
-bool is_strictly_copositive_3x3(integer::const_reference b11, integer::const_reference b12,
-                                integer::const_reference b13, integer::const_reference b22,
-                                integer::const_reference b23, integer::const_reference b33) noexcept
-{
-    if (b11.sign() <= 0 || b22.sign() <= 0 || b33.sign() <= 0) return false;
-
-    integer work;
-    if (b12.sign() < 0) {
-        work.set_product(b11, b22);
-        work.submul(b12, b12);
-        if (work.sign() <= 0) return false;
-    }
-    if (b13.sign() < 0) {
-        work.set_product(b11, b33);
-        work.submul(b13, b13);
-        if (work.sign() <= 0) return false;
-    }
-    if (b23.sign() < 0) {
-        work.set_product(b22, b33);
-        work.submul(b23, b23);
-        if (work.sign() <= 0) return false;
-    }
-
-    integer determinant;
-    determinant.set_product(b11, b22);
-    fmpz_mul(determinant.native_handle(), determinant.native_handle(), b33.native_handle());
-    work.set_product(b12, b13);
-    fmpz_mul(work.native_handle(), work.native_handle(), b23.native_handle());
-    work.multiply(2);
-    determinant += work;
-    work.set_product(b23, b23);
-    determinant.submul(b11, work);
-    work.set_product(b13, b13);
-    determinant.submul(b22, work);
-    work.set_product(b12, b12);
-    determinant.submul(b33, work);
-
-    if (determinant.sign() > 0) return true;
-
-    work.set_product(b22, b33);
-    work.submul(b23, b23);
-    if (work.sign() <= 0) return true;
-    work.set_product(b11, b33);
-    work.submul(b13, b13);
-    if (work.sign() <= 0) return true;
-    work.set_product(b11, b22);
-    work.submul(b12, b12);
-    if (work.sign() <= 0) return true;
-    work.set_product(b13, b23);
-    work.submul(b12, b33);
-    if (work.sign() <= 0) return true;
-    work.set_product(b12, b23);
-    work.submul(b13, b22);
-    if (work.sign() <= 0) return true;
-    work.set_product(b12, b13);
-    work.submul(b11, b23);
-    return work.sign() <= 0;
-}
 
 struct sparse_ray {
     std::array<size_t, 2> indices{};
@@ -223,8 +148,9 @@ std::pair<matrix_integer, matrix_integer> sponsel_split(const matrix_integer& gr
  */
 class adaptive_zischg_sponsel_copomatrix_checker {
 public:
-    explicit adaptive_zischg_sponsel_copomatrix_checker(size_t maximum_dimension)
+    adaptive_zischg_sponsel_copomatrix_checker(size_t maximum_dimension, copositivity_mode mode)
         : h_factorization_(maximum_dimension)
+        , mode_(mode)
     {
     }
 
@@ -236,7 +162,7 @@ public:
 
         const size_t dimension = matrix.rows();
         for (size_t i = 0; i < dimension; ++i) {
-            if (matrix(i, i).sign() <= 0) return false;
+            if (diagonal_fails(matrix(i, i))) return false;
         }
 
         const size_t pivot = first_narrow_copomatrix_pivot(matrix);
@@ -246,25 +172,16 @@ public:
     }
 
 private:
-    static bool decide_small(const matrix_integer& matrix, bool& result)
+    bool decide_small(const matrix_integer& matrix, bool& result) const
     {
-        switch (matrix.rows()) {
-            case 0:
-                result = true;
-                return true;
-            case 1:
-                result = is_strictly_copositive_1x1(matrix(0, 0));
-                return true;
-            case 2:
-                result = is_strictly_copositive_2x2(matrix(0, 0), matrix(0, 1), matrix(1, 1));
-                return true;
-            case 3:
-                result = is_strictly_copositive_3x3(
-                    matrix(0, 0), matrix(0, 1), matrix(0, 2), matrix(1, 1), matrix(1, 2), matrix(2, 2));
-                return true;
-            default:
-                return false;
-        }
+        if (matrix.rows() > 3) return false;
+        result = matrix.rows() == 0 || small_copositivity::check(matrix, mode_);
+        return true;
+    }
+
+    bool diagonal_fails(integer::const_reference diagonal) const noexcept
+    {
+        return diagonal.sign() < (mode_ == copositivity_mode::copositive ? 0 : 1);
     }
 
     static size_t first_narrow_copomatrix_pivot(const matrix_integer& matrix)
@@ -316,6 +233,7 @@ private:
 
         matrix_integer block = make_principal_block(matrix, remaining);
         if (!check_projection(block)) return false;
+        if (matrix(pivot_index, pivot_index).is_zero()) return negative.empty();
         if (negative.empty()) return true;
 
         matrix_integer schur = make_schur_block(matrix, pivot_index, remaining, p);
@@ -332,7 +250,7 @@ private:
         const size_t dimension = matrix.rows();
         for (size_t i = 0; i < dimension; ++i) {
             timeout_checkpoint();
-            if (matrix(i, i).sign() <= 0) return false;
+            if (diagonal_fails(matrix(i, i))) return false;
         }
         bool has_negative_entry = false;
         for (size_t i = 0; i < dimension && !has_negative_entry; ++i) {
@@ -444,9 +362,11 @@ private:
         integer edge_squared;
         diagonal_product.set_product(matrix(split_i, split_i), matrix(split_j, split_j));
         edge_squared.set_product(matrix(split_i, split_j), matrix(split_i, split_j));
-        if (edge_squared.compare(diagonal_product) >= 0) return false;
+        const int edge_comparison = edge_squared.compare(diagonal_product);
+        if (edge_comparison > 0
+            || (edge_comparison == 0 && mode_ == copositivity_mode::strictly_copositive)) return false;
 
-        if (passes_strict_h_certificate(matrix)) return true;
+        if (passes_h_certificate(matrix)) return true;
 
         auto children = sponsel_split(matrix, split_i, split_j);
         const size_t child_streak = sponsel_streak + 1;
@@ -454,7 +374,7 @@ private:
         return check(children.second, child_streak);
     }
 
-    bool passes_strict_h_certificate(const matrix_integer& gram)
+    bool passes_h_certificate(const matrix_integer& gram)
     {
         const size_t dimension = gram.rows();
         matrix_integer stripped(dimension, dimension);
@@ -470,7 +390,9 @@ private:
         }
 
         h_factorization_.factorize_inplace(stripped);
-        return h_factorization_.is_positive_definite();
+        return mode_ == copositivity_mode::copositive
+            ? h_factorization_.is_positive_semidefinite()
+            : h_factorization_.is_positive_definite();
     }
 
     static matrix_integer make_principal_block(const matrix_integer& matrix, const std::vector<size_t>& remaining)
@@ -550,19 +472,18 @@ private:
     }
 
     fraction_free_ldlt_factorization h_factorization_;
+    const copositivity_mode mode_;
 };
 
 } // namespace
 
 bool solve(const matrix_integer& matrix, copositivity_mode mode)
 {
-    require_strict_mode(mode);
     timeout_checkpoint();
-    const size_t dimension = matrix.rows();
 #ifdef COPOSIT_ADAPTIVE_ZISCHG_SPONSEL_COPOMATRIX_TESTING
     component_decomposition_count = 0;
 #endif
-    adaptive_zischg_sponsel_copomatrix_checker checker(dimension);
+    adaptive_zischg_sponsel_copomatrix_checker checker(matrix.rows(), mode);
     return checker.check(matrix);
 }
 
@@ -577,7 +498,7 @@ size_t streak_limit() noexcept
 bool solve_with_streak(const matrix_integer& matrix, size_t sponsel_streak)
 {
     component_decomposition_count = 0;
-    adaptive_zischg_sponsel_copomatrix_checker checker(matrix.rows());
+    adaptive_zischg_sponsel_copomatrix_checker checker(matrix.rows(), copositivity_mode::strictly_copositive);
     return checker.check(matrix, sponsel_streak);
 }
 

@@ -1,9 +1,10 @@
 # Adaptive Dutour-Danninger
 
-Classification: coposit-created experimental strict-copositivity model.
+Classification: coposit-created experimental CP/SCP predicate model.
 
-Public mode boundary: this coposit-created model supports only `strictly_copositive`. Calling
-`solve(A, copositivity_mode::copositive)` throws `std::invalid_argument` instead of applying strict rules to a non-strict query.
+Public mode boundary: `solve(A, copositivity_mode::copositive)` tests copositivity (CP), while
+`solve(A, copositivity_mode::strictly_copositive)` tests strict copositivity (SCP). The model does not implement combined `both`
+classification; callers that need both predicates must select them separately.
 
 ## What The Algorithm Does
 
@@ -13,7 +14,7 @@ Adaptive Dutour-Danninger combines two exact algorithms whose weaknesses are com
 - Dutour keeps the same matrix order, but its two-child cone split can change the geometry until a cheap Danninger reduction becomes
   available.
 
-At every recursive node, the algorithm first asks whether any Danninger pivot would create at most two children. It uses the first
+At every search node, the algorithm first asks whether any Danninger pivot would create at most two children. It uses the first
 such pivot. If none exists, it performs exactly one Dutour split. Every child begins the same decision again from its first possible
 Danninger pivot.
 
@@ -44,15 +45,17 @@ The Dutour part comes from Mathieu Dutour Sikirić's Polyhedral Common implement
 No paper describes the adaptive choice rule. It is a coposit-created combination implemented completely in this model's
 [`solver.cpp`](solver.cpp).
 
-## What A Recursive Node Represents
+## What A Search Node Represents
 
 A node stores a symmetric exact integer matrix $C$. Initially $C=A$, the input matrix. At deeper levels, $C$ is the Gram matrix of
 the original quadratic form after restriction to a current simplicial cone or after a Danninger coordinate elimination.
 
-Every node decides
+Every node decides the selected inequality
 
 \[
-z^TCz>0\qquad\text{for every nonzero }z\geq0.
+z^TCz\geq0\text{ for every }z\geq0\quad\text{(CP)},
+\qquad\text{or}\qquad
+z^TCz>0\text{ for every nonzero }z\geq0\quad\text{(SCP)}.
 \]
 
 Both component operations replace the current node by equivalent child decisions:
@@ -67,16 +70,17 @@ Only the transformed Gram matrices are needed. The solver never reconstructs the
 The input parser supplies a nonempty square symmetric integer matrix $A$. The solver assumes that contract and does not repeat the
 shape or symmetry scan.
 
-For a valid input it decides strict copositivity:
+For a valid input, CP means
 
 \[
-A\in\operatorname{int}(\mathcal C_n)
+A\in\mathcal C_n
 \quad\Longleftrightarrow\quad
-x^TAx>0\quad\text{for every }x\in\mathbb R_+^n\setminus\{0\}.
+x^TAx\geq0\quad\text{for every }x\geq0,
 \]
 
-Homogeneity is essential. If $x^TAx$ has one nonpositive value on a nonzero nonnegative vector, every positive multiple of that
-vector has the same sign. Conversely, the orthant may be studied through any collection of cones whose union is the orthant.
+while SCP replaces \(\mathcal C_n\) by its interior and \(\geq\) by \(>\) for every nonzero \(x\geq0\). Homogeneity is essential.
+For CP a negative value rejects; for SCP a negative or zero value rejects. Conversely, the orthant may be studied through any
+collection of cones whose union is the orthant.
 
 The maintained interface returns only a Boolean classification. Internally derived vectors prove rejection, but the current model
 does not return a witness. A cooperative timeout raises a distinct interruption outcome through the caller; it is never converted
@@ -88,7 +92,7 @@ Every call `check(C)` has the following invariant:
 
 1. $C$ is symmetric and has exact integer entries.
 2. Its nonnegative coordinate orthant parametrizes a current cone or a reduced minimization region.
-3. `check(C)` is true exactly when the represented part of the parent problem has strictly positive quadratic value.
+3. `check(C)` is true exactly when the represented part of the parent problem satisfies the selected CP or SCP inequality.
 4. If a step creates children $C_1,\ldots,C_k$, the parent is true exactly when every child is true.
 
 For a cone restriction with ray matrix $R$, this invariant is the congruence identity
@@ -109,8 +113,9 @@ those decisions.
 
 For a current matrix $C$ of order $n$:
 
-1. Use direct exact strict-copositivity tests when $n\leq3$.
-2. Reject if any diagonal entry is nonpositive.
+1. Use direct exact mode-aware tests when $n\leq3$.
+2. Reject a negative diagonal in CP mode or a nonpositive diagonal in SCP mode. In CP mode, reduce an eligible zero-diagonal row as
+   described below.
 3. Scan pivot rows from index zero upward and choose the first narrow Danninger pivot.
 4. If a narrow pivot exists, perform its one- or two-child Danninger reduction.
 5. If no narrow pivot exists, perform one Dutour cone split.
@@ -121,60 +126,60 @@ The following sections define the terminal tests, narrow pivots, and both transf
 
 ## Exact Pseudocode
 
-The recursive control flow implemented in `solver.cpp` is:
+The maintained solver traverses the same decision tree depth first with an explicit last-in, first-out worklist:
 
 ```text
-check(C):
-    checkpoint for cooperative timeout
-
-    if order(C) <= 3:
-        return the exact direct criterion for that order
-
-    if any diagonal entry of C is <= 0:
-        return false
-
-    for pivot i = 0, 1, ..., order(C)-1:
-        count positive and negative off-diagonal entries in row i
-        stop counting row i once both signs occur and their total exceeds 2
-
-        if row i has no positive entries:
-            return check(the Danninger Schur child for i)
-
-        if row i has no negative entries:
-            return check(the Danninger principal child for i)
-
-        if row i has exactly one positive and one negative entry:
-            if check(the Danninger plus child for i) is false:
-                return false
-            return check(the Danninger minus child for i)
-
-    inspect every negative pair (i,j) in lexicographic order:
-        if the two-generator restriction is not strict:
-            return false
-        remember the first pair maximizing c_ij^2 / (c_ii c_jj)
-
-    if no negative pair exists:
-        return true
-
-    form the Dutour child replacing generator i by v_i + v_j
-    form the Dutour child replacing generator j by v_i + v_j
-    if check(first child) is false:
-        return false
-    return check(second child)
+check(C, mode):
+    pending <- [C]
+    WHILE pending is not empty:
+        checkpoint for cooperative timeout
+        current <- remove the last matrix from pending
+        IF order(current) <= 3 AND the exact direct criterion fails:
+            RETURN false
+        IF order(current) <= 3:
+            CONTINUE
+        IF any diagonal entry fails mode (< 0 for CP, <= 0 for SCP):
+            RETURN false
+        IF CP mode has a zero diagonal c_ii:
+            IF row i contains a negative entry:
+                RETURN false
+            IF adding the principal block deleting i would make pending exceed 50,000 matrices:
+                RETURN 'unresolved_resource_limit'
+            add the principal block deleting i to pending
+            CONTINUE
+        choose the first pivot whose Danninger reduction has at most two children
+        IF such a pivot exists:
+            IF adding its Danninger children would make pending exceed 50,000 matrices:
+                RETURN 'unresolved_resource_limit'
+            add its Danninger children to pending, second child before first child
+            CONTINUE
+        inspect every negative pair (i,j) in lexicographic order
+        IF a two-generator restriction is negative, or is zero in SCP mode:
+            RETURN false
+        IF no negative pair exists:
+            CONTINUE
+        choose the first pair maximizing c_ij^2 / (c_ii c_jj)
+        IF adding its two Dutour children would make pending exceed 50,000 matrices:
+            RETURN 'unresolved_resource_limit'
+        add its two Dutour children to pending, second child before first child
+    RETURN true
 ```
 
-There is no persistent global queue. Recursion gives a depth-first traversal. A failing child immediately short-circuits every
-remaining sibling on the current call stack.
+Adding the second child before the first preserves the documented depth-first child order because the last matrix added is processed
+next. A failing node immediately short-circuits every pending sibling. The 50,000-open-node limit is a resource outcome, not a
+negative copositivity decision.
 
 ## Direct Terminal Cases Through Order Three
 
-Danninger recursion and Dutour subdivision are unnecessary once a child reaches order three. This model owns the same exact
-terminal criteria as the maintained Danninger model.
+Danninger reduction and Dutour subdivision are unnecessary once a child reaches order three. The model calls the shared exact
+mode-aware criteria in `cpp/include/coposit/small_copositivity.hpp`. The formulas below describe the strict boundary; CP uses the
+same formulas with each positivity comparison changed from \(>0\) to \(\geq0\), and each corresponding failure from \(\leq0\) to
+\(<0\).
 
 ### Order zero
 
-Order zero succeeds internally. Public input can never have order zero, but recursive code treats the empty residual problem as
-vacuously complete.
+Order zero succeeds internally. Public input can never have order zero, but the descendant traversal treats the empty residual
+problem as vacuously complete.
 
 ### Order one
 
@@ -184,7 +189,7 @@ For $C=(c_{11})$,
 x^TCx=c_{11}x_1^2.
 \]
 
-Strict copositivity is therefore exactly $c_{11}>0$.
+CP is exactly \(c_{11}\geq0\); SCP is exactly \(c_{11}>0\).
 
 ### Order two
 
@@ -194,16 +199,15 @@ Write
 C=\begin{pmatrix}a&b\\b&d\end{pmatrix}.
 \]
 
-Both $a$ and $d$ must be positive because the coordinate vectors are nonnegative test directions. If $b\geq0$, every term in
+For SCP, both $a$ and $d$ must be positive; for CP, both must be nonnegative. If $b\geq0$, every term in
 
 \[
 a x_1^2+2b x_1x_2+d x_2^2
 \]
 
-is nonnegative and at least one positive diagonal term is present for every nonzero $x\geq0$. The matrix is then strictly
-copositive.
+is nonnegative. The matrix is CP, and it is SCP when the strict diagonal conditions hold.
 
-If $b<0$, strict copositivity is equivalent to
+If $b<0$, CP is equivalent to \(ad-b^2\geq0\), while SCP is equivalent to
 
 \[
 ad-b^2>0.
@@ -218,8 +222,9 @@ C
 =d(ad-b^2).
 \]
 
-If the determinant is zero, this is a nonnegative zero direction; if it is negative, it is a negative direction. Sufficiency follows
-because positive diagonal and positive determinant make the two-dimensional form positive definite.
+If the determinant is zero, this is a nonnegative zero direction: CP accepts it and SCP rejects it. A negative determinant rejects
+both modes. Strict sufficiency follows because positive diagonal and positive determinant make the two-dimensional form positive
+definite; the shared exact formula handles the non-strict boundary analogously.
 
 ### Order three
 
@@ -389,7 +394,7 @@ S=aB-pp^T.
 ### No negative pivot entries
 
 If $s_i=0$, then $p\geq0$ and $p^Ty\geq0$ throughout the nonnegative orthant. The algorithm creates only the principal child $B$
-and recursively checks it.
+and adds it to the worklist.
 
 No second child is missing: the minus region $p^Ty\leq0$ is contained in the face $p^Ty=0$, and on that face the two minimized
 forms agree. Checking $B$ on the complete orthant already checks this boundary.
@@ -397,10 +402,10 @@ forms agree. Checking $B$ on the complete orthant already checks this boundary.
 ### No positive pivot entries
 
 If $r_i=0$, then $p\leq0$ and $p^Ty\leq0$ throughout the nonnegative orthant. The algorithm creates only the Schur child $S$ and
-recursively checks it. When every entry of $p$ is zero, both descriptions apply; the implementation takes the no-negative branch
+adds it to the worklist. When every entry of $p$ is zero, both descriptions apply; the implementation takes the no-negative branch
 and checks $B$.
 
-When $p=0$, $S=aB$ is only a positive scaling of $B$, so either choice would give the same strict decision.
+When $p=0$, $S=aB$ is only a positive scaling of $B$, so either choice gives the same CP or SCP decision.
 
 ### One positive and one negative pivot entry
 
@@ -524,8 +529,8 @@ For every negative off-diagonal entry $c_{ij}<0$, compare
 c_{ij}^2\quad\text{with}\quad c_{ii}c_{jj}.
 \]
 
-If $c_{ij}^2\geq c_{ii}c_{jj}$, the restriction to those two generators has a nonpositive direction. Equality gives a
-nonnegative zero and a larger left side gives a negative direction. Either rejects strict copositivity immediately.
+If $c_{ij}^2>c_{ii}c_{jj}$, the restriction has a negative direction and both modes reject. Equality gives a nonnegative zero:
+SCP rejects, while CP retains the node.
 
 The rejection is constructive. Put
 
@@ -571,7 +576,8 @@ The ratio is a normalized measure of how close the negative two-generator restri
 $c_{ij}^2=c_{ii}c_{jj}$. It is a routing heuristic only. Correctness does not depend on choosing the maximum; correctness follows
 from the exact cone cover after the pair is chosen.
 
-If no negative entry exists, then for every nonzero $\lambda\geq0$,
+If no negative entry exists, the matrix is entrywise nonnegative and therefore CP. In SCP mode the already-positive diagonal also
+gives, for every nonzero $\lambda\geq0$,
 
 \[
 \lambda^TC\lambda
@@ -638,20 +644,21 @@ c'_{k\ell}&=c_{k\ell} && (k,\ell\neq r).
 \]
 
 The implementation copies the parent matrix twice, applies this update with $r=i,o=j$ to the first child and $r=j,o=i$ to the
-second, recursively checks the first, and constructs no further decision for the second if the first has already failed.
+second, and pushes the second child before the first. The first child is therefore processed next; if it fails, the solver stops
+without processing the pending second child.
 
 ## Exact Arithmetic And Maintained Representation
 
 Every matrix entry and decision uses FLINT arbitrary-precision integers.
 
-- The direct terminal criteria are implemented locally.
+- The direct terminal criteria use the shared exact `small_copositivity::check` implementation.
 - Narrow-pivot selection uses exact signs and counts.
 - The Schur child uses $aB-pp^T$, so no division is introduced.
 - A mixed boundary ray is made primitive by one greatest-common-divisor reduction.
 - Congruence transforms use sparse rays containing at most two nonzero integer coefficients.
 - Dutour ratios use cross multiplication, and a sum-ray split updates one row and column.
 
-Positive scaling of a ray or a complete Gram matrix does not change strict copositivity. No floating-point tolerance, rational
+Positive scaling of a ray or a complete Gram matrix changes neither CP nor SCP. No floating-point tolerance, rational
 matrix storage, fixed-width mask, or small-dimension cap is used. The public `solve` boundary requires a nonempty square symmetric
 matrix. Cooperative timeout checkpoints report interruption as unresolved rather than `false`.
 
@@ -678,18 +685,20 @@ For a matrix of order $n$:
 - each narrow mixed congruence has $O(n^2)$ entries and at most four multiply-add terms per entry;
 - a Dutour inspection considers $n(n-1)/2$ pairs, and each child copies an $n\times n$ matrix before an $O(n)$ row-column update.
 
-These polynomial per-node costs are not the main worst-case issue. The number of recursive nodes can be very large, and same-order
-Dutour refinement is not known to be finite. Recursion also retains sibling matrices on the call stack, so memory depends on both
-matrix order and search depth.
+These polynomial per-node costs are not the main worst-case issue. The number of search nodes can be very large, and same-order
+Dutour refinement is not known to be finite. Pending sibling matrices live on an explicit worklist rather than the call stack, so
+the solver reports an unresolved resource limit before that worklist would exceed 50,000 matrices.
 
 ## Why The Complete Algorithm Is Correct
 
-The correctness statement is conditional only on completion: whenever the solver returns, its Boolean value is the exact strict
-copositivity classification.
+The correctness statement is conditional only on completion: whenever the solver returns, its Boolean value is the exact selected
+CP or SCP predicate.
 
 ### Rejection steps are sound
 
-- A nonpositive diagonal uses a coordinate vector with nonpositive quadratic value.
+- A negative diagonal rejects CP and SCP; a zero diagonal rejects SCP.
+- In CP mode, a zero diagonal with a negative row entry gives a nearby negative two-coordinate witness. If the row is
+  entrywise nonnegative, deleting that coordinate is an exact CP reduction.
 - A failed order-two restriction supplies the explicit two-coordinate vector shown above.
 - The order-three branch is Hadeler's exact criterion after all proper principal faces pass.
 - A Danninger child failure occurs in a region obtained by exact minimization of the parent form.
@@ -701,19 +710,18 @@ return that direction.
 ### Acceptance steps are sound
 
 - A direct terminal test is a complete low-dimensional criterion.
-- An entrywise nonnegative Gram matrix with positive diagonal is positive on every nonzero nonnegative coefficient vector.
+- An entrywise nonnegative Gram matrix is CP; with positive diagonal it is SCP.
 - A one-child Danninger case covers the complete reduced orthant because the pivot row has only one sign.
 - The two narrow Danninger children exactly cover the two sign half-cones.
 - The two Dutour children exactly cover the parent cone.
 
 Thus a node returns `true` only after every part of its represented region has been certified.
 
-### Recursive composition
+### Composition over the search tree
 
-Assume recursively that completed child calls return exact decisions. In a Danninger step, strict positivity of the parent is
-equivalent to strict positivity of every reduced half-cone child. In a Dutour step, it is equivalent to strict positivity on both
-covering cones. The conjunction of exact child decisions is therefore the exact parent decision. Starting from $C=A$ proves the
-result for the input matrix.
+Assume that every completed descendant decision is exact. In a Danninger step, the selected inequality on the parent is
+equivalent to the same inequality on every reduced half-cone child. In a Dutour step, it is equivalent to that inequality on both
+covering cones. Their conjunction is therefore the exact parent decision.
 
 The special case $y=0$ in Danninger's minimization needs no child direction: then the parent value is $at^2>0$ for every $t>0$
 because the pivot diagonal was checked positive.
@@ -951,8 +959,8 @@ the stored representation is coefficient-optimal.
 
 ### Depth-first traversal can commit to a difficult child
 
-The solver checks one child to completion before visiting its sibling. This gives fast short-circuit rejection and uses less
-bookkeeping than a global queue, but a difficult first child can delay an easy rejection in the second child. The exact first-child
+The solver processes descendants of the first child before visiting its sibling. This gives fast short-circuit rejection, but a
+difficult first child can delay an easy rejection in the second child. The exact first-child
 orders are:
 
 - Danninger plus child before minus child;
@@ -994,7 +1002,7 @@ Timed model-companion builds observe a shared signal flag at explicit checkpoint
 native boundary reports as an unresolved timeout. Checkpoints occur:
 
 - when the model starts;
-- at entry to every recursive node;
+- at the start of every worklist iteration;
 - once per candidate pivot row;
 - once per outer Dutour pair row;
 - once per produced matrix row during principal, Schur, and congruence construction, and once per updated sum-ray index.
@@ -1031,7 +1039,7 @@ shortcut, and deterministic traversal are therefore accurately described as the 
 original Danninger source code. The detailed reconstruction boundary is recorded in the
 [`danninger_1990` algorithm document](../../baselines/danninger_1990/ALGORITHM.md).
 
-The Dutour fallback was checked against the pinned Polyhedral Common implementation. Its strict pair test, maximum-ratio heuristic,
+The Dutour fallback was checked against the pinned Polyhedral Common implementation. Its pair test, maximum-ratio heuristic,
 first-tie behavior, unscaled sum ray, two children, and child order are source-derived. coposit's Gram-only storage removes unused
 generator-coordinate state without changing those mathematical decisions. The detailed fidelity boundary is recorded in the
 [`dutour_2018` algorithm document](../../baselines/dutour_2018/ALGORITHM.md).
@@ -1039,14 +1047,14 @@ generator-coordinate state without changing those mathematical decisions. The de
 No external source describes the hybrid as a whole. These decisions define coposit's Adaptive Dutour-Danninger model:
 
 1. apply direct exact criteria at orders zero through three;
-2. reject a nonpositive diagonal before any order-four-or-larger transformation;
+2. apply the mode-aware diagonal rule before any order-four-or-larger transformation;
 3. use Danninger only when the current pivot sign pattern creates one or two children;
 4. scan pivots in index order and take the first usable one;
 5. use exactly one maximum-ratio Dutour split only when no usable Danninger pivot exists;
 6. check the defined first child before its sibling and stop on the first failure;
 7. restart the complete adaptive decision, including the direct case and pivot-zero scan, in every child.
 
-Changing the gate, pivot choice, fallback, child construction, or recursive restart rule creates a different hybrid model.
+Changing the gate, pivot choice, fallback, child construction, or descendant restart rule creates a different hybrid model.
 
 ## Implementation-To-Algorithm Correspondence
 
@@ -1055,20 +1063,20 @@ that the prose and source still agree.
 
 | Source element | Mathematical responsibility |
 |---|---|
-| `solve` | Validate nonempty square symmetric public input, then create one checker and start at the input Gram matrix. |
-| `adaptive_dutour_danninger_checker::check` | Apply a timeout checkpoint, direct terminal cases, diagonal rejection, adaptive pivot routing, and Dutour fallback in that order. |
+| `solve` | Create one mode-specific checker and start at the input Gram matrix; the parser or direct C++ caller supplies a valid matrix. |
+| `adaptive_dutour_danninger_checker::check` | Traverse pending matrices depth first with an explicit LIFO worklist and stop on the first rejection. |
+| `adaptive_dutour_danninger_checker::check_node` | Apply direct terminal cases, diagonal rejection, adaptive pivot routing, and Dutour fallback in that order. |
 | `decide_small` | Dispatch orders zero, one, two, and three to the exact terminal criteria. |
-| `is_strictly_copositive_1x1` | Test the sole diagonal entry. |
-| `is_strictly_copositive_2x2` | Test positive diagonal and, only for a negative off-diagonal, positive determinant. |
-| `is_strictly_copositive_3x3` | Test the three principal pairs, determinant, and the six independent adjugate entries. |
+| `small_copositivity::check` | Apply the shared exact mode-aware criteria through order three. |
 | `first_narrow_danninger_pivot` | Count exact positive and negative row entries and return the first row satisfying the narrow cases. |
-| `check_danninger` | Partition the pivot row, choose the one-child or two-child case, build the required matrices and rays, and recurse. |
+| `check_danninger` | Partition the pivot row, choose the one-child or two-child case, build the required matrices and rays, and enqueue them in depth-first order. |
 | `make_principal_block` | Build $B$ by deleting the pivot row and column while retaining index order. |
 | `make_schur_block` | Build $S=aB-pp^T$ exactly and symmetrically. |
 | `coordinate_ray` | Represent one standard basis ray. |
 | `pair_ray` | Construct and gcd-reduce the unique positive-negative boundary ray. |
 | `transform` | Calculate $R^TMR$ from one- or two-entry sparse rays, upper triangle first, then mirror. |
-| `check_dutour` | Test all negative pairs, choose the exact maximum ratio, certify an entrywise-nonnegative node, or recurse into two sum-ray children. |
+| `check_dutour` | Test all negative pairs, choose the exact maximum ratio, certify an entrywise-nonnegative node, or enqueue two sum-ray children. |
+| `enforce_open_node_limit` | Report unresolved resource exhaustion before more than 50,000 matrices are pending. |
 | `replace_generator_with_sum` | Apply the Gram row-and-column update for replacing one generator by its sum with another. |
 
 ### Data and index conventions
@@ -1085,28 +1093,27 @@ A `sparse_ray` has storage for two index-coefficient pairs. A coordinate ray lea
 
 ### Allocation and short-circuit order
 
-In a one-sign Danninger case, only the required child matrix is built. In the mixed case, both $B$ and $S$ are built before the plus
-child is tested, because each is required if both recursive calls are reached. The plus congruence child is temporary and is
-destroyed after its recursive call returns. The minus child is not recursively entered if the plus child fails.
+In a one-sign Danninger case, only the required child matrix is built. In the mixed case, both $B$ and $S$ and both congruence
+children are built before either child is processed. The minus child is pushed first and the plus child second, so the plus child is
+processed next. The pending minus child is not processed if the plus subtree fails.
 
-In a Dutour fallback, the source copies and updates both child matrices before recursively testing the first. It does not enter the
-second recursive call after a first-child failure. Thus "short circuit" refers to decisions and descendant traversal, not to
-avoiding allocation of the already prepared sibling.
+In a Dutour fallback, the source copies and updates both child matrices before processing the first. It pushes the second child
+first and the first child second. Thus "short circuit" refers to decisions and descendant traversal, not to avoiding allocation of
+the already prepared sibling.
 
-Every child call starts at `check`; there is no special continuation state saying that it came from Danninger or Dutour. This is the
-mechanism that makes the routing genuinely adaptive rather than alternating.
+Every child is later processed by the same `check_node` flow; there is no special continuation state saying that it came from
+Danninger or Dutour. This is the mechanism that makes the routing genuinely adaptive rather than alternating.
 
-### Strict inequalities used by the implementation
+### Mode-aware inequalities used by the implementation
 
-Strict copositivity makes equality behavior important. The implementation uses the following exact boundaries:
+Equality behavior distinguishes CP from SCP. The implementation uses the following exact boundaries:
 
-| Test | Accepting side | Equality means |
-|---|---:|---|
-| Diagonal $c_{ii}$ | $c_{ii}>0$ | Immediate nonzero zero direction $e_i$. |
-| Negative order-two determinant | $c_{ii}c_{jj}-c_{ij}^2>0$ | Nonnegative zero in that coordinate face. |
-| Order-three determinant fast path | $\det C>0$ | Continue to the adjugate branch; equality is not accepted by this fast path. |
-| Order-three Hadeler failure condition | Every independent adjugate entry is $>0$ | Any zero adjugate entry prevents that failure condition. |
-| Dutour two-ray test | $c_{ij}^2<c_{ii}c_{jj}$ | Reject; the selected two-ray cone contains a zero. |
+| Test | CP accepting side | SCP accepting side |
+|---|---:|---:|
+| Diagonal $c_{ii}$ | $c_{ii}\geq0$ | $c_{ii}>0$ |
+| Negative order-two determinant | $c_{ii}c_{jj}-c_{ij}^2\geq0$ | $c_{ii}c_{jj}-c_{ij}^2>0$ |
+| Order-three direct criterion | Shared non-strict comparisons | Shared strict comparisons |
+| Dutour two-ray test | $c_{ij}^2\leq c_{ii}c_{jj}$ | $c_{ij}^2<c_{ii}c_{jj}$ |
 | Dutour ratio replacement | New ratio strictly greater | Equal ratios retain the pair encountered first. |
 
 There is no epsilon and no ambiguous zero. FLINT sign and comparison operations distinguish equality exactly.
@@ -1115,16 +1122,16 @@ There is no epsilon and no ambiguous zero. FLINT sign and comparison operations 
 
 Understanding the omissions is necessary to distinguish this algorithm from neighboring models:
 
-- It does not test non-strict, non-strict copositivity. Every accepted result is about strict copositivity.
+- It does not combine CP and SCP into one traversal; callers select one predicate per run.
 - It does not run the complete Danninger staircase when all rows are wide.
-- It does not alternate Danninger and Dutour according to recursion depth.
+- It does not alternate Danninger and Dutour according to search depth.
 - It does not score all narrow pivots or perform descendant lookahead.
 - It does not use SNC slicing, simplex-center bounds, Hadeler principal-submatrix enumeration, Dickinson support enumeration, or
   connected-component decomposition.
 - It does not reconstruct null spaces, solve a linear system, or enumerate arbitrary principal or non-principal submatrices.
 - It does not normalize a complete child matrix by its integer content.
 - It does not use floating point, tolerances, rational matrix storage, fixed-width sign masks, or a fixed maximum dimension.
-- It does not retain an explicit counterexample vector through the recursion, even though every rejection has a mathematical
+- It does not retain an explicit counterexample vector through the descendant traversal, even though every rejection has a mathematical
   witness.
 - It does not share its algorithm implementation with another model directory. Similar code is intentionally local so this model's
   routing can change without changing a baseline.
