@@ -21,6 +21,8 @@ namespace coposit::model {
 std::pair<size_t, size_t> cbdd_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals);
 size_t cbdd_maximum_interval_chain(size_t dimension, uint64_t lower_mask, uint64_t upper_mask);
+size_t cbdd_expired_bucket_count(
+    size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals);
 }
 
 namespace {
@@ -95,6 +97,13 @@ TEST(CbddDickinsonTest, SubtractsTheUnionOfBoundedIntervals)
     const std::vector<std::pair<uint64_t, uint64_t>> intervals{{0b001, 0b011}, {0b100, 0b110}};
     EXPECT_EQ(model::cbdd_uncovered_count(3, 1, intervals).first, 1U);
     EXPECT_EQ(model::cbdd_uncovered_count(3, 2, intervals).first, 1U);
+}
+
+TEST(CbddDickinsonTest, DeletesExpiredIntervalsWithoutDamagingOverlappingLiveCoverage)
+{
+    const std::vector<std::pair<uint64_t, uint64_t>> intervals{{0b0001, 0b0011}, {0b0001, 0b1111}};
+    EXPECT_EQ(model::cbdd_expired_bucket_count(4, 3, intervals), 1U);
+    EXPECT_EQ(model::cbdd_uncovered_count(4, 3, intervals).first, brute_uncovered_count(4, 3, intervals));
 }
 
 TEST(CbddDickinsonTest, CompressesAForcedZeroChain)

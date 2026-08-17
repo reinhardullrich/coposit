@@ -29,8 +29,9 @@ drift, and both automatically include future qualifying rows. A known
 strict-positive result requires a known non-strict-positive result. `NULL` in either truth column means that result has not been
 established; it must not be read as false.
 `preprocessing_solved` is true for every retained matrix completely classified by the new maintained depth-2 combined preprocessing
-workflow in the five-second corpus run or its sixty-second timeout continuation. Partial CP/SCP facts do not qualify. Every benchmark
-set excludes these rows so a selected benchmark measures model traversal rather than an exact preprocessing decision.
+workflow in the five-second corpus run, its sixty-second timeout continuation, or the focused ten-minute Motzkin--Straus follow-up.
+Partial CP/SCP facts do not qualify. Every benchmark selection excludes these rows so it measures model traversal rather than an
+exact preprocessing decision.
 Small matrices keep their comma-separated upper triangle inline. Large rows contain `file:matrices/<matrix_id>.mtx`, resolved relative
 to the database directory, and `file_sha256` binds each reference to the SHA-256 of its exact file bytes. Inline rows keep that column
 `NULL`. The hash is retained for occasional explicit integrity audits; normal solver and benchmark runs do not recompute it. Those
@@ -44,7 +45,7 @@ selected the smaller exact representation for every external file and compacted 
 `retire_scale_and_timeout_sets_2026_08_16.sql` removes the two retired stored flags. `aidocs/BENCHMARK_SETS.md` explains the
 current assignments and composition.
 `add_preprocessing_solved_2026_08_16.sql` records the original guarded 2,115-row preprocessing result flag. The current depth-2
-refresh flags 2,708 matrices; its exact run evidence is retained in `experiments/preprocessing_depth_2026-08-15/`.
+passes flag 2,730 matrices; their exact run evidence is retained in `experiments/preprocessing_depth_2026-08-15/`.
 `exclude_preprocessing_solved_from_benchmarks_2026_08_16.py` records the initial guarded curated replacements and current generated-set
 definitions. `refresh_benchmark_sets_after_motzkin_straus_2026_08_16.sql` removes the additional preprocessing-complete members and
 restores Smoke to 49 and Core and Stress to 512 with unresolved, known-truth replacements; comprehensive N ≤ 100 now contains 754

@@ -149,6 +149,23 @@ $$
 The current support is removed in both branches. The next satisfying CBDD path therefore advances. Only the first branch suppresses
 supports that have not yet been processed.
 
+## Safe Cardinality Expiration
+
+Each retained interval is tagged with $u=|U|$ and also united into an expiry bucket $E_u$. Before the model starts cardinality
+$k$, it performs
+
+$$
+C\leftarrow C\setminus\bigcup_{u<k}E_u
+$$
+
+and clears those buckets. This cannot change any present or future decision: every $J\in[L,U]$ satisfies
+$|J|\leq|U|=u$, so an interval with $u<k$ contains no support of cardinality $k$ or larger. Intersections with intervals that
+remain live are harmless for the same reason; every removed support is below the traversal frontier. Exact narrow certificates have
+$U=I$ and therefore expire immediately after their own cardinality.
+
+Expiration changes only the live decision-diagram roots. The private arena and unique table retain already allocated nodes until the
+matrix call ends, so this reduces later union and difference operands but is not garbage collection.
+
 ## Unchanged Dickinson Calculation
 
 For an emitted support $I$, copy and factor $A_I$ exactly with the shared fraction-free LDLT implementation.

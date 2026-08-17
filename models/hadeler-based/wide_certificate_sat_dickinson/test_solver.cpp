@@ -22,6 +22,7 @@ bool wide_certificate_sat_uses_full_interval(size_t dimension, size_t cardinalit
 size_t wide_certificate_sat_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals);
 size_t wide_certificate_sat_interval_count(size_t dimension, uint64_t lower_mask, uint64_t upper_mask);
+size_t wide_certificate_sat_interval_clause_size(size_t dimension, uint64_t lower_mask, uint64_t upper_mask);
 }
 
 namespace {
@@ -124,6 +125,12 @@ TEST_F(WideCertificateSatDickinsonTest, SubtractsTheUnionOfBoundedIntervals)
 TEST_F(WideCertificateSatDickinsonTest, StoresOneBlockingClausePerRetainedInterval)
 {
     EXPECT_EQ(model::wide_certificate_sat_interval_count(8, 0b001, 0b111), 1U);
+}
+
+TEST_F(WideCertificateSatDickinsonTest, AddsTheExistingCardinalityOutputOnlyToExpiringIntervals)
+{
+    EXPECT_EQ(model::wide_certificate_sat_interval_clause_size(8, 0b00000001, 0b00000111), 7U);
+    EXPECT_EQ(model::wide_certificate_sat_interval_clause_size(8, 0b00000001, 0b11111111), 1U);
 }
 
 TEST_F(WideCertificateSatDickinsonTest, PublishesGeneratedCertificateGeometryWithDiagnostics)

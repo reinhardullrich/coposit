@@ -1,4 +1,4 @@
-# Clingo-SAT Dickinson
+# Clingo Dickinson
 
 Classification: coposit-created exact copositivity experiment. It preserves Dickinson's exact certificate mathematics but delegates
 cardinality-ordered support enumeration and interval blocking to clingo and its clasp solver.
@@ -28,18 +28,17 @@ support but every support in a Boolean-lattice interval. The main computational 
 This model represents matrix index $i$ by a Boolean atom `selected(i)`. A true atom means that $i$ belongs to the support. Gringo
 grounds one exact-cardinality constraint for each layer $k$. Clasp enumerates completed answer sets for that layer. Whenever a
 completed answer set yields a valid Dickinson certificate, one clause excludes the certificate's entire interval. Clasp installs
-the clause directly into its current backtracking search. The model also keeps a copy until that solve finishes, then installs the
-equivalent integrity constraint through Clingo's persistent backend before advancing to the next cardinality.
+the clause directly into its current backtracking search. If the interval can cover a later cardinality, the model also keeps a copy
+until that solve finishes and installs an expiration-guarded equivalent through Clingo's persistent backend.
 
 Clingo and clasp perform no matrix classification. They only maintain the finite Boolean support family. Every matrix solve,
 nullspace construction, sign test, product, witness decision, and interval endpoint remains exact arbitrary-precision arithmetic.
 
 ## Name, Sources, And Classification
 
-The identifier is `clingo_sat_dickinson`:
+The identifier is `clingo_dickinson`:
 
 - **Clingo** identifies the public multi-shot API and ASP grounder used to describe the support family.
-- **SAT** identifies the clause representation used by clasp for Dickinson intervals.
 - **Dickinson** identifies the unchanged exact certificate mathematics.
 
 This is an independent copy of `sat_dickinson`, not a literature baseline. It replaces that experiment's hand-built Batcher
@@ -95,7 +94,7 @@ $$
 \bigvee_{j\notin U}x_j.
 $$
 
-The clause is false exactly on the supports in $[L,U]$, so it removes the complete interval and nothing else. Its length is
+The clause is false exactly on the supports in $[L,U]$, so it removes the complete interval and nothing else. Its unguarded length is
 
 $$
 |L|+n-|U|=n-(|U|-|L|).
@@ -104,15 +103,21 @@ $$
 Writing $d=|U|-|L|$, a wide certificate has large $d$ and therefore a short clause. A narrow certificate has a long clause and
 removes fewer supports.
 
+The interval is relevant only at cardinalities $k\leq|U|$. Clingo therefore exposes one shared external atom `expired(t)` for every
+possible upper size $t$. A persistent bounded-interval constraint also contains `not expired(|U|)`. When the traversal advances to
+$k=|U|+1$, it sets that one external atom to true, disabling every constraint with that upper size at once. This is one operation per
+cardinality, not a scan over stored certificates. Ceiling intervals with $|U|=n$ never expire and need no guard.
+
 The current support always belongs to its generated interval. Consequently every completed callback adds a clause that invalidates
 the current answer set, and clasp must backtrack to a genuinely uncovered support.
 
 ## Native Exact-Cardinality Layers
 
-The base ASP program contains one independent choice atom for each matrix index:
+The base ASP program contains one independent choice atom for each matrix index and the shared expiration guards:
 
 ```text
 { selected(0..n-1) }.
+#external expired(0..n).
 ```
 
 For each $k=1,\ldots,n$, the model grounds one guarded constraint:
@@ -144,7 +149,8 @@ The model instead uses `SolveEventHandler::on_model`. At that point clingo expos
 1. extracts the ascending support-index vector;
 2. verifies that its size is the active cardinality;
 3. performs the exact Dickinson calculation;
-4. adds the resulting interval clause through `Model::context()` and records it for persistent backend installation; and
+4. adds the resulting interval clause through `Model::context()` and, when it remains useful later, records it for guarded backend
+   installation; and
 5. returns to the same clasp enumeration.
 
 This is also the API specifically intended for adding clauses during model enumeration. No C++ exception is allowed to become a
@@ -158,11 +164,13 @@ guide backtracking within the active cardinality, but relying on their lifetime 
 The model therefore gives each generated clause two deliberately separate lifetimes:
 
 1. add it through `SolveControl::add_clause` so it affects the current cardinality immediately; and
-2. retain a temporary copy until the solve handle closes, negate its literals into a rule body, and add the permanent integrity
-   constraint `:- not clause_literal_1, ..., not clause_literal_m.` through `Control::backend()`.
+2. if $|U|=k$, discard the temporary copy after the current solve because the interval cannot cover any later layer;
+3. otherwise retain a temporary copy until the solve handle closes, negate its literals into a rule body, and add the persistent
+   integrity constraint through `Control::backend()`; when $|U|<n$, the body also contains `not expired(|U|)`.
 
-The backend then owns the constraint for all later solve calls. The temporary copies for one cardinality are discarded immediately
-after installation. The model still explicitly selects clasp's `bt` enumeration mode rather than relying on the `auto` default.
+The backend owns each retained constraint until the matrix call ends, but an expiration guard makes it inactive after its last useful
+layer. The temporary copies for one cardinality are discarded immediately after installation. The model still explicitly selects
+clasp's `bt` enumeration mode rather than relying on the `auto` default.
 
 Two focused tests cover the solve boundary. The identity test requires singleton certificates to eliminate every larger support. A
 three-dimensional positive-semidefinite test has singleton intervals that eliminate exactly one of its three pairs; cardinality two

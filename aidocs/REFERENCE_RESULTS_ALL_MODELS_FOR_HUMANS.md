@@ -1,6 +1,6 @@
 # All-Model Core/Stress Results for Humans
 
-Last updated: 2026-08-16
+Last updated: 2026-08-17
 
 This comparison uses 512 Core/Stress matrices. We admitted only matrices for which the shared preprocessing pipeline had already
 reported that it could not complete the classification. When a normal solver call is made, preprocessing still runs first and only
@@ -32,8 +32,8 @@ Color marks the algorithm family, while a thin black rectangle marks a literatur
     <tr><th>Approach</th><th>Solved instances</th><th>Models</th></tr>
   </thead>
   <tbody style="border:2px solid #777;">
-    <tr><td rowspan="3"><strong>Dickinson-based</strong><br><small>avoid enumerating every support individually</small></td><td align="right">457</td><td><code style="background:#e7eef8;">bdd_dickinson</code>, <code style="background:#e7eef8;">cbdd_dickinson</code>, <code style="background:#e7eef8;">cbdd_dickinson_improved_1</code>, <code style="background:#e7eef8;">clingo_sat_dickinson</code>, <code style="background:#e7eef8;">czdd_dickinson</code>, <code style="background:#e7eef8;">sat_dickinson</code>, <code style="background:#e7eef8;">zdd_dickinson</code></td></tr>
-    <tr><td align="right">456</td><td><code style="background:#e7eef8;">upper_endpoint_cbdd_dickinson</code></td></tr>
+    <tr><td rowspan="3"><strong>Dickinson-based</strong><br><small>avoid enumerating every support individually</small></td><td align="right">457</td><td><code style="background:#e7eef8;">bdd_dickinson</code>, <code style="background:#e7eef8;">cbdd_dickinson</code>, <code style="background:#e7eef8;">cbdd_dickinson_improved_1</code>, <code style="background:#e7eef8;">clingo_dickinson</code>, <code style="background:#e7eef8;">czdd_dickinson</code>, <code style="background:#e7eef8;">sat_halfspace_dickinson</code>, <code style="background:#e7eef8;">zdd_dickinson</code></td></tr>
+    <tr><td align="right">456</td><td><code style="background:#e7eef8;">sat_dickinson</code>, <code style="background:#e7eef8;">upper_endpoint_cbdd_dickinson</code></td></tr>
     <tr><td align="right">452</td><td><code style="background:#e7eef8;">affine_companion_dickinson</code>, <code style="background:#e7eef8;">breadth_first_singular_lift_dickinson</code>, <code style="background:#e7eef8;">ceiling_pruned_dickinson</code>, <code style="background:#e7eef8;">kernel_cone_dickinson</code>, <code style="background:#e7eef8;">layered_singular_lift_dickinson</code>, <code style="background:#e7eef8;">wide_certificate_cbdd_dickinson</code>, <code style="background:#e7eef8;">wide_certificate_sat_dickinson</code></td></tr>
   </tbody>
   <tbody style="border:2px solid #777;">

@@ -29,6 +29,7 @@ interval_recursive_dickinson
 bdd_dickinson
 zdd_dickinson
 cbdd_dickinson
+cbdd_halfspace_dickinson
 upper_endpoint_cbdd_dickinson
 cbdd_dickinson_improved_1
 wide_certificate_cbdd_dickinson
@@ -40,8 +41,11 @@ layered_singular_lift_dickinson
 breadth_first_singular_lift_dickinson
 czdd_dickinson
 sat_dickinson
+sat_halfspace_dickinson
+sat_halfspace_rays_dickinson
 wide_certificate_sat_dickinson
-clingo_sat_dickinson
+clingo_dickinson
+clingo_halfspace_dickinson
 support_pruned_dickinson
 nullity_support_pruned_dickinson
 rhs_dickinson
@@ -76,8 +80,9 @@ model has one implementation and one internal companion.
 memory. With `diagnostics=True`, completed supports and certificates appear after each parallel batch in the normal one-second
 decision-diagram status line.
 
-Serial `cbdd_dickinson`, `upper_endpoint_cbdd_dickinson`, `czdd_dickinson`, `sat_dickinson`, `wide_certificate_sat_dickinson`, and
-`clingo_sat_dickinson`
+Serial `cbdd_dickinson`, `cbdd_halfspace_dickinson`, `upper_endpoint_cbdd_dickinson`, `czdd_dickinson`, `sat_dickinson`,
+`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `wide_certificate_sat_dickinson`, `clingo_dickinson`, and
+`clingo_halfspace_dickinson`
 diagnostics also print the sparse
 joint histogram `certificate_k_d_u_counts=[(k,d,upper_size,count),...]`. Here `k` is the support cardinality at which a certificate was
 generated, `d = |U| - |L|` is its number of free indices, and `upper_size = |U|` shows how high the interval reaches. The histogram

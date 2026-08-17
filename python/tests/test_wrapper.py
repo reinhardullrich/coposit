@@ -189,11 +189,13 @@ class WrapperTests(unittest.TestCase):
     def test_serial_dickinson_experiments_collect_sparse_certificate_joint_distributions(self):
         for model in (
             "cbdd_dickinson",
+            "cbdd_halfspace_dickinson",
             "upper_endpoint_cbdd_dickinson",
             "czdd_dickinson",
             "sat_dickinson",
             "wide_certificate_sat_dickinson",
-            "clingo_sat_dickinson",
+            "clingo_dickinson",
+            "clingo_halfspace_dickinson",
         ):
             with self.subTest(model=model):
                 parameter = "50" if model == "wide_certificate_sat_dickinson" else None

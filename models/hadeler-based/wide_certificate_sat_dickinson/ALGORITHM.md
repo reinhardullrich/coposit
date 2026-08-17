@@ -85,16 +85,24 @@ The threshold is calculated with quotient and remainder arithmetic rather than f
 ## SAT Representation
 
 Matrix index $i$ is represented by a Boolean variable $x_i$, where true means that $i$ belongs to the candidate support. Membership
-in a retained Dickinson interval requires all $x_i$ for $i\in L$ to be true and all $x_i$ for $i\notin U$ to be false. Its negation
-is the single persistent blocking clause
+in a retained Dickinson interval requires all $x_i$ for $i\in L$ to be true and all $x_i$ for $i\notin U$ to be false. Write its
+single blocking clause as
 
 $$
+C(L,U)=
 \bigvee_{i\in L}\neg x_i
 \;\lor\;
 \bigvee_{i\notin U}x_i.
 $$
 
-The clause length is $n-d$. Wide certificates therefore produce shorter clauses.
+The cardinality-network output $y_t$ is true exactly when at least $t+1$ indices are selected. When $|U|<n$, the stored clause is
+
+$$
+C(L,U)\lor y_{|U|}.
+$$
+
+It blocks the interval through cardinality $|U|$ and is automatically satisfied afterward. Its length is $n-d+1$. A ceiling
+interval with $|U|=n$ never expires and keeps the original length $n-d$. Wide certificates therefore still produce shorter clauses.
 
 For a rejected narrow certificate, let $I$ be the exact current support. The model adds
 
@@ -104,11 +112,13 @@ $$
 \bigvee_{i\notin I}x_i,
 $$
 
-which excludes exactly the assignment $I$ and no other support. This clause is longer, but it is the minimum state change needed to
-prevent SAT from returning the same processed support forever.
+which excludes exactly the assignment $I$ and no other support. Its stored form also includes $y_{|I|}$, so it blocks the current
+cardinality but becomes inert immediately afterward. This clause is longer, but it is the minimum state change needed to prevent SAT
+from returning the same processed support forever.
 
-There is one CaDiCaL instance for the complete matrix call. All retained certificate clauses, exact-support clauses, and compatible
-learned clauses persist across cardinalities.
+There is one CaDiCaL instance for the complete matrix call. Retained certificate clauses, exact-support clauses, and compatible
+learned clauses persist across cardinalities, but the existing cardinality outputs make bounded clauses inactive after their last
+relevant layer.
 
 ## Exact Cardinality Layers
 
@@ -126,6 +136,8 @@ y_k=false\quad(k<n).
 $$
 
 These assumptions enforce exactly $k$ selected indices without rebuilding the network or adding a permanent cardinality clause.
+The same outputs deactivate bounded interval clauses once $k>|U|$; no interval scan or separate activation-variable family is
+needed.
 
 ## Complete Decision Flow
 
@@ -137,7 +149,8 @@ These assumptions enforce exactly $k$ selected indices without rebuilding the ne
 6. Otherwise copy the principal matrix $A_I$ and perform the exact Dickinson calculation below.
 7. Stop with a negative predicate result if the exact vector is a decisive witness.
 8. Compute $L$, $U$, and $d$ exactly.
-9. If $d>\lfloor p(n-k)/100\rfloor$, add the full interval clause. Otherwise add only the exact-support clause for $I$.
+9. If $d>\lfloor p(n-k)/100\rfloor$, add the cardinality-aware full interval clause. Otherwise add the cardinality-aware
+   exact-support clause for $I$.
 10. Ask SAT for the next support of the same cardinality.
 11. When every cardinality layer is exhausted, return the positive result.
 

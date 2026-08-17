@@ -113,6 +113,7 @@ struct snapshot {
     std::map<std::pair<size_t, size_t>, uint64_t> certificate_cardinality_free_index_counts;
     std::map<std::tuple<size_t, size_t, size_t>, uint64_t> certificate_cardinality_free_index_upper_size_counts;
     std::map<std::tuple<size_t, size_t, size_t, size_t>, uint64_t> certificate_root_lifted_upper_lower_counts;
+    std::map<std::pair<size_t, size_t>, uint64_t> singular_cardinality_nullity_counts;
 };
 
 namespace detail {
@@ -171,6 +172,7 @@ struct shared_state {
     std::map<std::pair<size_t, size_t>, uint64_t> certificate_cardinality_free_index_counts;
     std::map<std::tuple<size_t, size_t, size_t>, uint64_t> certificate_cardinality_free_index_upper_size_counts;
     std::map<std::tuple<size_t, size_t, size_t, size_t>, uint64_t> certificate_root_lifted_upper_lower_counts;
+    std::map<std::pair<size_t, size_t>, uint64_t> singular_cardinality_nullity_counts;
     std::mutex diagnostics_mutex;
     std::string diagnostics;
 };
@@ -221,6 +223,7 @@ inline void reset_current_metric() noexcept
         state.certificate_cardinality_free_index_counts.clear();
         state.certificate_cardinality_free_index_upper_size_counts.clear();
         state.certificate_root_lifted_upper_lower_counts.clear();
+        state.singular_cardinality_nullity_counts.clear();
     }
 }
 
@@ -299,6 +302,7 @@ inline snapshot load() noexcept
         result.certificate_cardinality_free_index_counts = state.certificate_cardinality_free_index_counts;
         result.certificate_cardinality_free_index_upper_size_counts = state.certificate_cardinality_free_index_upper_size_counts;
         result.certificate_root_lifted_upper_lower_counts = state.certificate_root_lifted_upper_lower_counts;
+        result.singular_cardinality_nullity_counts = state.singular_cardinality_nullity_counts;
     }
     return result;
 }
@@ -504,6 +508,16 @@ inline std::string format(const snapshot& value, std::chrono::seconds elapsed, d
             output << "  certificate_k_d_counts=[";
             bool first = true;
             for (const auto& [key, count] : value.certificate_cardinality_free_index_counts) {
+                if (!first) output << ',';
+                output << '(' << key.first << ',' << key.second << ',' << count << ')';
+                first = false;
+            }
+            output << ']';
+        }
+        if (!value.singular_cardinality_nullity_counts.empty()) {
+            output << "  singular_k_q_counts=[";
+            bool first = true;
+            for (const auto& [key, count] : value.singular_cardinality_nullity_counts) {
                 if (!first) output << ',';
                 output << '(' << key.first << ',' << key.second << ',' << count << ')';
                 first = false;
@@ -846,6 +860,13 @@ public:
         if (!active_ || free_indices > upper_size || upper_size > maximum_) return;
         std::lock_guard<std::mutex> lock(detail::state.certificate_histogram_mutex);
         ++detail::state.certificate_cardinality_free_index_upper_size_counts[{current_, free_indices, upper_size}];
+    }
+
+    void singular_support(size_t nullity) noexcept
+    {
+        if (!active_ || nullity == 0) return;
+        std::lock_guard<std::mutex> lock(detail::state.certificate_histogram_mutex);
+        ++detail::state.singular_cardinality_nullity_counts[{current_, nullity}];
     }
 
     void lifted_certificate(size_t lifted_cardinality, size_t upper_size, size_t lower_size) noexcept

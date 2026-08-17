@@ -233,6 +233,24 @@ $$
 
 where $k=|I|$ is the support cardinality that generated the interval.
 
+## Safe Cardinality Expiration
+
+Each retained interval is tagged with $u=|U|$ and also united into an expiry bucket $E_u$. Before the model starts cardinality
+$k$, it performs
+
+$$
+C\leftarrow C\setminus\bigcup_{u<k}E_u
+$$
+
+and clears those buckets. This cannot change any present or future decision: every $J\in[L,U]$ satisfies
+$|J|\leq|U|=u$, so an interval with $u<k$ contains no support of cardinality $k$ or larger. Intersections with intervals that
+remain live are harmless for the same reason; every removed support is below the traversal frontier.
+
+Expiration changes only the live decision-diagram roots. The private arena and unique table retain already allocated nodes until the
+matrix call ends, so this reduces later union and difference operands but is not garbage collection. After expiration, the marginal
+coverage test may retain a later interval only because it reintroduces already-past supports; this can add work but cannot change a
+current or future support decision.
+
 ## Complete Decision Flow
 
 1. Traverse support cardinalities from one through $n$.

@@ -220,6 +220,23 @@ Waiting for an entire cardinality would be unsafe for performance: a certificate
 (|L(u)|<k) and can therefore cover other (k)-element supports. The bounded (5n) batch retains most of that same-cardinality
 feedback while exposing enough independent exact calculations to the workers.
 
+## Safe Cardinality Expiration
+
+Each returned interval is tagged with $u=|U|$ and also united into its expiry bucket $E_u$ before the batch union is installed.
+Before the model starts cardinality $k$, it performs
+
+$$
+C\leftarrow C\setminus\bigcup_{u<k}E_u
+$$
+
+and clears those buckets. This cannot change any present or future decision: every $J\in[L,U]$ satisfies
+$|J|\leq|U|=u$, so an interval with $u<k$ contains no support of cardinality $k$ or larger. Intersections with intervals that
+remain live are harmless for the same reason; every removed support is below the traversal frontier. Bucketing happens per returned
+certificate rather than per batch because one batch may contain several different upper cardinalities.
+
+Expiration changes only the live decision-diagram roots. The private arena and unique table retain already allocated nodes until the
+matrix call ends, so this reduces later union and difference operands but is not garbage collection.
+
 ## Exactness, Termination, And Limits
 
 All mathematical decisions use FLINT arbitrary-precision integers. Supports and interval endpoints use dynamically sized packed

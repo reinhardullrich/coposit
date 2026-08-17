@@ -31,6 +31,7 @@ public:
     explicit interval_cbdd(size_t dimension, diagnostics::tracker* diagnostics = nullptr)
         : dimension_(dimension)
         , diagnostics_(diagnostics)
+        , expiring_(dimension + 1, empty)
         , current_support_(dimension)
     {
         nodes_.push_back({dimension_, dimension_, 0, 0}); // Constant false.
@@ -40,10 +41,12 @@ public:
     void start_cardinality(size_t cardinality)
     {
         if (!diagnostics_) {
+            expire_before(cardinality);
             remaining_ = subtract(cardinality_family(cardinality), covered_);
             return;
         }
         diagnostics_->decision_diagram_phase_change(diagnostics::decision_diagram_phase::cardinality_build);
+        expire_before(cardinality);
         remaining_ = subtract(cardinality_family(cardinality), covered_);
         publish_work();
         diagnostics_->decision_diagram_phase_change(diagnostics::decision_diagram_phase::support_solve);
@@ -69,16 +72,19 @@ public:
         return true;
     }
 
-    void add_interval(const support& lower, const support& upper)
+    void add_interval(const support& lower, const support& upper, size_t upper_cardinality)
     {
+        assert(upper_cardinality >= expiration_cursor_);
         const size_t certificate = interval_family(lower, upper);
         if (!diagnostics_) {
             covered_ = unite(covered_, certificate);
+            retain_until(upper_cardinality, certificate);
             remaining_ = subtract(remaining_, certificate);
             return;
         }
         diagnostics_->decision_diagram_phase_change(diagnostics::decision_diagram_phase::certificate_union);
         covered_ = unite(covered_, certificate);
+        retain_until(upper_cardinality, certificate);
         publish_work();
         diagnostics_->decision_diagram_phase_change(diagnostics::decision_diagram_phase::certificate_subtract);
         remaining_ = subtract(remaining_, certificate);
@@ -87,6 +93,10 @@ public:
     }
 
     size_t node_count() const noexcept { return nodes_.size(); }
+
+#ifdef COPOSIT_CBDD_DICKINSON_TESTING
+    size_t expired_bucket_count() const noexcept { return expired_bucket_count_; }
+#endif
 
     size_t maximum_chain_length() const noexcept
     {
@@ -232,6 +242,28 @@ private:
         return build(0, cardinality);
     }
 
+    void retain_until(size_t upper_cardinality, size_t certificate)
+    {
+        if (upper_cardinality < dimension_)
+            expiring_[upper_cardinality] = unite(expiring_[upper_cardinality], certificate);
+    }
+
+    void expire_before(size_t cardinality)
+    {
+        assert(cardinality >= expiration_cursor_);
+        while (expiration_cursor_ < cardinality) {
+            const size_t expired = expiring_[expiration_cursor_];
+            if (expired != empty) {
+                covered_ = subtract(covered_, expired);
+                expiring_[expiration_cursor_] = empty;
+#ifdef COPOSIT_CBDD_DICKINSON_TESTING
+                ++expired_bucket_count_;
+#endif
+            }
+            ++expiration_cursor_;
+        }
+    }
+
     size_t unite(size_t left, size_t right)
     {
         union_cache_.clear();
@@ -315,8 +347,13 @@ private:
     std::unordered_map<node_key, size_t, node_key_hash> unique_;
     std::unordered_map<pair_key, size_t, pair_key_hash> union_cache_;
     std::unordered_map<pair_key, size_t, pair_key_hash> difference_cache_;
+    std::vector<size_t> expiring_;
     size_t covered_ = empty;
     size_t remaining_ = empty;
+    size_t expiration_cursor_ = 0;
+#ifdef COPOSIT_CBDD_DICKINSON_TESTING
+    size_t expired_bucket_count_ = 0;
+#endif
     support current_support_;
     uint64_t operations_ = 0;
 };
@@ -439,12 +476,12 @@ private:
 
         const size_t free_indices = upper_size - lower_size;
         if (uses_full_certificate_interval(matrix.rows(), indices_.size(), free_indices)) {
-            supports_.add_interval(lower, upper);
+            supports_.add_interval(lower, upper, upper_size);
             COPOSIT_CBDD_DIAGNOSTICS("wide-certificate", free_indices);
         } else {
             support processed(matrix.rows());
             for (const size_t index : indices_) processed.set(index);
-            supports_.add_interval(processed, processed);
+            supports_.add_interval(processed, processed, indices_.size());
             COPOSIT_CBDD_DIAGNOSTICS("narrow-certificate", free_indices);
         }
         return free_indices;
@@ -508,11 +545,15 @@ std::pair<size_t, size_t> cbdd_uncovered_count(
     for (const auto& [lower_mask, upper_mask] : intervals) {
         support lower(dimension);
         support upper(dimension);
+        size_t upper_size = 0;
         for (size_t bit = 0; bit < dimension; ++bit) {
             if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
-            if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
+            if ((upper_mask & (uint64_t{1} << bit)) != 0) {
+                upper.set(bit);
+                ++upper_size;
+            }
         }
-        diagram.add_interval(lower, upper);
+        diagram.add_interval(lower, upper, upper_size);
     }
 
     diagram.start_cardinality(cardinality);
@@ -521,7 +562,7 @@ std::pair<size_t, size_t> cbdd_uncovered_count(
     while (diagram.take_first(indices)) {
         support exact(dimension);
         for (const size_t index : indices) exact.set(index);
-        diagram.add_interval(exact, exact);
+        diagram.add_interval(exact, exact, indices.size());
         ++count;
     }
     return {count, diagram.node_count()};
@@ -536,8 +577,32 @@ size_t cbdd_maximum_interval_chain(size_t dimension, uint64_t lower_mask, uint64
         if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
         if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
     }
-    diagram.add_interval(lower, upper);
+    size_t upper_size = 0;
+    for (size_t bit = 0; bit < dimension; ++bit)
+        upper_size += upper.contains(bit);
+    diagram.add_interval(lower, upper, upper_size);
     return diagram.maximum_chain_length();
+}
+
+size_t cbdd_expired_bucket_count(
+    size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals)
+{
+    interval_cbdd diagram(dimension);
+    for (const auto& [lower_mask, upper_mask] : intervals) {
+        support lower(dimension);
+        support upper(dimension);
+        size_t upper_size = 0;
+        for (size_t bit = 0; bit < dimension; ++bit) {
+            if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
+            if ((upper_mask & (uint64_t{1} << bit)) != 0) {
+                upper.set(bit);
+                ++upper_size;
+            }
+        }
+        diagram.add_interval(lower, upper, upper_size);
+    }
+    diagram.start_cardinality(cardinality);
+    return diagram.expired_bucket_count();
 }
 #endif
 

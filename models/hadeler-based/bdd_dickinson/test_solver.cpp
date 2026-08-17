@@ -17,6 +17,8 @@ using namespace coposit;
 namespace coposit::model {
 std::pair<size_t, size_t> interval_bdd_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals);
+size_t interval_bdd_expired_bucket_count(
+    size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals);
 }
 
 namespace {
@@ -76,6 +78,13 @@ TEST(BddDickinsonTest, SubtractsTheUnionOfBoundedIntervals)
     const std::vector<std::pair<uint64_t, uint64_t>> intervals{{0b001, 0b011}, {0b100, 0b110}};
     EXPECT_EQ(model::interval_bdd_uncovered_count(3, 1, intervals).first, 1U);
     EXPECT_EQ(model::interval_bdd_uncovered_count(3, 2, intervals).first, 1U);
+}
+
+TEST(BddDickinsonTest, DeletesExpiredIntervalsWithoutDamagingOverlappingLiveCoverage)
+{
+    const std::vector<std::pair<uint64_t, uint64_t>> intervals{{0b0001, 0b0011}, {0b0001, 0b1111}};
+    EXPECT_EQ(model::interval_bdd_expired_bucket_count(4, 3, intervals), 1U);
+    EXPECT_EQ(model::interval_bdd_uncovered_count(4, 3, intervals).first, brute_uncovered_count(4, 3, intervals));
 }
 
 TEST(BddDickinsonTest, MatchesBruteForceForEveryPairOfFourDimensionalIntervals)

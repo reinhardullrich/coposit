@@ -31,6 +31,10 @@ This file routes to every other Markdown document under `aidocs/` without duplic
   Dickinson intervals, exact stacked-flat and affine searches, activation-loss counterexamples, and staged certificate-engine proposals.
 - `BPQY_DICKINSON_CERTIFICATE_GEOMETRY.md` — **research finding** — designated-zero support size, Dickinson interval width, exact
   digit-growth evidence, ten-second outcomes, and the order-25 matrix-12580 diagnostics trace.
+- `BPQY_N50_RAYS_LONG_RUN.md` — **research result** — per-layer timing and certificate upper-cardinality distributions for the
+  long SAT-Halfspace-Rays Dickinson run on three order-50 BPQY COP matrices with $\rho_0=12,25,38$.
+- `AFFINE_RHS_DICKINSON_CERTIFICATE_GEOMETRY.md` — **research finding** — exact $L/U/d$ identities, affine right-hand-side path
+  geometry, singularity distinctions, objective-equivalence theorems, and the order-25 BPQY two-path experiment.
 - `PREPROCESSING_PIPELINE_DESIGN.md` — **current implementation** — complete root-check, component, ordinary-check,
   bounded-reduction, child-pipeline, single-switch, outcome, scan-reuse, and diagnostics specification.
 - `KUZMANOVIC_100000_MATRIX_SCREEN.md` — **completed screen** — exact reconstruction, complete ordinary-copositivity results,

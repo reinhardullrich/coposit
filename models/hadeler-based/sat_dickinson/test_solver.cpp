@@ -21,6 +21,7 @@ namespace coposit::model {
 size_t sat_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals);
 size_t sat_interval_count(size_t dimension, uint64_t lower_mask, uint64_t upper_mask);
+size_t sat_interval_clause_size(size_t dimension, uint64_t lower_mask, uint64_t upper_mask);
 }
 
 namespace {
@@ -102,6 +103,12 @@ TEST(SatDickinsonTest, StoresOneBlockingClausePerInterval)
     EXPECT_EQ(model::sat_interval_count(8, 0b001, 0b111), 1U);
 }
 
+TEST(SatDickinsonTest, AddsTheExistingCardinalityOutputOnlyToExpiringIntervals)
+{
+    EXPECT_EQ(model::sat_interval_clause_size(8, 0b00000001, 0b00000111), 7U);
+    EXPECT_EQ(model::sat_interval_clause_size(8, 0b00000001, 0b11111111), 1U);
+}
+
 TEST(SatDickinsonTest, RepresentsAWholeDownsetWithAnEmptyLowerEndpoint)
 {
     const std::vector<std::pair<uint64_t, uint64_t>> downset{{0, 0b101}};
@@ -142,6 +149,21 @@ TEST(SatDickinsonTest, PublishesCertificateFreeIndexAndUpperSizeDistributionOnly
 
     EXPECT_EQ(snapshot.certificate_cardinality_free_index_upper_size_counts,
               (std::map<std::tuple<size_t, size_t, size_t>, uint64_t>{{{1, 1, 2}, 2}}));
+}
+
+TEST(SatDickinsonTest, RecordsFactoredSingularSupportsOnlyWhenDiagnosticsAreEnabled)
+{
+    const matrix_integer boundary = symmetric_matrix(2, {1, -1, 1});
+
+    diagnostics::detail::reset();
+    diagnostics::detail::state.enabled.store(true, std::memory_order_relaxed);
+    EXPECT_FALSE(model::solve(boundary));
+    const diagnostics::snapshot snapshot = diagnostics::detail::load();
+    diagnostics::detail::state.enabled.store(false, std::memory_order_relaxed);
+    diagnostics::detail::reset();
+
+    EXPECT_EQ(snapshot.singular_cardinality_nullity_counts,
+              (std::map<std::pair<size_t, size_t>, uint64_t>{{{2, 1}, 1}}));
 }
 
 TEST(SatDickinsonTest, KeepsPackedSupportsBeyondOneWord)
