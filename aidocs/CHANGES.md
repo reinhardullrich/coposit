@@ -2,6 +2,70 @@
 
 This append-only file records meaningful decisions, results, and evidence that are not clear from Git. Do not log routine edits here.
 
+## 2026-08-17 — Ordinary Dickinson singular-support diagnostics
+
+- Added diagnostics-only $(k,q,\mathrm{count})$ histograms to SAT Dickinson, SAT-Halfspace Dickinson, and SAT-Halfspace-Rays
+  Dickinson. A count is added only after an exact principal LDLT factorization has found nullity $q>0$; SAT-excluded supports are
+  never refactored for measurement.
+- A mixed no-preprocessing, 60-second combined-mode sample covered Zischg--Bomze, Motzkin--Straus/Johnson, BPQY, Burer, and
+  MANN/Steiner matrices. No run reached nullity two or higher. Only the Motzkin--Straus/Johnson matrix 9628 reached singular
+  supports, all at nullity one. The half-space reduction in processed supports therefore came from nonsingular certificates in this
+  first sample, not from avoiding observed high-nullity systems.
+- Reconfigured the complete Release build conservatively with two compilation jobs and passed all 76 maintained checks.
+
+## 2026-08-17 — Wider singular certificates in every halfspace model
+
+- Changed all four Halfspace Dickinson variants to compare both orientations of their one exact singular nullspace vector and retain
+  the orientation with larger Dickinson upper set. A nonnegative orientation remains the copositive-zero case and still decides SCP.
+- Reused the single exact full product: positive and negative product counts determine both upper-set sizes, and selecting the negative
+  orientation only negates the vector and product. Higher-nullity supports still use one deterministic kernel vector.
+
+## 2026-08-17 — Clingo model naming and halfspace variant
+
+- Renamed `clingo_sat_dickinson` to `clingo_dickinson`; Clingo/clasp still stores Dickinson intervals as clauses, but SAT is an
+  implementation mechanism rather than a distinguishing model name.
+- Added `clingo_halfspace_dickinson` as an isolated Clingo Dickinson copy using SAT-Halfspace Dickinson's cumulative exact
+  coordinate search over strictly positive right-hand sides.
+
+## 2026-08-17 — SAT-Halfspace synthesized-ray experiment
+
+- Added `sat_halfspace_rays_dickinson` as an isolated copy of SAT-Halfspace Dickinson. Its coordinate-ascent path maximizes
+  $(|U|,d)$ lexicographically—$|U|$ first and $d=|U|-|L|$ only as the tie-breaker—and, on the final stalled pass, keeps a
+  dimension-dependent shortlist of complementary coordinate-ray points.
+- It ranks the shortlisted pairs by their gained and lost upper indices, synthesizes the best two exact combined directions, and
+  performs at most two extra breakpoint sweeps. The shortlist is bounded by
+  $\min\{k,64,\lceil3\sqrt n\rceil\}$, so pair selection cannot become an unbounded quadratic cost on large matrices.
+- The complete Release build and all 76 maintained checks pass. A five-second combined-mode Smoke run with complete preprocessing
+  classified all 49 matrices, with zero timeouts and zero disagreements with the stored exact expectations.
+
+## 2026-08-17 — CBDD-Halfspace Dickinson experiment
+
+- Added `cbdd_halfspace_dickinson` as an isolated model combining the exact cumulative positive-right-hand-side coordinate search from
+  SAT-Halfspace Dickinson with CBDD Dickinson's chain-reduced interval union and exact upper-cardinality expiry.
+- Kept the halfspace certificate engine mathematically identical to the SAT variant while removing the SAT dependency. Focused tests
+  cover an actual exact halfspace improvement, combined CP/SCP classification, CBDD interval expiry, diagnostics, and timeout handling.
+- All 74 maintained C++/Python tests pass. The rebuilt model completed all 49 Smoke matrices in combined mode with diagnostics and
+  complete preprocessing, with zero disagreements or unresolved cases.
+
+## 2026-08-17 — Decision-diagram certificates expire below the cardinality frontier
+
+- Added exact upper-cardinality expiry buckets to all eight maintained BDD-, ZDD-, CBDD-, and CZDD-backed Dickinson models. Before
+  cardinality $k$, each model removes intervals with $|U|<k$ from its live covered root; such an interval contains no support of
+  cardinality $k$ or greater, including when it overlaps a longer-lived interval.
+- Kept the change model-local, including per-certificate bucketing inside the multithreaded model's batch union. The decision-diagram
+  arenas still retain allocated nodes until the matrix call ends; this is logical root reduction, not garbage collection.
+- Added a focused overlapping-live-interval check to every affected model. All 73 C++/Python tests pass, and all eight rebuilt models
+  completed the 49-matrix Smoke set in combined CP/SCP mode with zero disagreements or unresolved cases.
+
+## 2026-08-17 — Ten-minute preprocessing results marked
+
+- Marked the 22 Motzkin--Straus matrices completely classified in the focused ten-minute depth-2 continuation as
+  `preprocessing_solved`; the 23 timeouts remain unmarked. The corpus now has 2,730 preprocessing-complete matrices.
+- Preserved the exact 22 matrix IDs and truth guards in
+  `testdata/archive/mark_ten_minute_preprocessing_solved_2026_08_17.sql`. The 22 rows remain stored Core/Stress members, but the
+  runner's preprocessing gate excludes them; curated replacement is intentionally deferred rather than silently selecting a new
+  benchmark composition.
+
 ## 2026-08-16 — Ordinary-copositivity cone comparison completed
 
 - Completed the five-second ordinary-copositivity campaign for 11 literature and experimental cone models on the 49-matrix Smoke

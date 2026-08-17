@@ -82,15 +82,39 @@ public:
 
     void add_interval(const support& lower, const support& upper)
     {
+        size_t upper_size = 0;
+#ifdef COPOSIT_SAT_DICKINSON_TESTING
+        last_interval_clause_size_ = 0;
+#endif
         for (size_t index = 0; index < dimension_; ++index) {
-            if (lower.contains(index)) solver_.add(-variable(index));
-            else if (!upper.contains(index)) solver_.add(variable(index));
+            const bool in_upper = upper.contains(index);
+            if (in_upper) ++upper_size;
+            if (lower.contains(index)) {
+                solver_.add(-variable(index));
+#ifdef COPOSIT_SAT_DICKINSON_TESTING
+                ++last_interval_clause_size_;
+#endif
+            } else if (!in_upper) {
+                solver_.add(variable(index));
+#ifdef COPOSIT_SAT_DICKINSON_TESTING
+                ++last_interval_clause_size_;
+#endif
+            }
+        }
+        if (upper_size < dimension_) {
+            solver_.add(cardinality_outputs_[upper_size]);
+#ifdef COPOSIT_SAT_DICKINSON_TESTING
+            ++last_interval_clause_size_;
+#endif
         }
         solver_.add(0);
         ++interval_count_;
     }
 
     size_t interval_count() const noexcept { return interval_count_; }
+#ifdef COPOSIT_SAT_DICKINSON_TESTING
+    size_t last_interval_clause_size() const noexcept { return last_interval_clause_size_; }
+#endif
 
 private:
     int variable(size_t index) const noexcept
@@ -155,6 +179,9 @@ private:
     int next_variable_ = 1;
     size_t cardinality_ = 0;
     size_t interval_count_ = 0;
+#ifdef COPOSIT_SAT_DICKINSON_TESTING
+    size_t last_interval_clause_size_ = 0;
+#endif
     timeout_terminator terminator_;
     CaDiCaL::Solver solver_;
     std::vector<int> cardinality_outputs_;
@@ -212,6 +239,7 @@ private:
         copy_principal(matrix, indices_, principal_);
 
         const bool singular = factorization_.factorize_inplace(principal_) == 0;
+        if (singular && diagnostics_.active()) diagnostics_.singular_support(dimension - factorization_.rank());
         if (!singular) {
             for (size_t row = 0; row < dimension; ++row) solution_(row, 0).set_one();
 
@@ -351,6 +379,19 @@ size_t sat_interval_count(size_t dimension, uint64_t lower_mask, uint64_t upper_
     }
     diagram.add_interval(lower, upper);
     return diagram.interval_count();
+}
+
+size_t sat_interval_clause_size(size_t dimension, uint64_t lower_mask, uint64_t upper_mask)
+{
+    interval_sat diagram(dimension);
+    support lower(dimension);
+    support upper(dimension);
+    for (size_t bit = 0; bit < dimension; ++bit) {
+        if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
+        if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
+    }
+    diagram.add_interval(lower, upper);
+    return diagram.last_interval_clause_size();
 }
 #endif
 

@@ -28,6 +28,7 @@ public:
   explicit interval_cbdd(size_t dimension,
                          diagnostics::tracker *diagnostics = nullptr)
       : dimension_(dimension), diagnostics_(diagnostics),
+        expiring_(dimension + 1, empty),
         current_support_(dimension) {
     nodes_.push_back({dimension_, dimension_, 0, 0}); // Constant false.
     nodes_.push_back({dimension_, dimension_, 1, 1}); // Constant true.
@@ -35,11 +36,13 @@ public:
 
   void start_cardinality(size_t cardinality) {
     if (!diagnostics_) {
+      expire_before(cardinality);
       remaining_ = subtract(cardinality_family(cardinality), covered_);
       return;
     }
     diagnostics_->decision_diagram_phase_change(
         diagnostics::decision_diagram_phase::cardinality_build);
+    expire_before(cardinality);
     remaining_ = subtract(cardinality_family(cardinality), covered_);
     publish_work();
     diagnostics_->decision_diagram_phase_change(
@@ -66,7 +69,9 @@ public:
     return true;
   }
 
-  bool add_interval_if_new(const support &lower, const support &upper) {
+  bool add_interval_if_new(const support &lower, const support &upper,
+                           size_t upper_cardinality) {
+    assert(upper_cardinality >= expiration_cursor_);
     const size_t certificate = interval_family(lower, upper);
     if (diagnostics_)
       diagnostics_->decision_diagram_phase_change(
@@ -82,6 +87,9 @@ public:
     }
 
     covered_ = new_covered;
+    if (upper_cardinality < dimension_)
+      expiring_[upper_cardinality] =
+          unite(expiring_[upper_cardinality], certificate);
     if (diagnostics_)
       diagnostics_->decision_diagram_phase_change(
           diagnostics::decision_diagram_phase::certificate_subtract);
@@ -95,6 +103,10 @@ public:
   }
 
   size_t node_count() const noexcept { return nodes_.size(); }
+
+#ifdef COPOSIT_CBDD_DICKINSON_IMPROVED_1_TESTING
+  size_t expired_bucket_count() const noexcept { return expired_bucket_count_; }
+#endif
 
 private:
   static constexpr size_t empty = 0;
@@ -236,6 +248,21 @@ private:
     return build(0, cardinality);
   }
 
+  void expire_before(size_t cardinality) {
+    assert(cardinality >= expiration_cursor_);
+    while (expiration_cursor_ < cardinality) {
+      const size_t expired = expiring_[expiration_cursor_];
+      if (expired != empty) {
+        covered_ = subtract(covered_, expired);
+        expiring_[expiration_cursor_] = empty;
+#ifdef COPOSIT_CBDD_DICKINSON_IMPROVED_1_TESTING
+        ++expired_bucket_count_;
+#endif
+      }
+      ++expiration_cursor_;
+    }
+  }
+
   size_t unite(size_t left, size_t right) {
     union_cache_.clear();
     return diagnostics_ ? unite_impl<true>(left, right)
@@ -331,8 +358,13 @@ private:
   std::unordered_map<node_key, size_t, node_key_hash> unique_;
   std::unordered_map<pair_key, size_t, pair_key_hash> union_cache_;
   std::unordered_map<pair_key, size_t, pair_key_hash> difference_cache_;
+  std::vector<size_t> expiring_;
   size_t covered_ = empty;
   size_t remaining_ = empty;
+  size_t expiration_cursor_ = 0;
+#ifdef COPOSIT_CBDD_DICKINSON_IMPROVED_1_TESTING
+  size_t expired_bucket_count_ = 0;
+#endif
   support current_support_;
   uint64_t operations_ = 0;
 };
@@ -707,7 +739,8 @@ private:
   void commit_pending_intervals() {
     for (pending_interval &interval : pending_) {
       const size_t free_indices = interval.upper_size - interval.lower_size;
-      if (!supports_.add_interval_if_new(interval.lower, interval.upper)) {
+      if (!supports_.add_interval_if_new(interval.lower, interval.upper,
+                                         interval.upper_size)) {
         COPOSIT_CBDD_DICKINSON_IMPROVED_1_DIAGNOSTICS("redundant-interval",
                                                       free_indices);
         continue;
@@ -788,15 +821,49 @@ size_t cbdd_dickinson_improved_1_retained_interval_count(
   for (const auto &[lower_mask, upper_mask] : intervals) {
     support lower(dimension);
     support upper(dimension);
+    size_t upper_size = 0;
     for (size_t bit = 0; bit < dimension; ++bit) {
       if ((lower_mask & (uint64_t{1} << bit)) != 0)
         lower.set(bit);
-      if ((upper_mask & (uint64_t{1} << bit)) != 0)
+      if ((upper_mask & (uint64_t{1} << bit)) != 0) {
         upper.set(bit);
+        ++upper_size;
+      }
     }
-    result += diagram.add_interval_if_new(lower, upper);
+    result += diagram.add_interval_if_new(lower, upper, upper_size);
   }
   return result;
+}
+
+std::pair<size_t, size_t> cbdd_dickinson_improved_1_expiry_result(
+    size_t dimension, size_t cardinality,
+    const std::vector<std::pair<uint64_t, uint64_t>> &intervals) {
+  interval_cbdd diagram(dimension);
+  for (const auto &[lower_mask, upper_mask] : intervals) {
+    support lower(dimension);
+    support upper(dimension);
+    size_t upper_size = 0;
+    for (size_t bit = 0; bit < dimension; ++bit) {
+      if ((lower_mask & (uint64_t{1} << bit)) != 0)
+        lower.set(bit);
+      if ((upper_mask & (uint64_t{1} << bit)) != 0) {
+        upper.set(bit);
+        ++upper_size;
+      }
+    }
+    diagram.add_interval_if_new(lower, upper, upper_size);
+  }
+  diagram.start_cardinality(cardinality);
+  std::vector<size_t> indices;
+  size_t uncovered = 0;
+  while (diagram.take_first(indices)) {
+    support exact(dimension);
+    for (const size_t index : indices)
+      exact.set(index);
+    diagram.add_interval_if_new(exact, exact, indices.size());
+    ++uncovered;
+  }
+  return {uncovered, diagram.expired_bucket_count()};
 }
 #endif
 

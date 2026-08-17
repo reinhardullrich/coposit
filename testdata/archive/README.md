@@ -26,6 +26,8 @@ runtime.
 - `refresh_benchmark_sets_after_motzkin_straus_2026_08_16.sql` removes the 21 additional Smoke and 226 additional Core members solved
   by the current preprocessing pipeline, then records the exact unresolved replacements that restore the curated 49- and 512-row
   sizes. N ≤ 100 remains comprehensive and therefore falls naturally to 754 rows.
+- `mark_ten_minute_preprocessing_solved_2026_08_17.sql` marks the 22 Motzkin--Straus matrices completely classified by the later
+  ten-minute continuation. Its 23 timeouts remain unmarked; curated benchmark replacement is deliberately separate.
 - `replace_hildebrand_circulants_2026_08_16.py` replaces the 17 order-15–25 Hildebrand points by one diversified low-digit exact
   representative per order, deletes their obsolete local diagnostics and four payloads, and preserves the 512-row Core set with six
   same-order boundary replacements.

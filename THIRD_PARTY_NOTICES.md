@@ -11,7 +11,7 @@ coposit is licensed under GPL-3.0-or-later.
 | MPFR | FLINT dependency | LGPL-3.0-or-later | <https://www.mpfr.org/> |
 | GoogleTest 1.14.0 | Test-only dependency fetched by CMake | BSD-3-Clause | <https://github.com/google/googletest/tree/v1.14.0> |
 | CaDiCaL 2.2.1 | Incremental SAT engine for the `sat_dickinson` experiment | MIT | <https://github.com/arminbiere/cadical/tree/rel-2.2.1> |
-| clingo 5.8.2 with clasp 3.4.1 | Backtracking support enumeration for `clingo_sat_dickinson` | MIT | <https://github.com/potassco/clingo/tree/v5.8.2> |
+| clingo 5.8.2 with clasp 3.4.1 | Backtracking support enumeration for `clingo_dickinson` and `clingo_halfspace_dickinson` | MIT | <https://github.com/potassco/clingo/tree/v5.8.2> |
 | Open MCS | MCS maximum-clique search adapted for the Motzkin--Straus pre-check | GPL-3.0-or-later | <https://github.com/darrenstrash/open-mcs/tree/735788af066fc8589f577036af521f22f45c2731> |
 
 The immediate-integer Bareiss update in `cpp/include/coposit/fraction_free_ldlt.hpp` is adapted from Fredrik Johansson's

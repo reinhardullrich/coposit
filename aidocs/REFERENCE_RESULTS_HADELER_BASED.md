@@ -1,15 +1,18 @@
 # Hadeler-Based Model Reference Results
 
-Last updated: 2026-08-16
+Last updated: 2026-08-17
 
 Status: current experiment complete.
 
 ## Protocol
 
-All valid rows use the current Release companions rebuilt at 2026-08-16 17:57 after the latest shared-preprocessing changes. Runs
+All valid rows use Release companions built after the latest shared-preprocessing changes. The original campaign was rebuilt at
+2026-08-16 17:57; the four SAT-family companions refreshed in this table were built on 2026-08-17. Runs
 request combined copositivity and strict-copositivity classification (`both`), enable diagnostics, and use a five-second cooperative
-timeout per matrix. CPU 3 performs dispatch and SQLite writes; native workers use CPUs 4–9. Results are committed to
-`experiments/diagnostics.sqlite3` after every matrix. Hadeler-based rows from earlier companion hashes were removed before this pass.
+timeout per matrix. CPU 3 performs dispatch and SQLite writes and native workers use CPUs 4–9 for the original campaign. The four
+2026-08-17 SAT-family reruns used CPU 2 for dispatch and CPUs 3–9 for workers. Results are committed to
+`experiments/diagnostics.sqlite3` after every matrix. Historical hashes for the four refreshed models are retained for direct
+before-and-after comparison; this table names only the current hashes.
 
 Smoke contains 49 matrices. Core and Stress contains 512 matrices and excludes every matrix already decided fully by preprocessing.
 `Solved / timeout / other` never counts a timeout or process failure as a negative classification.
@@ -25,7 +28,7 @@ Smoke contains 49 matrices. Core and Stress contains 512 matrices and excludes e
 | `upper_endpoint_cbdd_dickinson` | — | 49 / 0 / 0 | 456 / 56 / 0 | complete; current hash `5f199c3da0701cedbad684f5f163be97eff673a63e7321644401534201cab175`; diagnostics complete |
 | `cbdd_dickinson_improved_1` | — | 49 / 0 / 0 | 457 / 55 / 0 | complete; current hash `f6287b5ca7ebcd0b84851a0c6b945100fc2a10c9af3e8bf6e14fbdec3ca1bf11`; diagnostics complete |
 | `ceiling_pruned_dickinson` | — | 49 / 0 / 0 | 452 / 60 / 0 | complete; current hash `284829ce1d78292fd410bc96ddeb1fc771258bb5b1b39dc950d3bcabc86f08db`; diagnostics complete |
-| `clingo_sat_dickinson` | — | 49 / 0 / 0 | 457 / 55 / 0 | complete; current hash `6064632cbc17c385a83cc36d343b9fecec7a3383ed6812bd684c91348f0a5ef3`; diagnostics complete |
+| `clingo_dickinson` | — | 49 / 0 / 0 | 457 / 55 / 0 | complete; current hash `d9c611e121c4cd72155d95c9500db08501a61f198cadfeda7e92d54b0d9a98de`; diagnostics complete |
 | `czdd_dickinson` | — | 49 / 0 / 0 | 457 / 55 / 0 | complete; current hash `cd3b15b804eba8ad1460f62ac118fd8c301846f912dcf50083662978da55a70a`; diagnostics complete |
 | `dense_bitset_dickinson` | default 1 GiB dense-family cap | 49 / 0 / 0 | 379 / 62 / 71 | complete; 71 explicit size-limit errors; current hash `7eb9d486e4ca403f8bffad636f44dfa43dcc2ddad85d59f24308357c861f6808`; diagnostics complete |
 | `dickinson_2019` | — | 49 / 0 / 0 | 380 / 132 / 0 | complete; current hash `db839d4b33c67390eaf390ff4d3ea7e91599f76e3a55df04e5e564f1657d8e16`; diagnostics complete |
@@ -40,11 +43,12 @@ Smoke contains 49 matrices. Core and Stress contains 512 matrices and excludes e
 | `one_step_frank_wolfe_dickinson` | — | 49 / 0 / 0 | 380 / 132 / 0 | complete; current hash `ba397746515edc3f4405fda44b43d8d9d5ace799117f032ee5ec06c030f1e846`; diagnostics complete |
 | `pairwise_frank_wolfe_dickinson` | — | 49 / 0 / 0 | 380 / 132 / 0 | complete; current hash `37e83d3190b260c219e6dd0c5148cb1bc28578345cc4bbc2786581d1d23c5738`; diagnostics complete |
 | `rhs_dickinson` | — | 49 / 0 / 0 | 374 / 138 / 0 | complete; current hash `f38a9b9bbdc66fc875c7a5e99c30e3bb48fc60922e858c95fcbd68fe75920f7e`; diagnostics complete |
-| `sat_dickinson` | — | 49 / 0 / 0 | 457 / 55 / 0 | complete; current hash `8e8e120fa9f914c7394676138ddd897936b8ea675e9ee5e939d841128fa464f1`; diagnostics complete |
+| `sat_dickinson` | — | 49 / 0 / 0 | 456 / 56 / 0 | complete; current hash `9d4e586ec90e0087b439efea7dd1d432d2f6143269ec3e8bc37e647744782901`; diagnostics complete |
+| `sat_halfspace_dickinson` | — | 49 / 0 / 0 | 457 / 55 / 0 | complete; current hash `29acbaa02b9c9b7d86ba6e592659efde211259827544809d691a676ef16c485a`; diagnostics complete |
 | `support_polished_frank_wolfe_dickinson` | — | 49 / 0 / 0 | 381 / 131 / 0 | complete; current hash `149ca4834609770d1cbe48e7f184d9f9286bb6c949159c43287bd40549978dad`; diagnostics complete |
 | `support_pruned_dickinson` | — | 49 / 0 / 0 | 379 / 133 / 0 | complete; current hash `e663c6bdd159d53d9656e944d46f8d78daf8f7529d5090c73d77ecdcca4765ab`; diagnostics complete |
 | `wide_certificate_cbdd_dickinson` | percentage 90 | 49 / 0 / 0 | 452 / 60 / 0 | complete; stored as `wide_certificate_cbdd_dickinson@90`; current hash `0b19379add05b0828d5b4178b5abb1dc7267c0931e6811f0848f6f0a675f7818`; diagnostics complete |
-| `wide_certificate_sat_dickinson` | percentage 90 | 49 / 0 / 0 | 452 / 60 / 0 | complete; stored as `wide_certificate_sat_dickinson@90`; current hash `5146c7ac1be858834935b8e4bce9a3ae3920bb9235b819590f167113ea9ec2e0`; diagnostics complete |
+| `wide_certificate_sat_dickinson` | percentage 90 | 49 / 0 / 0 | 452 / 60 / 0 | complete; stored as `wide_certificate_sat_dickinson@90`; current hash `45f03eb3e17441ffc8b61f244321fcade6edd5b9f6cbd517a0658de8841f5e28`; diagnostics complete |
 | `zdd_dickinson` | — | 49 / 0 / 0 | 457 / 55 / 0 | complete; current hash `8c561d4f2f14758b374177119c3a9062156a714e177df011e3efac93f35f3c1c`; diagnostics complete |
 | `zischg_dickinson` | — | 49 / 0 / 0 | 379 / 133 / 0 | complete; current hash `dabbfa9212ad7021d21113baccbe4e0b2aeb297e49ec8a4621916ad077c3bc6a`; diagnostics complete |
 | `zischg_fracessa` | — | 49 / 0 / 0 | 375 / 137 / 0 | complete; current hash `39b3318dae5027f0070d280d1641e96e3b7c9b563c0eea0c40f6dff830511354`; diagnostics complete |
@@ -52,6 +56,7 @@ Smoke contains 49 matrices. Core and Stress contains 512 matrices and excludes e
 
 ## Verification
 
-All 31 maintained model identities have exactly 512 current-hash rows, combined mode, complete preprocessing, and nonempty diagnostics.
+All 32 model identities listed in this completed benchmark have exactly 512 current-hash rows, combined mode, complete preprocessing,
+and nonempty diagnostics.
 All completed classifications agree with available corpus truth. `PRAGMA integrity_check` returns `ok`. Timeouts and explicit model
 limits remain unresolved and are never counted as negative classifications.

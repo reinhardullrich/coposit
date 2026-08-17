@@ -41,6 +41,25 @@ TEST(Diagnostics, FormatsSupportCertificateDistribution)
     EXPECT_NE(output.find("certificate_k_d_counts=[(2,4,2)]"), std::string::npos);
 }
 
+TEST(Diagnostics, RecordsTheCardinalityAndNullityOfFactoredSingularSupports)
+{
+    detail::reset();
+    detail::state.enabled.store(true, std::memory_order_relaxed);
+    tracker model_diagnostics(metric::support, 8);
+    model_diagnostics.stage(5);
+    model_diagnostics.singular_support(2);
+    model_diagnostics.singular_support(2);
+    model_diagnostics.singular_support(4);
+    const snapshot value = detail::load();
+    detail::state.enabled.store(false, std::memory_order_relaxed);
+    detail::reset();
+
+    EXPECT_EQ(value.singular_cardinality_nullity_counts,
+              (std::map<std::pair<size_t, size_t>, uint64_t>{{{5, 2}, 2}, {{5, 4}, 1}}));
+    EXPECT_NE(detail::format(value, std::chrono::seconds(1), 0.0).find("singular_k_q_counts=[(5,2,2),(5,4,1)]"),
+              std::string::npos);
+}
+
 TEST(Diagnostics, FormatsCertificateDistributionWithUpperSetSize)
 {
     snapshot value;

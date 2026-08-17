@@ -98,14 +98,14 @@ endif()
 
 set(COPOSIT_COMBINED_CLASSIFICATION_MODELS
     danninger_1990 hadeler_1983 dickinson_2019 dense_bitset_dickinson interval_recursive_dickinson bdd_dickinson zdd_dickinson
-    cbdd_dickinson upper_endpoint_cbdd_dickinson cbdd_dickinson_improved_1
+    cbdd_dickinson cbdd_halfspace_dickinson upper_endpoint_cbdd_dickinson cbdd_dickinson_improved_1
     wide_certificate_cbdd_dickinson
     multithreaded_cbdd_dickinson ceiling_pruned_dickinson kernel_cone_dickinson affine_companion_dickinson
     layered_singular_lift_dickinson
     breadth_first_singular_lift_dickinson
-    czdd_dickinson sat_dickinson
+    czdd_dickinson sat_dickinson sat_halfspace_dickinson sat_halfspace_rays_dickinson
     wide_certificate_sat_dickinson
-    clingo_sat_dickinson
+    clingo_dickinson clingo_halfspace_dickinson
     support_pruned_dickinson nullity_support_pruned_dickinson rhs_dickinson frank_wolfe_dickinson
     one_step_frank_wolfe_dickinson pairwise_frank_wolfe_dickinson support_polished_frank_wolfe_dickinson
     fracessa zischg_hadeler zischg_dickinson zischg_fracessa)
@@ -124,6 +124,7 @@ set(COPOSIT_COPOSITIVE_MODELS
     bdd_dickinson
     zdd_dickinson
     cbdd_dickinson
+    cbdd_halfspace_dickinson
     upper_endpoint_cbdd_dickinson
     cbdd_dickinson_improved_1
     wide_certificate_cbdd_dickinson
@@ -135,8 +136,11 @@ set(COPOSIT_COPOSITIVE_MODELS
     breadth_first_singular_lift_dickinson
     czdd_dickinson
     sat_dickinson
+    sat_halfspace_dickinson
+    sat_halfspace_rays_dickinson
     wide_certificate_sat_dickinson
-    clingo_sat_dickinson
+    clingo_dickinson
+    clingo_halfspace_dickinson
     support_pruned_dickinson
     nullity_support_pruned_dickinson
     rhs_dickinson
@@ -178,9 +182,11 @@ function(add_coposit_model_interfaces model_name)
             target_compile_definitions(${model_target} PRIVATE COPOSIT_HAS_MODEL_PARAMETER=1)
         endif()
         target_link_libraries(${model_target} PRIVATE coposit_core Threads::Threads)
-        if(model_name STREQUAL "sat_dickinson" OR model_name STREQUAL "wide_certificate_sat_dickinson")
+        if(model_name STREQUAL "sat_dickinson" OR model_name STREQUAL "sat_halfspace_dickinson"
+           OR model_name STREQUAL "sat_halfspace_rays_dickinson"
+           OR model_name STREQUAL "wide_certificate_sat_dickinson")
             target_link_libraries(${model_target} PRIVATE coposit_cadical)
-        elseif(model_name STREQUAL "clingo_sat_dickinson")
+        elseif(model_name STREQUAL "clingo_dickinson" OR model_name STREQUAL "clingo_halfspace_dickinson")
             target_link_libraries(${model_target} PRIVATE libclingo)
         endif()
         list(APPEND COPOSIT_MODEL_TARGETS ${model_target})
@@ -203,6 +209,7 @@ add_coposit_model_interfaces(interval_recursive_dickinson)
 add_coposit_model_interfaces(bdd_dickinson)
 add_coposit_model_interfaces(zdd_dickinson)
 add_coposit_model_interfaces(cbdd_dickinson)
+add_coposit_model_interfaces(cbdd_halfspace_dickinson)
 add_coposit_model_interfaces(upper_endpoint_cbdd_dickinson)
 add_coposit_model_interfaces(cbdd_dickinson_improved_1)
 add_coposit_model_interfaces(wide_certificate_cbdd_dickinson)
@@ -214,8 +221,11 @@ add_coposit_model_interfaces(layered_singular_lift_dickinson)
 add_coposit_model_interfaces(breadth_first_singular_lift_dickinson)
 add_coposit_model_interfaces(czdd_dickinson)
 add_coposit_model_interfaces(sat_dickinson)
+add_coposit_model_interfaces(sat_halfspace_dickinson)
+add_coposit_model_interfaces(sat_halfspace_rays_dickinson)
 add_coposit_model_interfaces(wide_certificate_sat_dickinson)
-add_coposit_model_interfaces(clingo_sat_dickinson)
+add_coposit_model_interfaces(clingo_dickinson)
+add_coposit_model_interfaces(clingo_halfspace_dickinson)
 add_coposit_model_interfaces(support_pruned_dickinson)
 add_coposit_model_interfaces(nullity_support_pruned_dickinson)
 add_coposit_model_interfaces(rhs_dickinson)
@@ -346,6 +356,14 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
     target_link_libraries(test_cbdd_dickinson PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME CbddDickinsonModelTests COMMAND test_cbdd_dickinson)
 
+    add_executable(test_cbdd_halfspace_dickinson
+        ../models/hadeler-based/cbdd_halfspace_dickinson/test_solver.cpp
+        ../models/hadeler-based/cbdd_halfspace_dickinson/solver.cpp)
+    target_compile_definitions(test_cbdd_halfspace_dickinson
+        PRIVATE COPOSIT_CBDD_HALFSPACE_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_cbdd_halfspace_dickinson PRIVATE coposit_core GTest::gtest_main)
+    add_test(NAME CbddHalfspaceDickinsonModelTests COMMAND test_cbdd_halfspace_dickinson)
+
     add_executable(test_upper_endpoint_cbdd_dickinson
         ../models/hadeler-based/upper_endpoint_cbdd_dickinson/test_solver.cpp
         ../models/hadeler-based/upper_endpoint_cbdd_dickinson/solver.cpp)
@@ -434,6 +452,22 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
     target_link_libraries(test_sat_dickinson PRIVATE coposit_core coposit_cadical GTest::gtest_main)
     add_test(NAME SatDickinsonModelTests COMMAND test_sat_dickinson)
 
+    add_executable(test_sat_halfspace_dickinson
+        ../models/hadeler-based/sat_halfspace_dickinson/test_solver.cpp
+        ../models/hadeler-based/sat_halfspace_dickinson/solver.cpp)
+    target_compile_definitions(test_sat_halfspace_dickinson
+        PRIVATE COPOSIT_SAT_HALFSPACE_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_sat_halfspace_dickinson PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME SatHalfspaceDickinsonModelTests COMMAND test_sat_halfspace_dickinson)
+
+    add_executable(test_sat_halfspace_rays_dickinson
+        ../models/hadeler-based/sat_halfspace_rays_dickinson/test_solver.cpp
+        ../models/hadeler-based/sat_halfspace_rays_dickinson/solver.cpp)
+    target_compile_definitions(test_sat_halfspace_rays_dickinson
+        PRIVATE COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_sat_halfspace_rays_dickinson PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME SatHalfspaceRaysDickinsonModelTests COMMAND test_sat_halfspace_rays_dickinson)
+
     add_executable(test_wide_certificate_sat_dickinson
         ../models/hadeler-based/wide_certificate_sat_dickinson/test_solver.cpp
         ../models/hadeler-based/wide_certificate_sat_dickinson/solver.cpp)
@@ -442,13 +476,21 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
     target_link_libraries(test_wide_certificate_sat_dickinson PRIVATE coposit_core coposit_cadical GTest::gtest_main)
     add_test(NAME WideCertificateSatDickinsonModelTests COMMAND test_wide_certificate_sat_dickinson)
 
-    add_executable(test_clingo_sat_dickinson
-        ../models/hadeler-based/clingo_sat_dickinson/test_solver.cpp
-        ../models/hadeler-based/clingo_sat_dickinson/solver.cpp)
-    target_compile_definitions(test_clingo_sat_dickinson
-        PRIVATE COPOSIT_CLINGO_SAT_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
-    target_link_libraries(test_clingo_sat_dickinson PRIVATE coposit_core libclingo GTest::gtest_main)
-    add_test(NAME ClingoSatDickinsonModelTests COMMAND test_clingo_sat_dickinson)
+    add_executable(test_clingo_dickinson
+        ../models/hadeler-based/clingo_dickinson/test_solver.cpp
+        ../models/hadeler-based/clingo_dickinson/solver.cpp)
+    target_compile_definitions(test_clingo_dickinson
+        PRIVATE COPOSIT_CLINGO_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_clingo_dickinson PRIVATE coposit_core libclingo GTest::gtest_main)
+    add_test(NAME ClingoDickinsonModelTests COMMAND test_clingo_dickinson)
+
+    add_executable(test_clingo_halfspace_dickinson
+        ../models/hadeler-based/clingo_halfspace_dickinson/test_solver.cpp
+        ../models/hadeler-based/clingo_halfspace_dickinson/solver.cpp)
+    target_compile_definitions(test_clingo_halfspace_dickinson
+        PRIVATE COPOSIT_CLINGO_HALFSPACE_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_clingo_halfspace_dickinson PRIVATE coposit_core libclingo GTest::gtest_main)
+    add_test(NAME ClingoHalfspaceDickinsonModelTests COMMAND test_clingo_halfspace_dickinson)
 
     add_executable(test_support_pruned_dickinson
         ../models/hadeler-based/support_pruned_dickinson/test_solver.cpp

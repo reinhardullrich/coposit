@@ -66,7 +66,7 @@ $$
 $$
 
 A Boolean assignment belongs to this interval exactly when every $x_i$ with $i\in L$ is true and every $x_i$ with $i\notin U$ is
-false. Negating that conjunction gives the blocking clause
+false. Negating that conjunction gives the blocking clause $C(L,U)$
 
 $$
 \bigvee_{i\in L}\neg x_i
@@ -74,15 +74,26 @@ $$
 \bigvee_{i\notin U}x_i.
 $$
 
-Therefore one certificate always costs exactly one persistent SAT clause. Its length is
+The cardinality network described below already provides an output $y_t$ that is true exactly when at least $t+1$ indices are
+selected. When $|U|<n$, the implementation stores the equivalent cardinality-aware clause
+
+$$
+C(L,U)\lor y_{|U|}.
+$$
+
+If the active cardinality is at most $|U|$, the added literal is false and the Dickinson interval remains active. If the traversal
+has advanced beyond $|U|$, the literal is true and immediately satisfies the expired clause. No interval scan, explicit deletion,
+new activation variable, or solver rebuild is required. A ceiling interval with $|U|=n$ never expires and keeps $C(L,U)$ unchanged.
+
+Therefore one certificate still costs exactly one persistent SAT clause. Before the optional expiration literal, its length is
 
 $$
 |L|+(n-|U|)=n-(|U|-|L|)=n-d,
 $$
 
-where $d$ is the number of free indices in the interval. A wide interval gives a short, strongly propagating clause; a narrow
-interval gives a long clause. The implementation stores no separate interval object and performs no later linear scan over
-certificates.
+where $d$ is the number of free indices in the interval. A bounded interval adds the one cardinality-output literal, so its stored
+length is $n-d+1$; a ceiling interval remains $n-d$. A wide interval gives a short, strongly propagating clause; a narrow interval
+gives a long clause. The implementation stores no separate interval object and performs no later linear scan over certificates.
 
 The current support lies in the interval that it generates, so the new clause blocks it immediately. This guarantees that the next
 SAT solution, if one exists, is a different uncovered support.
@@ -102,6 +113,9 @@ $$
 
 The equivalences are encoded by six clauses, three for each output. A bitonic network sorts all outputs in descending truth order.
 Consequently output $y_j$ is true exactly when at least $j+1$ original support variables are true.
+
+These outputs serve both purposes: two outputs select the current cardinality, and $y_{|U|}$ makes each bounded Dickinson clause
+inert after its last relevant cardinality. Reusing the existing network avoids a second family of activation variables.
 
 For cardinality $k$, SAT is called under the temporary assumptions
 

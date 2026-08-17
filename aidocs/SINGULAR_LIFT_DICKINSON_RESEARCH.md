@@ -2037,6 +2037,53 @@ $$
 These formulas turn the stored certificate distribution into exact combinatorial work bounds rather than a purely empirical runtime
 correlate.
 
+## 27. First Ordinary-Traversal Nullity Measurement
+
+The preceding theory describes what can happen once ordinary Dickinson reaches a singular principal support. It did not establish how
+often that event occurs in ordinary traversal, nor whether positive-right-hand-side certificates avoid high-nullity supports before
+they are factored.
+
+To measure that question without changing traversal, the three persistent-SAT models now record every support that actually reaches
+exact LDLT factorization and is singular. The diagnostic key is
+
+$$
+(k,q,\text{count}),
+$$
+
+where $k$ is the ordinary support cardinality and $q=\dim\ker A_I$. A support excluded by an earlier SAT interval is deliberately
+not factored merely to learn its nullity. Thus the count measures the singular systems that the actual algorithm really pays for.
+
+### First mixed sample
+
+All runs used combined CP/SCP classification, no preprocessing, stored diagnostics, a 60-second per-matrix cutoff, dispatcher CPU 3,
+and workers on CPUs 4 through 7. The sample was selected to differ in construction rather than to maximize a particular result:
+
+| Matrix | Construction and order | Ordinary SAT Dickinson | D-first SAT-Halfspace | U-first SAT-Halfspace-Rays |
+| --- | --- | --- | --- | --- |
+| 12523 | Zischg--Bomze Appendix B, $n=5$ | solved; 10 systems; no singular support | same | same |
+| 9628 | Motzkin--Straus/Johnson, $n=28$ | solved; 763 systems; $105$ supports with $q=1$ | same | same |
+| 12574 | BPQY COP, $n=25$ | timeout at $k=11$; 63,052 systems; no singular support | solved; 871 systems; no singular support | solved; 871 systems; no singular support |
+| 12619 | BPQY COP, $n=25$ | solved; 30,764 systems; no singular support | solved; 1,561 systems; no singular support | solved; 1,566 systems; no singular support |
+| 12198 | Burer, $n=40$ | timeout at $k=7$; 141,309 systems; no singular support | timeout at $k=8$; 58,296 systems; no singular support | timeout at $k=8$; 57,269 systems; no singular support |
+| 12201 | Burer, $n=40$ | timeout at $k=8$; 101,504 systems; no singular support | timeout at $k=10$; 47,247 systems; no singular support | timeout at $k=10$; 43,472 systems; no singular support |
+| 9647 | MANN/Steiner, $n=45$ | timeout at $k=5$; 215,818 systems; no singular support | timeout at $k=5$; 218,429 systems; no singular support | timeout at $k=5$; 214,747 systems; no singular support |
+
+There was no reached support with $q\geq2$ in any of the 21 runs. The only singular supports reached were the same 105 nullity-one
+supports on matrix 9628. In particular, the half-space improvement on BPQY 12574--from an ordinary 60-second timeout to a 0.113-second
+completion--is entirely a nonsingular-certificate effect.
+
+This also explains the apparently paradoxical MANN observation. The full MANN matrix 9647 has nullity 16, but ordinary traversal had
+not reached even one singular principal support after one minute: all three models were still working in layer $k=5$. The
+singular-lift theory remains relevant once a high-nullity root is reached, but this measurement does not support it as an explanation
+of the present half-space gains.
+
+### What remains unmeasured
+
+This is evidence about the supports actually reached by each traversal, not a census of all singular principal submatrices. To test
+whether an earlier interval hides a high-nullity support, a separate small-order counterfactual audit must enumerate those supports
+and factor them after the fact. That would answer a different question and must remain bounded, because performing that factorization
+inside the live solver would destroy the pruning being measured.
+
 ## References
 
 1. Peter J. C. Dickinson, “A New Certificate for Copositivity,” *Linear Algebra and its Applications* 569 (2019), 15–37.

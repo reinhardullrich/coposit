@@ -1,6 +1,6 @@
 # coposit Project Overview
 
-Last verified: 2026-08-15
+Last verified: 2026-08-17
 
 ## Purpose And Contract
 
@@ -16,13 +16,15 @@ reported as `false`.
 
 The eight literature baselines, `adaptive_sponsel_copomatrix`, `dense_bitset_dickinson`, all CBDD Dickinson
 variants, `ceiling_pruned_dickinson`, `layered_singular_lift_dickinson`, `breadth_first_singular_lift_dickinson`, `sat_dickinson`,
+`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `cbdd_halfspace_dickinson`,
 `kernel_cone_dickinson`, `affine_companion_dickinson`,
-`wide_certificate_sat_dickinson`, and
-`clingo_sat_dickinson` support
+`wide_certificate_sat_dickinson`, `clingo_dickinson`, and `clingo_halfspace_dickinson` support
 separately selected CP and SCP.
 Hadeler 1983, Dickinson 2019, Dense-Bitset Dickinson, Danninger 1990, all CBDD Dickinson variants,
-Ceiling-Pruned Dickinson, Kernel-Cone Dickinson, Layered Singular-Lift Dickinson, SAT Dickinson, Wide-Certificate SAT Dickinson,
-Affine-Companion Dickinson, and Clingo-SAT Dickinson can additionally classify both predicates in one traversal.
+Ceiling-Pruned Dickinson, Kernel-Cone Dickinson, Layered Singular-Lift Dickinson, SAT Dickinson, SAT-Halfspace Dickinson,
+SAT-Halfspace-Rays Dickinson,
+Wide-Certificate SAT Dickinson,
+Affine-Companion Dickinson, Clingo Dickinson, and Clingo-Halfspace Dickinson can additionally classify both predicates in one traversal.
 Other coposit-created models reject CP and combined mode explicitly.
 
 ## Repository Structure
@@ -187,6 +189,7 @@ Their canonical source directories and compact lineage inventory are under
 | `bdd_dickinson` | Dickinson interval union represented by an ordinary binary decision diagram; [`ALGORITHM.md`](../models/hadeler-based/bdd_dickinson/ALGORITHM.md). |
 | `zdd_dickinson` | Dickinson interval union represented by a zero-suppressed decision diagram; [`ALGORITHM.md`](../models/hadeler-based/zdd_dickinson/ALGORITHM.md). |
 | `cbdd_dickinson` | Bryant chain-reduced BDD interval algebra for Dickinson certificates; [`ALGORITHM.md`](../models/hadeler-based/cbdd_dickinson/ALGORITHM.md). |
+| `cbdd_halfspace_dickinson` | CBDD Dickinson with the cumulative exact coordinate search over strictly positive right-hand sides from SAT-Halfspace Dickinson; [`ALGORITHM.md`](../models/hadeler-based/cbdd_halfspace_dickinson/ALGORITHM.md). |
 | `upper_endpoint_cbdd_dickinson` | CBDD Dickinson with one nonrecursive nonsingular solve at each distinct larger certificate upper endpoint before activation; [`ALGORITHM.md`](../models/hadeler-based/upper_endpoint_cbdd_dickinson/ALGORITHM.md). |
 | `cbdd_dickinson_improved_1` | CBDD Dickinson with batched affine and homogeneous singular certificates, including the complete nullity-two stacked-line family; [`ALGORITHM.md`](../models/hadeler-based/cbdd_dickinson_improved_1/ALGORITHM.md). |
 | `wide_certificate_cbdd_dickinson` | Parameterized CBDD Dickinson that prunes a full interval only for $d>\lfloor p(n-k)/100\rfloor$; required $p$ replaces the former 75%, 90%, and 95% source copies; [`ALGORITHM.md`](../models/hadeler-based/wide_certificate_cbdd_dickinson/ALGORITHM.md). |
@@ -198,8 +201,11 @@ Their canonical source directories and compact lineage inventory are under
 | `breadth_first_singular_lift_dickinson` | The same singular-superset experiment with a FIFO frontier that finishes each lifted cardinality before the next; [`ALGORITHM.md`](../models/hadeler-based/breadth_first_singular_lift_dickinson/ALGORITHM.md). |
 | `czdd_dickinson` | Bryant chain-reduced ZDD interval algebra for Dickinson certificates; [`ALGORITHM.md`](../models/hadeler-based/czdd_dickinson/ALGORITHM.md). |
 | `sat_dickinson` | Incremental CaDiCaL encoding with one blocking clause per Dickinson interval and one shared exact-cardinality sorting network; [`ALGORITHM.md`](../models/hadeler-based/sat_dickinson/ALGORITHM.md). |
+| `sat_halfspace_dickinson` | SAT Dickinson with cumulative exact coordinate search over strictly positive right-hand sides; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_dickinson/ALGORITHM.md). |
+| `sat_halfspace_rays_dickinson` | U-first, width-second SAT-Halfspace path with an adaptive shortlist and at most two exact synthesized-ray sweeps; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_rays_dickinson/ALGORITHM.md). |
 | `wide_certificate_sat_dickinson` | Parameterized SAT Dickinson that retains only intervals with $d>\lfloor p(n-k)/100\rfloor$ and otherwise blocks exactly the processed support; [`ALGORITHM.md`](../models/hadeler-based/wide_certificate_sat_dickinson/ALGORITHM.md). |
-| `clingo_sat_dickinson` | Clingo/clasp backtracking enumeration with native cardinality layers and one persistent clause per Dickinson interval; [`ALGORITHM.md`](../models/hadeler-based/clingo_sat_dickinson/ALGORITHM.md). |
+| `clingo_dickinson` | Clingo/clasp backtracking enumeration with native cardinality layers and one persistent clause per Dickinson interval; [`ALGORITHM.md`](../models/hadeler-based/clingo_dickinson/ALGORITHM.md). |
+| `clingo_halfspace_dickinson` | Clingo Dickinson with the cumulative exact coordinate search over strictly positive right-hand sides from SAT-Halfspace Dickinson; [`ALGORITHM.md`](../models/hadeler-based/clingo_halfspace_dickinson/ALGORITHM.md). |
 | `support_pruned_dickinson` | Dickinson with upward support pruning; [`ALGORITHM.md`](../models/hadeler-based/support_pruned_dickinson/ALGORITHM.md). |
 | `nullity_support_pruned_dickinson` | Support-pruned Dickinson with singular-vector selection; [`ALGORITHM.md`](../models/hadeler-based/nullity_support_pruned_dickinson/ALGORITHM.md). |
 | `rhs_dickinson` | Dickinson with searched positive right-hand sides; [`ALGORITHM.md`](../models/hadeler-based/rhs_dickinson/ALGORITHM.md). |
@@ -257,9 +263,10 @@ earliest located source or exact local generator. Another 513 matrices carry 837
 obtained from explicit catalog matches, stored occurrence provenance, exact positive-scale duplicates, and audited named or
 family-level reuse statements. These links are
 best-effort literature evidence, not a claim that a class-level paper prints every member's coefficients.
-The `preprocessing_solved` metadata flag identifies all 2,708 retained matrices completely classified by the current maintained
-depth-2 combined preprocessing workflow in the five-second corpus run or its sixty-second timeout continuation. They comprise 705
-strictly copositive, 1,025 copositive-boundary, and 978 non-copositive matrices. Partial facts are excluded.
+The `preprocessing_solved` metadata flag identifies all 2,730 retained matrices completely classified by the current maintained
+depth-2 combined preprocessing workflow in the five-second corpus run, its sixty-second timeout continuation, or the focused
+ten-minute Motzkin--Straus follow-up. They comprise 711 strictly copositive, 1,031 copositive-boundary, and 988 non-copositive
+matrices. Partial facts are excluded.
 Every named benchmark set excludes these rows; the current sets therefore measure matrices that reach the selected model.
 Separately, 430 matrices have 629 `references_solved` entries from 27 sources whose reported result establishes the matrix's complete
 stored copositivity classification. A negative witness is decisive, but a nonnegative heuristic screen, a stationary point, or merely

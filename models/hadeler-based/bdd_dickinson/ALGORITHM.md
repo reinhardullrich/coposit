@@ -95,6 +95,22 @@ $$
 The current support belongs to its own certificate and is removed. The next satisfying BDD path therefore advances without a
 separate scan through retained certificates.
 
+## Safe Cardinality Expiration
+
+Each retained interval is tagged with $u=|U|$ and also united into an expiry bucket $E_u$. Before the model starts cardinality
+$k$, it performs
+
+$$
+C\leftarrow C\setminus\bigcup_{u<k}E_u
+$$
+
+and clears those buckets. This cannot change any present or future decision: every $J\in[L,U]$ satisfies
+$|J|\leq|U|=u$, so an interval with $u<k$ contains no support of cardinality $k$ or larger. Intersections with intervals that
+remain live are harmless for the same reason; every removed support is below the traversal frontier.
+
+Expiration changes only the live decision-diagram roots. The private arena and unique table retain already allocated nodes until the
+matrix call ends, so this reduces later union and difference operands but is not garbage collection.
+
 ## Unchanged Dickinson Calculation
 
 For an emitted support $I$, copy and factor $A_I$ exactly with the shared fraction-free LDLT implementation.
@@ -111,12 +127,12 @@ Every other vector generates the exact interval above. All components of $Au$ us
 
 1. Receive a parser-guaranteed nonempty square symmetric integer matrix.
 2. Reject a non-strict request.
-3. Maintain one BDD $C$ for all covered certificate intervals.
-4. For cardinality $k$, construct $R_k=K_k\setminus C$.
-5. Extract the first satisfying support from $R_k$.
+3. Maintain one BDD $C$ for the still-relevant covered certificate intervals.
+4. Before cardinality $k$, expire every interval whose upper endpoint has cardinality below $k$.
+5. Construct $R_k=K_k\setminus C$ and extract its first satisfying support.
 6. Perform Dickinson 2019's exact solve or nullspace branch.
 7. Return `false` on a negative witness or nonnegative zero.
-8. Otherwise add $[L,U]$ to $C$ and subtract it from $R_k$.
+8. Otherwise add $[L,U]$ to $C$, its expiry bucket, and subtract it from $R_k$.
 9. Advance to $k+1$ when $R_k$ becomes false.
 10. Return `true` after the final cardinality is exhausted.
 

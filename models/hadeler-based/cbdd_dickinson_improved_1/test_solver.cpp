@@ -24,6 +24,9 @@ cbdd_dickinson_improved_1_singular_candidates(
 size_t cbdd_dickinson_improved_1_retained_interval_count(
     size_t dimension,
     const std::vector<std::pair<uint64_t, uint64_t>> &intervals);
+std::pair<size_t, size_t> cbdd_dickinson_improved_1_expiry_result(
+    size_t dimension, size_t cardinality,
+    const std::vector<std::pair<uint64_t, uint64_t>> &intervals);
 } // namespace coposit::model
 
 namespace {
@@ -159,6 +162,15 @@ TEST(CbddDickinsonImproved1Test,
   EXPECT_EQ(model::cbdd_dickinson_improved_1_retained_interval_count(
                 3, {{0b001, 0b111}, {0b001, 0b011}, {0b101, 0b111}}),
             1U);
+}
+
+TEST(CbddDickinsonImproved1Test,
+     DeletesExpiredIntervalsWithoutDamagingOverlappingLiveCoverage) {
+  const auto [uncovered, expired] =
+      model::cbdd_dickinson_improved_1_expiry_result(
+          4, 3, {{0b0001, 0b0011}, {0b0001, 0b1111}});
+  EXPECT_EQ(expired, 1U);
+  EXPECT_EQ(uncovered, 1U);
 }
 
 TEST(CbddDickinsonImproved1Test,

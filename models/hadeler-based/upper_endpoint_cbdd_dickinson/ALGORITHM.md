@@ -98,6 +98,22 @@ node. A unique table canonicalizes `(top,bottom,low,high)` nodes, and each union
 The lookahead does not alter this representation or enumeration order. It only inserts one additional valid interval before the
 interval that triggered the probe.
 
+## Safe Cardinality Expiration
+
+Each retained interval is tagged with $u=|U|$ and also united into an expiry bucket $E_u$. Before the model starts cardinality
+$k$, it performs
+
+$$
+C\leftarrow C\setminus\bigcup_{u<k}E_u
+$$
+
+and clears those buckets. This cannot change any present or future decision: every $J\in[L,U]$ satisfies
+$|J|\leq|U|=u$, so an interval with $u<k$ contains no support of cardinality $k$ or larger. Intersections with intervals that
+remain live are harmless for the same reason; every removed support is below the traversal frontier.
+
+Expiration changes only the live decision-diagram roots. The private arena and unique table retain already allocated nodes until the
+matrix call ends, so this reduces later union and difference operands but is not garbage collection.
+
 ## Exact Calculation At An Emitted Support
 
 For an emitted support `I`, copy and factor the principal matrix `A_I` using exact fraction-free LDLT.
