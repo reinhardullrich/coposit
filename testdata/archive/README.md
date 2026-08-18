@@ -11,6 +11,8 @@ runtime.
   rows moved into the separate diagnostics database.
 - `reset_fastest_result_cache_to_both_2026_08_16.sql` clears and reconstructs those fields using only complete `both`-mode results,
   independently of preprocessing selection.
+- `refresh_corpus_from_diagnostics_2026_08_18.sql` adds 17 unanimous combined classifications, adds 33 zero-delegation preprocessing
+  results without clearing earlier long-timeout flags, and verifies the fastest-result cache against every eligible combined run.
 - `reshape_generated_stress_2026_08_15.py` removes the 120 sparse/dense generated stress matrices above order 1,000, their dependent
   diagnostics and external payloads, and inserts 90 matrices at 15 additional irregular dimensions from 43 through 199.
 - `remove_generated_stress_2026_08_16.py` removes the remaining 150 precheck-trivial generated matrices, their 21 external payloads,

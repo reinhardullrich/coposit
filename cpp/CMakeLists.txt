@@ -103,7 +103,9 @@ set(COPOSIT_COMBINED_CLASSIFICATION_MODELS
     multithreaded_cbdd_dickinson ceiling_pruned_dickinson kernel_cone_dickinson affine_companion_dickinson
     layered_singular_lift_dickinson
     breadth_first_singular_lift_dickinson
-    czdd_dickinson sat_dickinson sat_halfspace_dickinson sat_halfspace_rays_dickinson
+    czdd_dickinson sat_dickinson sat_halfspace_dickinson sat_halfspace_rays_dickinson sat_halfspace_lp_dickinson
+    sat_halfspace_milp_dickinson sat_halfspace_rays_lookahead_dickinson
+    sat_halfspace_rays_wide_dickinson
     wide_certificate_sat_dickinson
     clingo_dickinson clingo_halfspace_dickinson
     support_pruned_dickinson nullity_support_pruned_dickinson rhs_dickinson frank_wolfe_dickinson
@@ -138,6 +140,10 @@ set(COPOSIT_COPOSITIVE_MODELS
     sat_dickinson
     sat_halfspace_dickinson
     sat_halfspace_rays_dickinson
+    sat_halfspace_lp_dickinson
+    sat_halfspace_milp_dickinson
+    sat_halfspace_rays_lookahead_dickinson
+    sat_halfspace_rays_wide_dickinson
     wide_certificate_sat_dickinson
     clingo_dickinson
     clingo_halfspace_dickinson
@@ -178,12 +184,17 @@ function(add_coposit_model_interfaces model_name)
         if(model_name IN_LIST COPOSIT_COPOSITIVE_MODELS)
             target_compile_definitions(${model_target} PRIVATE COPOSIT_SUPPORTS_COPOSITIVE=1)
         endif()
-        if(model_name STREQUAL "wide_certificate_cbdd_dickinson" OR model_name STREQUAL "wide_certificate_sat_dickinson")
+        if(model_name STREQUAL "wide_certificate_cbdd_dickinson" OR model_name STREQUAL "wide_certificate_sat_dickinson"
+           OR model_name STREQUAL "sat_halfspace_rays_wide_dickinson")
             target_compile_definitions(${model_target} PRIVATE COPOSIT_HAS_MODEL_PARAMETER=1)
         endif()
         target_link_libraries(${model_target} PRIVATE coposit_core Threads::Threads)
         if(model_name STREQUAL "sat_dickinson" OR model_name STREQUAL "sat_halfspace_dickinson"
            OR model_name STREQUAL "sat_halfspace_rays_dickinson"
+           OR model_name STREQUAL "sat_halfspace_lp_dickinson"
+           OR model_name STREQUAL "sat_halfspace_milp_dickinson"
+           OR model_name STREQUAL "sat_halfspace_rays_lookahead_dickinson"
+           OR model_name STREQUAL "sat_halfspace_rays_wide_dickinson"
            OR model_name STREQUAL "wide_certificate_sat_dickinson")
             target_link_libraries(${model_target} PRIVATE coposit_cadical)
         elseif(model_name STREQUAL "clingo_dickinson" OR model_name STREQUAL "clingo_halfspace_dickinson")
@@ -223,6 +234,10 @@ add_coposit_model_interfaces(czdd_dickinson)
 add_coposit_model_interfaces(sat_dickinson)
 add_coposit_model_interfaces(sat_halfspace_dickinson)
 add_coposit_model_interfaces(sat_halfspace_rays_dickinson)
+add_coposit_model_interfaces(sat_halfspace_lp_dickinson)
+add_coposit_model_interfaces(sat_halfspace_milp_dickinson)
+add_coposit_model_interfaces(sat_halfspace_rays_lookahead_dickinson)
+add_coposit_model_interfaces(sat_halfspace_rays_wide_dickinson)
 add_coposit_model_interfaces(wide_certificate_sat_dickinson)
 add_coposit_model_interfaces(clingo_dickinson)
 add_coposit_model_interfaces(clingo_halfspace_dickinson)
@@ -467,6 +482,38 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
         PRIVATE COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
     target_link_libraries(test_sat_halfspace_rays_dickinson PRIVATE coposit_core coposit_cadical GTest::gtest_main)
     add_test(NAME SatHalfspaceRaysDickinsonModelTests COMMAND test_sat_halfspace_rays_dickinson)
+
+    add_executable(test_sat_halfspace_lp_dickinson
+        ../models/hadeler-based/sat_halfspace_lp_dickinson/test_solver.cpp
+        ../models/hadeler-based/sat_halfspace_lp_dickinson/solver.cpp)
+    target_compile_definitions(test_sat_halfspace_lp_dickinson
+        PRIVATE COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_sat_halfspace_lp_dickinson PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME SatHalfspaceLpDickinsonModelTests COMMAND test_sat_halfspace_lp_dickinson)
+
+    add_executable(test_sat_halfspace_milp_dickinson
+        ../models/hadeler-based/sat_halfspace_milp_dickinson/test_solver.cpp
+        ../models/hadeler-based/sat_halfspace_milp_dickinson/solver.cpp)
+    target_compile_definitions(test_sat_halfspace_milp_dickinson
+        PRIVATE COPOSIT_SAT_HALFSPACE_MILP_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_sat_halfspace_milp_dickinson PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME SatHalfspaceMilpDickinsonModelTests COMMAND test_sat_halfspace_milp_dickinson)
+
+    add_executable(test_sat_halfspace_rays_lookahead_dickinson
+        ../models/hadeler-based/sat_halfspace_rays_lookahead_dickinson/test_solver.cpp
+        ../models/hadeler-based/sat_halfspace_rays_lookahead_dickinson/solver.cpp)
+    target_compile_definitions(test_sat_halfspace_rays_lookahead_dickinson
+        PRIVATE COPOSIT_SAT_HALFSPACE_RAYS_LOOKAHEAD_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_sat_halfspace_rays_lookahead_dickinson PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME SatHalfspaceRaysLookaheadDickinsonModelTests COMMAND test_sat_halfspace_rays_lookahead_dickinson)
+
+    add_executable(test_sat_halfspace_rays_wide_dickinson
+        ../models/hadeler-based/sat_halfspace_rays_wide_dickinson/test_solver.cpp
+        ../models/hadeler-based/sat_halfspace_rays_wide_dickinson/solver.cpp)
+    target_compile_definitions(test_sat_halfspace_rays_wide_dickinson
+        PRIVATE COPOSIT_SAT_HALFSPACE_RAYS_WIDE_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_sat_halfspace_rays_wide_dickinson PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME SatHalfspaceRaysWideDickinsonModelTests COMMAND test_sat_halfspace_rays_wide_dickinson)
 
     add_executable(test_wide_certificate_sat_dickinson
         ../models/hadeler-based/wide_certificate_sat_dickinson/test_solver.cpp

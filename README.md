@@ -43,10 +43,11 @@ requires `strict` or `non-strict`. There are no `fast`, `safe`, or implicit mode
 mode prints named `copositive` and `strictly_copositive` results; a single-predicate command prints `true` or `false`.
 
 The complete preprocessing pipeline is on by default and can be bypassed with `--preprocessing off`. Globally valid checks run
-during the root scan, negative-entry components are then visited, and Frank–Wolfe plus exact
-definiteness and the structural matrix checks are deferred to each component. Exact Motzkin–Straus graph matrices use the
-Open-MCS-derived exact maximum-clique search instead of maximal-Z enumeration. Danninger is then attempted when its best pivot creates at most
-two children; an unresolved matrix
+during the root scan, negative-entry components are then visited, and Frank–Wolfe plus the exact matrix checks are deferred to each
+component. Exact Motzkin–Straus graph matrices use the Open-MCS-derived maximum-clique search. Otherwise preprocessing factorizes the
+original matrix. If it is already a Z-matrix, that factorization is the complete decision, so neither the negative-part nor the
+maximal-Z factorization is repeated. Other matrices then factorize their negative part and use maximal principal Z-matrices only as
+the remaining fallback. Danninger is then attempted when its best pivot creates at most two children; an unresolved matrix
 receives the corresponding COPOMATRIX attempt. Reduction children re-enter the same pipeline up to the internal maximum reduction
 depth of two. Resolved connected components are discarded; the selected model receives only unresolved component matrices. An
 inconclusive Danninger or COPOMATRIX attempt retains its unchanged parent component rather than its generated children. Invalid input,

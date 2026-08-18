@@ -84,31 +84,31 @@ The recursive calls that check one or two children are written explicitly below.
 
 ### Algorithm: Complete Preprocessing
 
-```text
-maximum_reduction_depth <- 2  # Check children and grandchildren, but never create great-grandchildren.
+```cpp
+maximum_reduction_depth <- 2  // Check children and grandchildren, but never create great-grandchildren.
 preprocess(M, reduction_depth):
     root_outcome <- root_checks(M)
     IF root_outcome != 'unresolved':
-        RETURN preprocessing_result(root_outcome, no component records)
+        RETURN (root_outcome, no component records)
     overall <- 'copositive'
     component_results <- empty list
     FOR EACH C in negative_entry_components(M):
         outcome <- ordinary_checks(C)
         IF outcome == 'unresolved' AND reduction_depth >= maximum_reduction_depth:
-            # The configured recursion bound is reached: retain C, but create no deeper descendants.
+            // The configured recursion bound is reached: retain C, but create no deeper descendants.
             outcome <- 'unresolved'
         IF outcome == 'unresolved' AND reduction_depth < maximum_reduction_depth:
             children <- danninger_children(C)
             IF number_of(children) > 2:
-                # Create no child; Danninger stays unresolved and control falls through to COPOMATRIX.
+                // Create no child; Danninger stays unresolved and control falls through to COPOMATRIX.
                 outcome <- 'unresolved'
             ELSE IF number_of(children) == 0:
-                # In ordinary mode this is the zero-diagonal, negative-row case.
+                // Zero children is the direct rejection case: the parent component C is not copositive.
                 outcome <- 'not_copositive'
             ELSE:
                 outcome <- 'copositive'
                 FOR EACH H in children:
-                    # Only a reduction child increases the depth.
+                    // Only a reduction child increases the depth.
                     child_result <- preprocess(H, reduction_depth = reduction_depth + 1)
                     outcome <- combine_outcome(outcome, aggregate_certificate(child_result))
                     IF outcome == 'not_copositive':
@@ -116,12 +116,12 @@ preprocess(M, reduction_depth):
             IF outcome == 'unresolved':
                 children <- copomatrix_children(C)
                 IF number_of(children) > 2:
-                    # Create no child; COPOMATRIX and preprocessing stay unresolved.
+                    // Create no child; COPOMATRIX and preprocessing stay unresolved.
                     outcome <- 'unresolved'
                 ELSE:
                     outcome <- 'copositive'
                     FOR EACH H in children:
-                        # Only a reduction child increases the depth.
+                        // Only a reduction child increases the depth.
                         child_result <- preprocess(H, reduction_depth = reduction_depth + 1)
                         outcome <- combine_outcome(outcome, aggregate_certificate(child_result))
                         IF outcome == 'not_copositive':
@@ -132,8 +132,8 @@ preprocess(M, reduction_depth):
             APPEND (no matrix, certificate outcome) TO component_results
         overall <- combine_outcome(overall, outcome)
         IF overall == 'not_copositive':
-            RETURN preprocessing_result(root_outcome, component_results)
-    RETURN preprocessing_result(root_outcome, component_results)
+            RETURN (root_outcome, component_results)
+    RETURN (root_outcome, component_results)
 ```
 
 `outcome` is the current component status. Each later method replaces it only while it remains unresolved. `overall` is the
@@ -275,6 +275,34 @@ free after traversal: the original matrix and its scan become the single ordinar
 Ordinary checks run on each connected work unit. When the negative-entry graph is connected, that work unit is the original matrix.
 Ordinary checks create no Danninger or COPOMATRIX children.
 
+Their maintained order is:
+
+```text
+ordinary_checks(A):
+    run the small-face and cheap component checks
+    if A has the exact Motzkin--Straus form:
+        classify A by maximum clique and return
+
+    factorize the original A exactly
+    use positive-(semi)definiteness and, when applicable, its nullity-one kernel
+    if the requested result is complete: return
+    if A has no positive off-diagonal entry:
+        use the same factorization as the complete symmetric-Z-matrix decision and return
+
+    form C by replacing positive off-diagonal entries of A by zero
+    factorize C exactly
+    use positive-(semi)definiteness of C as a one-way positive certificate for A
+    if the requested result is complete: return
+    if C is positive semidefinite: return the partial result
+
+    inspect maximal principal Z-blocks of the original A
+    return the resulting partial decision; any unresolved work still refers to A
+```
+
+The exact Motzkin--Straus branch stays before the cubic factorizations because it is a complete specialized classifier. The ordinary
+maximal principal-$Z$ search is deferred until both complete-matrix factorizations have failed. The auxiliary matrix $C$ is never
+sent to a copositivity model: it supplies only a sufficient certificate for the original $A$.
+
 ### 8.1 Complete Small-Component Check
 
 When a component has order at most three, the same exact low-order routine classifies that component completely. This is not a
@@ -332,9 +360,9 @@ evaluates the resulting quadratic form with exact integers. Only that exact sign
 
 Frank--Wolfe never accepts a component.
 
-### 8.6 Motzkin--Straus And Maximal Z-Matrix Check
+### 8.6 Motzkin--Straus Fast Path
 
-This stage selects one of two mutually exclusive exact methods. First it recognizes the two-level Motzkin--Straus form:
+This stage recognizes the two-level Motzkin--Straus form:
 
 - every diagonal entry has one common value $d\geq0$;
 - every off-diagonal entry is either $d$ or one common value $q<0$;
@@ -367,38 +395,9 @@ A strict-only query stops as soon as a proved clique reaches the strict boundary
 only after a clique passes the ordinary boundary. Equality in combined mode remains open until the coloring bounds prove that no
 larger clique exists. The outer timeout remains authoritative, so an interrupted exponential search produces no Boolean result.
 
-Only an exact pattern match enters this branch. It then skips maximal-Z enumeration because the Motzkin--Straus result classifies the
-whole component. A matrix with any third coefficient value follows the ordinary Z-matrix path below.
-
-A principal Z-matrix is a principal block whose off-diagonal entries are all nonpositive. The check searches maximal such blocks,
-which are maximal cliques in the graph with edges $a_{ij}\leq0$.
-
-The operational sequence is:
-
-1. recognize the exact Motzkin--Straus two-value graph-matrix pattern;
-2. if that pattern matches, run its exact maximum-clique classifier and skip the remaining Z-matrix steps;
-3. otherwise enumerate maximal nonpositive principal blocks;
-4. split each block internally into components of its strictly negative graph;
-5. copy each resulting principal block and factorize it exactly with fraction-free LDLT.
-
-The decisions are:
-
-- a block that is not positive semidefinite disproves ordinary and strict copositivity;
-- a singular positive-semidefinite block disproves strict copositivity but leaves ordinary copositivity open;
-- a positive-definite block gives no whole-component decision.
-
-The Z-matrix check can only disprove a requested property. It is not a root check, and its internal block decomposition is not the
-general connected-component decomposition used by the preprocessing pipeline.
-
-The negative-component and Z-matrix graphs are related but different:
-
-- connected components use $a_{ij}<0$;
-- Z blocks use $a_{ij}\leq0$.
-
-The root sign scan supplies the needed sign data, connected components runs first, and expensive
-maximal-clique enumeration and exact block factorization run only on the smaller components. A Z block that spans separate negative
-components can have only zero cross entries, so it is block diagonal there; processing its negative components separately loses no
-decision.
+Only an exact pattern match enters this branch. Its exact result classifies the whole component, so neither complete-matrix
+factorization nor maximal principal-$Z$ enumeration follows. A matrix with any third coefficient value continues with the ordinary
+factorization flow.
 
 ### 8.7 Exact Positive-(Semi)definiteness
 
@@ -413,6 +412,70 @@ The current work unit is copied once and factorized exactly with fraction-free L
 
 This check is deliberately component-local because exact factorization is one of the most expensive preprocessing operations and can
 be substantially cheaper on separated principal components.
+
+### 8.8 Exact Negative-Part Positive-(Semi)definiteness
+
+This check runs only when the preceding factorization leaves the requested result unresolved. Define the exact symmetric matrix
+$C$ by retaining the diagonal and every negative off-diagonal entry of the current work unit $A$, while replacing each positive
+off-diagonal entry by zero:
+
+$$
+C_{ii}=A_{ii},
+\qquad
+C_{ij}=\min\{A_{ij},0\}\quad(i\ne j).
+$$
+
+Then $A=C+N$ for an entrywise-nonnegative matrix $N$. For every $x\geq0$,
+
+$$
+x^TAx=x^TCx+x^TNx,
+\qquad x^TNx\geq0.
+$$
+
+Therefore:
+
+- positive semidefiniteness of $C$ accepts ordinary copositivity of $A$;
+- positive definiteness of $C$ accepts strict copositivity of $A$;
+- singular positive semidefiniteness of $C$ does not reject strict copositivity, because $N$ may be positive on every nonnegative
+  null vector of $C$;
+- failure of positive semidefiniteness gives no decision.
+
+The implementation constructs $C$ and reuses the existing exact fraction-free LDLT object for a second factorization. When $A$ has
+no positive off-diagonal entry, $C=A$ is itself a symmetric Z-matrix. The preceding factorization then gives the complete decision:
+PSD is equivalent to copositivity, positive definiteness is equivalent to strict copositivity, and singular PSD lies on the strict
+boundary. This avoids both constructing $C$ and refactorizing $A$ as a maximal Z-block. This is the fixed, easily checked SPN
+certificate $A=C+N$; it does not solve a semidefinite feasibility problem.
+
+### 8.9 Maximal Principal Z-Matrix Fallback
+
+A principal Z-matrix is a principal block of the original $A$ whose off-diagonal entries are all nonpositive. The fallback searches
+maximal such blocks, which are maximal cliques in the graph with edges $a_{ij}\leq0$. It then:
+
+1. splits each maximal block into components of its strictly negative graph;
+2. copies each resulting principal block of $A$;
+3. factorizes it exactly with fraction-free LDLT.
+
+The decisions are:
+
+- a block that is not positive semidefinite disproves ordinary and strict copositivity;
+- a singular positive-semidefinite block disproves strict copositivity but leaves ordinary copositivity open;
+- a positive-definite block gives no whole-component decision.
+
+This fallback runs only when a separately constructed negative-part matrix $C$ was not positive semidefinite. The skip is exact, not
+heuristic. If $C=A$, the first exact factorization already completed the symmetric-Z-matrix decision. Each ordinary work unit has a
+connected negative graph. If its $C$ is positive semidefinite, then $C$ is an irreducible symmetric positive-semidefinite Z-matrix.
+Every proper principal submatrix of $C$ is positive definite. Any principal Z-block of $A$ is identical to the corresponding block of
+$C$; when $A$ has a positive off-diagonal entry, such a Z-block must be proper. Therefore maximal principal-Z enumeration cannot add
+a decision after this certificate.
+
+The fallback can only disprove a requested property. Its internal block decomposition is not the general connected-component
+decomposition used by the preprocessing pipeline. The two graphs are related but different:
+
+- connected components use $a_{ij}<0$;
+- Z blocks use $a_{ij}\leq0$.
+
+The root sign scan supplies both graphs. A Z block spanning separate negative components has only zero cross entries and is block
+diagonal there, so processing its negative components separately loses no decision.
 
 ## 9. Bounded Danninger Reduction
 
@@ -570,9 +633,10 @@ ordinary: principal triples
 ordinary: negative-part diagonal dominance
 ordinary: all-ones
 ordinary: Frank-Wolfe
-ordinary: Motzkin-Straus
-ordinary: Z-matrix
+ordinary: Motzkin-Straus fast path
 ordinary: exact factorization
+ordinary: negative-part factorization
+ordinary: maximal Z-matrix fallback
 Danninger reduction
 COPOMATRIX reduction
 ```
@@ -603,8 +667,8 @@ The ordering deliberately places cheap decisions and structural decomposition be
 - negative-component traversal uses the packed multiword support representation and is cheap after the scan;
 - principal-triple work can grow rapidly with negative degrees, so it is component-local;
 - bounded Frank--Wolfe uses only order-many floating iterations, followed by exact verification of proposed witnesses;
-- the Motzkin--Straus maximum-clique branch-and-bound and maximal-Z search are both exponential in the worst case, so they follow
-  splitting and only one of them runs on a given component;
+- the Motzkin--Straus maximum-clique branch-and-bound and maximal-Z search are both exponential in the worst case; the exact pattern
+  takes its complete specialized path, while maximal-Z runs only after both complete-matrix factorizations remain insufficient;
 - exact fraction-free LDLT has bounded pivot count but can suffer severe arbitrary-precision coefficient growth;
 - the two reduction gates refuse pivots with more than two immediate children;
 - preprocessing retains a pending component record whenever these stages establish neither the requested fact nor its negation.
@@ -620,7 +684,8 @@ The maintained implementation preserves these invariants:
 2. make root checks and ordinary checks separate return-value stages rather than nested delegation callbacks;
 3. run cardinality-three faces only after component decomposition;
 4. avoid repeating negative-part diagonal dominance and all-ones decisions at root and component level;
-5. run Frank--Wolfe, maximal-Z enumeration, and exact definiteness only on post-split work units;
+5. run Frank--Wolfe and the exact Motzkin--Straus fast path before factorizing the original component and its negative part, then run
+   maximal-Z enumeration only when those exact complete-matrix checks leave it useful;
 6. reuse each matrix scan and collect Z/reduction sign data without an extra full-matrix sign pass;
 7. fix the internal maximum reduction depth at two, with no settings-file, CLI, or Python control;
 8. make the enabled profile execute connected components, every check, Danninger, and COPOMATRIX in the documented fixed order;

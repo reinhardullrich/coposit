@@ -2,6 +2,68 @@
 
 This append-only file records meaningful decisions, results, and evidence that are not clear from Git. Do not log routine edits here.
 
+## 2026-08-18 — Additive truth, preprocessing, and timing refresh
+
+- Added 17 previously missing exact truth classifications from unanimous completed combined diagnostic rows: 16 strictly copositive
+  matrices and one non-copositive matrix. The corpus now has 105 matrices without a completed CP/SCP classification.
+- Added 33 `preprocessing_solved` flags from stored combined diagnostics reporting a resolved preprocessing outcome and zero model
+  delegations. No existing flag was cleared, preserving the earlier long-timeout evidence; the total is now 2,765.
+- Recomputed and verified the fastest-result cache against every eligible exact combined diagnostic result. All 3,349 existing timing
+  entries were already current, including the eight decimal-rounding matrices, so no timing value changed.
+- Preserved the stored 49-row Smoke and 512-row Core-and-Stress assignments. Because selectors exclude preprocessing-complete rows,
+  their effective sizes are now 46 and 469; comprehensive N ≤ 100 contains 731 matrices.
+
+## 2026-08-18 — Exact negative-part SPN preprocessing certificate
+
+- Added one component-local exact certificate after whole-matrix positive-(semi)definiteness remains inconclusive. It retains the
+  diagonal and negative off-diagonal entries, replaces positive off-diagonal entries by zero, and factorizes the resulting matrix
+  with the existing fraction-free LDLT implementation.
+- Kept exact Motzkin--Straus recognition ahead of both cubic factorizations. For every other connected negative component, the fixed
+  order is the original matrix, its negative part, and then maximal principal-Z enumeration only when still useful. A
+  positive-semidefinite negative part makes every proper principal Z-block positive definite, so that final enumeration is skipped.
+- A positive-semidefinite negative part proves ordinary copositivity; a positive-definite negative part proves strict copositivity.
+  Singular positive semidefiniteness deliberately makes no negative strict claim unless the original matrix is already a Z-matrix.
+  In that case the first factorization is the complete Z-matrix decision, avoiding both the duplicate negative-part factorization and
+  maximal-Z refactorization. The auxiliary negative-part matrix is never passed to a model; unresolved work retains the original
+  component matrix.
+- Focused checks cover a connected indefinite matrix whose negative part is positive definite and a singular negative part for which
+  strict copositivity remains delegated.
+
+## 2026-08-18 — Bounded MILP halfspace model
+
+- Added `sat_halfspace_milp_dickinson`, an isolated SAT Dickinson experiment that replaces ray search with a small bounded
+  branch-and-bound MILP maximizing the number of nonnegative full-product entries. Floating candidates are reconstructed and checked
+  in exact integer arithmetic; every limit or rejected proposal falls back to the ordinary all-ones Dickinson certificate.
+- Kept the solver model-local and dependency-free. It uses dense two-phase simplex relaxations, a 20 ms and 10,000-node per-support
+  limit, bounded optional workspace, and focused classification, SAT-interval, singular-orientation, and MILP checks.
+
+## 2026-08-18 — Tiny full-ceiling LP experiment
+
+- Added `sat_halfspace_lp_dickinson`, a copied SAT-Halfspace-Rays experiment that probes full-ceiling feasibility with a tiny dense
+  simplex and accepts only exactly reconstructed candidates. Numerical failure falls back to the unchanged exact ray search.
+
+## 2026-08-17 — SAT-Halfspace-Rays one-cardinality look-ahead
+
+- Added `sat_halfspace_rays_lookahead_dickinson` as an isolated SAT-Halfspace-Rays experiment. At a cardinality-$k$ support it
+  analyzes every immediate cardinality-$k+1$ child and compares complete Dickinson intervals rather than only $d=|U|-|L|$.
+- It immediately inserts every child interval that is not contained in the current interval. It omits the current interval only when
+  one inserted child contains it completely; equal intervals retain the current copy.
+- A packed-support cache ensures each examined child is factored once even though it has several parents. Every examined child is
+  covered immediately, so the cache is discarded with the active parent cardinality instead of being carried into the next layer.
+
+## 2026-08-17 — Corrected Anstreicher G17 max-clique transforms
+
+- Corrected generated corpus rows 13035 and 13036 after the initially imported orientation made both matrices exactly non-copositive:
+  the all-ones simplex point was a direct negative witness. The source pattern in matrix 11794 is the adjacency input for the paper's
+  complement-graph construction, so the correct transform is \(A_k=k(E-B)-E\), not \(k(I+B)-E\).
+- The repaired files have 4,667 lower-triangle \(-1\) entries, one for each raw G17 edge, and 315,733 entries of \(k-1\). Their
+  SHA-256 values are `89720ed80566a21a1650fda9b7cb62a491f112d077b42307d4d40352e7a51891` for \(A_5\) and
+  `cd01380014bdd7ab13f6644f1b42d32aa079e8a4e95376a124bc29f1db83d771` for \(A_6\).
+- The complete preprocessing pipeline classifies both immediately in its exact Motzkin--Straus phase, with no model delegation:
+  \(A_5\) is non-copositive and \(A_6\) is copositive but not strictly copositive, agreeing with Anstreicher Section 3.3.
+- Marked both rows `preprocessing_solved`; the maintained corpus now has 2,732 such rows and no remaining
+  `n_gt_100_solved` member, because every literature-solved higher-order row is resolved before model delegation.
+
 ## 2026-08-17 — Ordinary Dickinson singular-support diagnostics
 
 - Added diagnostics-only $(k,q,\mathrm{count})$ histograms to SAT Dickinson, SAT-Halfspace Dickinson, and SAT-Halfspace-Rays
@@ -19,6 +81,24 @@ This append-only file records meaningful decisions, results, and evidence that a
   the orientation with larger Dickinson upper set. A nonnegative orientation remains the copositive-zero case and still decides SCP.
 - Reused the single exact full product: positive and negative product counts determine both upper-set sizes, and selecting the negative
   orientation only negates the vector and product. Higher-nullity supports still use one deterministic kernel vector.
+
+## 2026-08-17 — SAT-Halfspace-Rays wide-certificate experiment
+
+- Added `sat_halfspace_rays_wide_dickinson` as an isolated parameterized copy of SAT-Halfspace-Rays Dickinson. It keeps the exact
+  U-first coordinate and synthesized-ray search, but retains the resulting full interval only when
+  $d>\lfloor p(n-k)/100\rfloor$; a rejected interval blocks only the exact processed support.
+- The initial experiment uses $p=50$. The percentage remains a required runtime model parameter so later comparisons do not require
+  copied source variants.
+- Diagnostics now distinguish every exact interval found from the complete intervals accepted by the width gate. Rejected intervals'
+  exact-support fallback clauses are not counted as accepted certificates.
+- The complete Release build and all 77 maintained checks pass. On the 490 preprocessing-unsolved Core/Stress matrices in combined
+  mode with a five-second cutoff, $p=50$ completed 455 and timed out on 35, with no mismatch or error. Ordinary SAT-Halfspace-Rays
+  completed 457 and timed out on 33; the selective rule gained no completion and lost matrices 10285 and 13024. Across the 455
+  common completions, its median paired runtime was 0.527% higher.
+- Caution: the matching ordinary-model `--rerun` replaced 93 pre-existing longer-cutoff rows for the current binary hash because the
+  diagnostics primary key does not include the cutoff. Dedicated long-run files and reports under `experiments/` and `aidocs/`
+  remain intact, but those 93 database rows are not recoverable from a current backup or WAL. Do not use destructive reruns to mix
+  cutoff campaigns in this table.
 
 ## 2026-08-17 — Clingo model naming and halfspace variant
 

@@ -232,6 +232,7 @@ TEST(Diagnostics, NamesTheDanningerPreprocessingPhase)
 {
     EXPECT_STREQ(detail::phase_text(preprocessing_phase::root_checks), "root checks");
     EXPECT_STREQ(detail::phase_text(preprocessing_phase::negative_part_diagonal_dominance), "negative-part diagonal dominance");
+    EXPECT_STREQ(detail::phase_text(preprocessing_phase::negative_part_factorization), "negative-part factorization");
     EXPECT_STREQ(detail::phase_text(preprocessing_phase::all_ones), "all-ones");
     EXPECT_STREQ(detail::phase_text(preprocessing_phase::danninger), "Danninger");
 }

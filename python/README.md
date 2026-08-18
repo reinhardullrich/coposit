@@ -43,6 +43,10 @@ czdd_dickinson
 sat_dickinson
 sat_halfspace_dickinson
 sat_halfspace_rays_dickinson
+sat_halfspace_lp_dickinson
+sat_halfspace_milp_dickinson
+sat_halfspace_rays_lookahead_dickinson
+sat_halfspace_rays_wide_dickinson
 wide_certificate_sat_dickinson
 clingo_dickinson
 clingo_halfspace_dickinson
@@ -70,9 +74,9 @@ selected CP and SCP and classifies both predicates in one traversal. Danninger 1
 `dense_bitset_dickinson` allocates one packed bit for every Boolean-lattice support and traverses surviving bits by cardinality.
 Set either `COPOSIT_DENSE_BITSET_MAX_N` or `COPOSIT_DENSE_BITSET_MAX_GIB`; setting neither uses a one-GiB bitmap limit.
 
-`wide_certificate_cbdd_dickinson` and `wide_certificate_sat_dickinson` accept `model_parameter="75"`, `"90"`, `"95"`, or any
-other integer percentage from 0 through 100. The argument is required. The percentage applies to the remaining width $n-k$; each
-model has one implementation and one internal companion.
+`wide_certificate_cbdd_dickinson`, `wide_certificate_sat_dickinson`, and `sat_halfspace_rays_wide_dickinson` accept
+`model_parameter="50"`, `"75"`, `"90"`, or any other integer percentage from 0 through 100. The argument is required. The
+percentage applies to the remaining width $n-k$; each model has one implementation and one internal companion.
 
 `multithreaded_cbdd_dickinson` defaults to seven C++ worker threads pinned consecutively to CPUs 3–9 inside one matrix call. Set
 `COPOSIT_CBDD_WORKERS` to another positive count and `COPOSIT_CBDD_FIRST_CPU` to the first CPU. When it is called through
@@ -81,8 +85,9 @@ memory. With `diagnostics=True`, completed supports and certificates appear afte
 decision-diagram status line.
 
 Serial `cbdd_dickinson`, `cbdd_halfspace_dickinson`, `upper_endpoint_cbdd_dickinson`, `czdd_dickinson`, `sat_dickinson`,
-`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `wide_certificate_sat_dickinson`, `clingo_dickinson`, and
-`clingo_halfspace_dickinson`
+`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_halfspace_lp_dickinson`, `sat_halfspace_milp_dickinson`,
+`sat_halfspace_rays_lookahead_dickinson`,
+`sat_halfspace_rays_wide_dickinson`, `wide_certificate_sat_dickinson`, `clingo_dickinson`, and `clingo_halfspace_dickinson`
 diagnostics also print the sparse
 joint histogram `certificate_k_d_u_counts=[(k,d,upper_size,count),...]`. Here `k` is the support cardinality at which a certificate was
 generated, `d = |U| - |L|` is its number of free indices, and `upper_size = |U|` shows how high the interval reaches. The histogram
@@ -237,7 +242,7 @@ derived `references_unsolved` selector. Without a set selector, the runner selec
 `--results-database PATH` overrides the diagnostics database. A custom `--database` without this option keeps the historical single-file
 behavior, which is useful for disposable test databases.
 
-`--model-parameter PERCENTAGE` is required for both wide-certificate models. Parameterized result rows append `@PERCENTAGE` to the
+`--model-parameter PERCENTAGE` is required for all three wide-certificate models. Parameterized result rows append `@PERCENTAGE` to the
 selected model identifier so different values of the same binary do not overwrite one another.
 
 For `dense_bitset_dickinson`, the mutually exclusive `--dense-bitset-max-n N` and `--dense-bitset-max-gib GIB` options pass the

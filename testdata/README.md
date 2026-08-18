@@ -5,13 +5,13 @@
 It contains corpus and reference data plus a two-column cache of the fastest eligible local diagnostic result. Mutable benchmark
 measurements remain in the ignored local `experiments/diagnostics.sqlite3` database.
 
-- Matrices: 3,513
+- Matrices: 3,523
 - Dimensions: 1 through 5,000
-- Strictly copositive: 872
-- Copositive but not strictly copositive: 1,331
-- Not copositive: 845
+- Strictly copositive: 1,002
+- Copositive but not strictly copositive: 1,332
+- Not copositive: 1,084
 - Copositive with strict status not yet established: 0
-- Strict and non-strict copositivity not yet established: 465
+- Strict and non-strict copositivity not yet established: 105
 - Schema: the `sources` and `matrices` tables, with no views, triggers, or manually created indexes
 
 The maintained directory contains this database, its `schema.sql`, the reproducible `diagnostics_schema.sql`, this README, and the
@@ -29,9 +29,10 @@ drift, and both automatically include future qualifying rows. A known
 strict-positive result requires a known non-strict-positive result. `NULL` in either truth column means that result has not been
 established; it must not be read as false.
 `preprocessing_solved` is true for every retained matrix completely classified by the new maintained depth-2 combined preprocessing
-workflow in the five-second corpus run, its sixty-second timeout continuation, or the focused ten-minute Motzkin--Straus follow-up.
-Partial CP/SCP facts do not qualify. Every benchmark selection excludes these rows so it measures model traversal rather than an
-exact preprocessing decision.
+workflow in the five-second corpus run, its sixty-second timeout continuation, the focused ten-minute Motzkin--Straus follow-up, or a
+stored combined diagnostic result with `preprocessing_outcome=resolved` and zero model delegations. Partial CP/SCP facts do not
+qualify. Updating from shorter diagnostics is additive: it never clears evidence established by a longer run. Every benchmark
+selection excludes these rows so it measures model traversal rather than an exact preprocessing decision.
 Small matrices keep their comma-separated upper triangle inline. Large rows contain `file:matrices/<matrix_id>.mtx`, resolved relative
 to the database directory, and `file_sha256` binds each reference to the SHA-256 of its exact file bytes. Inline rows keep that column
 `NULL`. The hash is retained for occasional explicit integrity audits; normal solver and benchmark runs do not recompute it. Those
@@ -44,13 +45,15 @@ selected the smaller exact representation for every external file and compacted 
 `fuse_core_and_stress_test_2026_08_16.sql` records their current union without the precheck-trivial generated panel.
 `retire_scale_and_timeout_sets_2026_08_16.sql` removes the two retired stored flags. `aidocs/BENCHMARK_SETS.md` explains the
 current assignments and composition.
-`add_preprocessing_solved_2026_08_16.sql` records the original guarded 2,115-row preprocessing result flag. The current depth-2
-passes flag 2,730 matrices; their exact run evidence is retained in `experiments/preprocessing_depth_2026-08-15/`.
+`add_preprocessing_solved_2026_08_16.sql` records the original guarded 2,115-row preprocessing result flag. The current maintained
+preprocessing record flags 2,765 matrices; its bulk exact run evidence is retained in `experiments/preprocessing_depth_2026-08-15/`
+and `experiments/diagnostics.sqlite3`.
 `exclude_preprocessing_solved_from_benchmarks_2026_08_16.py` records the initial guarded curated replacements and current generated-set
 definitions. `refresh_benchmark_sets_after_motzkin_straus_2026_08_16.sql` removes the additional preprocessing-complete members and
-restores Smoke to 49 and Core and Stress to 512 with unresolved, known-truth replacements; comprehensive N ≤ 100 now contains 754
-matrices. The older `add_n_le_100_set_2026_08_14.sql` and `add_n_gt_100_solved_set_2026_08_14.sql` files preserve their original
-pre-preprocessing definitions.
+restores stored Smoke and Core-and-Stress membership to 49 and 512 rows. The additive preprocessing flags are not removed from those
+stored lists; the effective selectors currently contain 46 and 469 rows, and comprehensive N ≤ 100 contains 731 matrices. The older
+`add_n_le_100_set_2026_08_14.sql` and `add_n_gt_100_solved_set_2026_08_14.sql` files preserve their original pre-preprocessing
+definitions.
 `replace_hildebrand_circulants_2026_08_16.py` replaces the 17 order-15–25 Hildebrand parameter points by one diversified low-digit
 exact representative per order, removes their obsolete diagnostics, and refills six boundary Core slots at the same orders.
 `fastest_elapsed_ns` stores the shortest eligible completed native time, and `fastest_result_ref` identifies its exact diagnostic row

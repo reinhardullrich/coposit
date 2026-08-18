@@ -1,5 +1,6 @@
 #include <coposit/diagnostics.hpp>
 #include <coposit/model.hpp>
+#include <coposit/support.hpp>
 #include <coposit/timeout.hpp>
 
 #include <gtest/gtest.h>
@@ -25,6 +26,8 @@ bool sat_halfspace_rays_prefers_ray_candidate_for_testing(size_t candidate_upper
                                                           size_t candidate_losses, size_t current_upper, size_t current_width,
                                                           size_t current_gains, size_t current_losses);
 bool sat_halfspace_rays_check_support_for_testing(const matrix_integer& matrix, const std::vector<size_t>& indices);
+bool sat_halfspace_rays_certificate_for_testing(
+    const matrix_integer& matrix, const std::vector<size_t>& indices, support& lower, support& upper);
 size_t sat_halfspace_rays_fixed_support_upper_size_for_testing() noexcept;
 size_t sat_halfspace_rays_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals);
@@ -80,6 +83,22 @@ TEST(SatHalfspaceRaysDickinsonTest, UsesWidthAsTheSecondaryObjective)
     EXPECT_TRUE(model::sat_halfspace_rays_check_support_for_testing(matrix, {0, 1}));
     EXPECT_EQ(model::sat_halfspace_rays_fixed_support_upper_size_for_testing(), 2U);
     EXPECT_GT(model::sat_halfspace_rays_optimized_certificate_count_for_testing(), 0U);
+}
+
+TEST(SatHalfspaceRaysDickinsonTest, ExposesTheExactOptimizedFixedSupportCertificate)
+{
+    matrix_integer identity;
+    identity.set_identity(3);
+    support lower(3);
+    support upper(3);
+
+    EXPECT_TRUE(model::sat_halfspace_rays_certificate_for_testing(identity, {0}, lower, upper));
+    EXPECT_TRUE(lower.contains(0));
+    EXPECT_FALSE(lower.contains(1));
+    EXPECT_FALSE(lower.contains(2));
+    EXPECT_TRUE(upper.contains(0));
+    EXPECT_TRUE(upper.contains(1));
+    EXPECT_TRUE(upper.contains(2));
 }
 
 TEST(SatHalfspaceRaysDickinsonTest, AdaptiveShortlistRemainsBounded)
