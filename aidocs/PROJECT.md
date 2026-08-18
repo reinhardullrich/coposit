@@ -16,13 +16,16 @@ reported as `false`.
 
 The eight literature baselines, `adaptive_sponsel_copomatrix`, `dense_bitset_dickinson`, all CBDD Dickinson
 variants, `ceiling_pruned_dickinson`, `layered_singular_lift_dickinson`, `breadth_first_singular_lift_dickinson`, `sat_dickinson`,
-`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `cbdd_halfspace_dickinson`,
+`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_halfspace_lp_dickinson`, `sat_halfspace_milp_dickinson`,
+`sat_halfspace_rays_lookahead_dickinson`,
+`sat_halfspace_rays_wide_dickinson`, `cbdd_halfspace_dickinson`,
 `kernel_cone_dickinson`, `affine_companion_dickinson`,
 `wide_certificate_sat_dickinson`, `clingo_dickinson`, and `clingo_halfspace_dickinson` support
 separately selected CP and SCP.
 Hadeler 1983, Dickinson 2019, Dense-Bitset Dickinson, Danninger 1990, all CBDD Dickinson variants,
 Ceiling-Pruned Dickinson, Kernel-Cone Dickinson, Layered Singular-Lift Dickinson, SAT Dickinson, SAT-Halfspace Dickinson,
-SAT-Halfspace-Rays Dickinson,
+SAT-Halfspace-Rays Dickinson, SAT-Halfspace-LP Dickinson, SAT-Halfspace-MILP Dickinson,
+SAT-Halfspace-Rays Lookahead Dickinson, SAT-Halfspace-Rays Wide Dickinson,
 Wide-Certificate SAT Dickinson,
 Affine-Companion Dickinson, Clingo Dickinson, and Clingo-Halfspace Dickinson can additionally classify both predicates in one traversal.
 Other coposit-created models reject CP and combined mode explicitly.
@@ -119,8 +122,11 @@ supervisor process nor a watchdog thread.
 
 Enabled preprocessing applies exact negative-entry connected-component decomposition and the complete exact-decision pre-check
 profile. The implementation fuses them: one root scan supplies globally valid checks and the negative graph,
-then each component is visited. Frank–Wolfe and exact definiteness are deferred to the component matrices; a connected whole matrix is
-used directly without copying. Last, one minimum-child Danninger reduction is attempted when it creates at most two order-reduced
+then each component is visited. After Frank–Wolfe, an exact Motzkin–Straus pattern takes its specialized maximum-clique path.
+Otherwise preprocessing factorizes the original component. If it is already a Z-matrix, that factorization is the complete decision
+and neither the negative-part nor maximal-Z factorization is repeated. Other components then factorize their exact negative part and
+use maximal principal Z-matrices only when those complete-matrix certificates remain insufficient. A connected whole matrix is used
+directly without copying. Last, one minimum-child Danninger reduction is attempted when it creates at most two order-reduced
 children. If that remains unresolved, the same gate is applied to one COPOMATRIX reduction. Their children re-enter scan, root
 checks, component splitting, and ordinary checks, then may apply both reductions again while their reduction depth is below the
 internal maximum of two. Nodes at the maximum create no deeper descendants and call no model. If a reduction remains unresolved,
@@ -128,12 +134,19 @@ the next stage receives its original component unchanged.
 
 The pre-check profile contains the complete order-at-most-three criterion, selected principal faces through cardinality three,
 nonnegative off-diagonal acceptance, Qi negative-part diagonal dominance, the all-ones witness, a complete exact Motzkin–Straus
-graph-matrix classifier, the negative-only maximal-Z-matrix test, bounded floating Frank-Wolfe witness proposals with exact
-verification, and exact positive-(semi)definiteness. A recognized Motzkin–Straus matrix uses the Open-MCS-derived exact
-maximum-clique branch-and-bound and skips maximal-Z enumeration. Other matrices retain the Z-matrix test, which rejects an indefinite maximal block
-in both modes and a singular positive-semidefinite block only in strict mode. Floating arithmetic may only propose a witness; an
-exact integer calculation must verify
-it before a decision. The final Danninger and COPOMATRIX steps use exact integer rays and transformed matrices.
+graph-matrix classifier, bounded floating Frank-Wolfe witness proposals with exact verification, exact positive-(semi)definiteness,
+and the negative-only maximal-Z-matrix fallback. A recognized Motzkin–Straus matrix uses the Open-MCS-derived exact maximum-clique
+branch-and-bound and skips both factorization paths. The maximal-Z fallback rejects an indefinite maximal block in both modes and a
+singular positive-semidefinite block only in strict mode. Floating arithmetic may only propose a witness; an exact integer calculation
+must verify it before a decision. The final Danninger and COPOMATRIX steps use exact integer rays and transformed matrices.
+
+After whole-component exact definiteness remains inconclusive, preprocessing replaces every positive off-diagonal entry by zero and
+factorizes that exact negative-part matrix. Positive semidefiniteness proves ordinary copositivity; positive definiteness proves strict
+copositivity because the removed remainder is entrywise nonnegative. A singular stripped matrix does not by itself reject strict
+copositivity. On a connected negative component, a positive-semidefinite negative part also makes maximal principal-Z enumeration
+redundant. When the original matrix has no positive off-diagonal entry, it equals its negative part; the already available original
+factorization then decides both ordinary and strict copositivity without another factorization. This auxiliary matrix is never
+delegated: every unresolved model call still receives the original component matrix.
 
 Connected components are taken from the graph whose edges are negative off-diagonal entries. Cross-component entries are
 nonnegative, so CP or SCP of the whole matrix is the logical AND of the corresponding component decisions. Disconnected component
@@ -203,6 +216,10 @@ Their canonical source directories and compact lineage inventory are under
 | `sat_dickinson` | Incremental CaDiCaL encoding with one blocking clause per Dickinson interval and one shared exact-cardinality sorting network; [`ALGORITHM.md`](../models/hadeler-based/sat_dickinson/ALGORITHM.md). |
 | `sat_halfspace_dickinson` | SAT Dickinson with cumulative exact coordinate search over strictly positive right-hand sides; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_dickinson/ALGORITHM.md). |
 | `sat_halfspace_rays_dickinson` | U-first, width-second SAT-Halfspace path with an adaptive shortlist and at most two exact synthesized-ray sweeps; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_rays_dickinson/ALGORITHM.md). |
+| `sat_halfspace_lp_dickinson` | SAT-Halfspace-Rays plus a tiny numerical full-ceiling LP whose candidate must pass exact reconstruction and verification; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_lp_dickinson/ALGORITHM.md). |
+| `sat_halfspace_milp_dickinson` | SAT Dickinson with a bounded model-local MILP maximizing the upper endpoint; only exactly reconstructed improvements become certificates; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_milp_dickinson/ALGORITHM.md). |
+| `sat_halfspace_rays_lookahead_dickinson` | SAT-Halfspace-Rays with one-cardinality child analysis, one-layer exact-result caching, and immediate insertion of every child interval not contained in its current parent interval; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_rays_lookahead_dickinson/ALGORITHM.md). |
+| `sat_halfspace_rays_wide_dickinson` | Parameterized SAT-Halfspace-Rays model retaining a full interval only for $d>\lfloor p(n-k)/100\rfloor$; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_rays_wide_dickinson/ALGORITHM.md). |
 | `wide_certificate_sat_dickinson` | Parameterized SAT Dickinson that retains only intervals with $d>\lfloor p(n-k)/100\rfloor$ and otherwise blocks exactly the processed support; [`ALGORITHM.md`](../models/hadeler-based/wide_certificate_sat_dickinson/ALGORITHM.md). |
 | `clingo_dickinson` | Clingo/clasp backtracking enumeration with native cardinality layers and one persistent clause per Dickinson interval; [`ALGORITHM.md`](../models/hadeler-based/clingo_dickinson/ALGORITHM.md). |
 | `clingo_halfspace_dickinson` | Clingo Dickinson with the cumulative exact coordinate search over strictly positive right-hand sides from SAT-Halfspace Dickinson; [`ALGORITHM.md`](../models/hadeler-based/clingo_halfspace_dickinson/ALGORITHM.md). |
@@ -250,7 +267,7 @@ Standard local reference runs use parent CPU 3 and solver CPUs 4 through 7.
 
 ## Corpus And Evidence
 
-`testdata/copos_testdata.sqlite3` contains 3,513 exact matrices of orders 1 through 5,000 and uses SQLite `auto_vacuum=FULL` so
+`testdata/copos_testdata.sqlite3` contains 3,523 exact matrices of orders 1 through 5,000 and uses SQLite `auto_vacuum=FULL` so
 deleted or replaced result rows do not leave persistent free pages. The `matrices` table stores nullable strict and non-strict truth,
 free-form occurrence provenance and family text, an earliest-known primary `source_id`, an `additional_source_ids` JSON bibliography,
 a `references_solved` JSON array of source-linked literature solution claims, a parallel `references_unsolved` array of explicit
@@ -263,10 +280,11 @@ earliest located source or exact local generator. Another 513 matrices carry 837
 obtained from explicit catalog matches, stored occurrence provenance, exact positive-scale duplicates, and audited named or
 family-level reuse statements. These links are
 best-effort literature evidence, not a claim that a class-level paper prints every member's coefficients.
-The `preprocessing_solved` metadata flag identifies all 2,730 retained matrices completely classified by the current maintained
-depth-2 combined preprocessing workflow in the five-second corpus run, its sixty-second timeout continuation, or the focused
-ten-minute Motzkin--Straus follow-up. They comprise 711 strictly copositive, 1,031 copositive-boundary, and 988 non-copositive
-matrices. Partial facts are excluded.
+The `preprocessing_solved` metadata flag identifies all 2,765 retained matrices completely classified by the current maintained
+depth-2 combined preprocessing workflow in the five-second corpus run, its sixty-second timeout continuation, the focused ten-minute
+Motzkin--Straus follow-up, or a stored combined diagnostic result with zero model delegations. They comprise 744 strictly copositive,
+1,032 copositive-boundary, and 989 non-copositive matrices. Partial facts are excluded, and shorter later diagnostics can add evidence
+but never remove a flag established by a longer run.
 Every named benchmark set excludes these rows; the current sets therefore measure matrices that reach the selected model.
 Separately, 430 matrices have 629 `references_solved` entries from 27 sources whose reported result establishes the matrix's complete
 stored copositivity classification. A negative witness is decisive, but a nonnegative heuristic screen, a stationary point, or merely

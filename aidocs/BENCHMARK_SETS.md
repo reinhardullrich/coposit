@@ -7,14 +7,14 @@ its matrix row or expected classification.
 
 | Flag | Rows | Orders | Strict | Boundary | Not copositive | Unknown | Intended use |
 |---|---:|---:|---:|---:|---:|---:|---|
-| `smoke_set` | 49 | 4–15 | 23 | 26 | 0 | 0 | Fast correctness and integration checks |
-| `core_and_stress_test` | 512 | 4–3,361 | 242 | 251 | 19 | 0 | Routine comparisons and difficult model-search cases |
-| `n_le_100` | 754 | 4–100 | 225 | 293 | 0 | 236 | Every matrix of order at most 100 not solved by preprocessing |
+| `smoke_set` | 46 | 4–15 | 20 | 26 | 0 | 0 | Fast correctness and integration checks |
+| `core_and_stress_test` | 469 | 4–3,361 | 215 | 245 | 9 | 0 | Routine comparisons and difficult model-search cases |
+| `n_le_100` | 731 | 4–100 | 247 | 293 | 86 | 105 | Every matrix of order at most 100 not solved by preprocessing |
 | `n_gt_100_solved` | 0 | — | 0 | 0 | 0 | 0 | Higher-order literature-solved matrices not solved by preprocessing |
 
 All four sets exclude `preprocessing_solved = 1`: a benchmark member must reach the selected model rather than end in the shared
-preprocessing pipeline. The two stored curated flags and two generated flags cover 803 distinct rows. All 49 Smoke rows belong to
-Core and Stress and to N ≤ 100. Of the 512 Core and Stress rows, 463 belong to N ≤ 100 and 49 belong to neither generated set. The
+preprocessing pipeline. The two stored curated flags and two generated flags cover 758 distinct rows. All 46 Smoke rows belong to
+Core and Stress and to N ≤ 100. Of the 469 Core and Stress rows, 442 belong to N ≤ 100 and 27 belong to neither generated set. The
 two generated sets are disjoint by definition.
 
 ## N ≤ 100
@@ -33,15 +33,14 @@ exact arithmetic.
 
 ## Smoke Set
 
-The current Smoke set contains 28 matrices at orders 4–7, 16 at orders 8–12, and 5 at orders 13–15. Every selected row has a stored
+The current Smoke set contains 26 matrices at orders 4–7, 15 at orders 8–12, and 5 at orders 13–15. Every selected row has a stored
 eligible completion no slower than 50 ms. That threshold is selection evidence, not a promise about other hardware or future models.
 
-The current refresh retained the 28 members that still reach a model and replaced 21 preprocessing-complete rows with unresolved,
-known-truth matrices. No known non-copositive matrix of order at most 100 survives preprocessing, so preserving the former 12
-non-copositive Smoke slots is impossible. The replacement therefore keeps the former 23 strict cases and uses 26 boundary cases,
-which still exercise a negative strict-copositivity result. Selection required order at most 20 and an eligible completion no slower
-than 50 ms, then preferred underrepresented families, nearby order, source diversity, and timing. No order-1–3 row remains because
-preprocessing classifies every such corpus matrix.
+The dated refresh assigned 49 stored members after replacing 21 preprocessing-complete rows. Three of those assignments are now also
+resolved by later preprocessing, so the effective selector retains 20 strict and 26 boundary cases. The boundary cases still exercise
+a negative strict-copositivity result. Selection required order at most 20 and an eligible completion no slower than 50 ms, then
+preferred underrepresented families, nearby order, source diversity, and timing. No order-1–3 row remains because preprocessing
+classifies every such corpus matrix.
 
 ## Core And Stress Test
 
@@ -54,11 +53,11 @@ cycled across families within each order/outcome stratum, and selected 384 matri
 mandatory portion included common baseline failures, the historical bad-26 cohort, difficult representatives from each canonical
 family, and maximum-order family/outcome anchors; difficulty-ranked, family-capped filler completed the original selection.
 
-The current refresh retained 286 members and replaced 226 preprocessing-complete rows. The unresolved known-truth pool contains no
-additional non-copositive candidates, so Core retains all 19 such matrices that still reach a model. The replacements use all 52
-available strict candidates and 174 boundary candidates, giving 242 strict, 251 boundary, and 19 non-copositive matrices with no
-unknown truth. Selection prefers underrepresented families before nearby order, source and literature-failure diversity, and
-difficult stored timing; this avoids filling nearly every available boundary slot with the large Hoffman-Pereira catalog family.
+The dated refresh retained 286 members and replaced 226 preprocessing-complete rows, restoring 512 stored assignments. Later additive
+preprocessing evidence now excludes 43 of those assignments at selection time, leaving 215 strict, 245 boundary, and 9 non-copositive
+matrices with no unknown truth. The stored selection prefers underrepresented families before nearby order, source and
+literature-failure diversity, and difficult stored timing; this avoids filling nearly every available boundary slot with the large
+Hoffman-Pereira catalog family.
 
 The Hildebrand panel migration removed six redundant same-order boundary variants while retaining one order-15–25 representative per
 order. Six already eligible boundary matrices at orders 16, 18, and 20 replaced those Core memberships, so at that stage the 512-row
@@ -82,6 +81,8 @@ all 150 of their matrices. `testdata/archive/retire_scale_and_timeout_sets_2026_
 and changes both generated flags to require `preprocessing_solved = 0`.
 `testdata/archive/refresh_benchmark_sets_after_motzkin_straus_2026_08_16.sql` records the current 2,708-row refresh and exact curated
 replacement IDs. New rows default both stored curated flags to zero.
+`testdata/archive/refresh_corpus_from_diagnostics_2026_08_18.sql` adds later exact classifications and preprocessing flags without
+rewriting either curated membership list.
 `testdata/archive/replace_hildebrand_circulants_2026_08_16.py` records the later one-per-order Hildebrand replacement and six Core
 refills.
 

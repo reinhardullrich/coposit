@@ -514,22 +514,79 @@ TEST(PreCheckTest, OneExactFactorizationDecidesDefinitenessAndNullityOneByMode)
     }));
     EXPECT_EQ(calls, 0U);
 
-    // Higher nullity remains deliberately unresolved and is delegated to the final algorithm.
+    // A singular PSD Z-matrix is copositive but not strictly copositive even when its nullity exceeds one.
     matrix_integer higher_nullity(3, 3);
     higher_nullity(0, 0).set_one();
     EXPECT_FALSE(pre_check::check(higher_nullity, strict, selected, [&](const matrix_integer&) {
         ++calls;
         return false;
     }));
-    EXPECT_EQ(calls, 1U);
+    EXPECT_EQ(calls, 0U);
 
-    // Failure of the factorization certificate is inconclusive: this indefinite matrix is nevertheless strictly copositive.
-    const matrix_integer indefinite_strict = symmetric_matrix(2, {1, 2, 1});
+    // Failure of both factorization certificates is inconclusive. Horn's copositive matrix plus the identity is strictly
+    // copositive and indefinite, while stripping its positive off-diagonal entries leaves the singular cycle Laplacian.
+    const matrix_integer indefinite_strict =
+        symmetric_matrix(5, {2, -1, 1, 1, -1, 2, -1, 1, 1, 2, -1, 1, 2, -1, 2});
     EXPECT_TRUE(pre_check::check(indefinite_strict, strict, selected, [&](const matrix_integer&) {
         ++calls;
         return true;
     }));
-    EXPECT_EQ(calls, 2U);
+    EXPECT_EQ(calls, 1U);
+}
+
+TEST(PreCheckTest, ExactNegativePartFactorizationAddsAnSpnCertificate)
+{
+    pre_check::options selected = pre_check::options::none();
+    selected.positive_definiteness = true;
+
+    // The full matrix is indefinite, but replacing its positive off-diagonal entries by zero gives the positive-definite
+    // tridiagonal matrix with leading principal determinants 2, 3, 4, and 5.
+    const matrix_integer strict_spn = symmetric_matrix(4, {2, -3, 10, 10, 6, -1, 10, 2, -1, 2});
+    size_t calls = 0;
+    const auto strict_result = pre_check::classify(strict_spn, selected, [&](const matrix_integer&) {
+        ++calls;
+        return model::copositivity_classification{false, false};
+    });
+    EXPECT_TRUE(strict_result.is_copositive);
+    EXPECT_TRUE(strict_result.is_strictly_copositive);
+    EXPECT_EQ(calls, 0U);
+
+    // A singular stripped matrix proves ordinary copositivity only. Positive entries can make the original matrix indefinite and
+    // strictly copositive, so the strict predicate must remain delegated rather than being reported as false.
+    const matrix_integer boundary_spn = symmetric_matrix(4, {1, -1, 10, 10, 2, -1, 10, 2, -1, 1});
+    EXPECT_TRUE(pre_check::check(boundary_spn, copositive, selected, [&](const matrix_integer&) {
+        ++calls;
+        return false;
+    }));
+    EXPECT_TRUE(pre_check::check(boundary_spn, strict, selected, [&](const matrix_integer&) {
+        ++calls;
+        return true;
+    }));
+    EXPECT_EQ(calls, 1U);
+}
+
+TEST(PreCheckTest, ExactFullZFactorizationDoesNotFallThroughToMaximalBlocks)
+{
+    pre_check::options selected = pre_check::options::none();
+    selected.positive_definiteness = true;
+    selected.z_matrix = true;
+
+    // This connected Z-matrix is indefinite. Two distinct negative off-diagonal values keep it out of the specialized
+    // Motzkin--Straus path, so its first exact factorization must reject it without repeating the work as a maximal Z-block.
+    const matrix_integer matrix = symmetric_matrix(4, {5, -1, -2, -2, 5, -2, -2, 5, -2, 5});
+    diagnostics::detail::reset();
+    diagnostics::detail::state.enabled.store(true, std::memory_order_relaxed);
+    size_t calls = 0;
+    EXPECT_FALSE(pre_check::check(matrix, copositive, selected, [&](const matrix_integer&) {
+        ++calls;
+        return true;
+    }));
+    const diagnostics::snapshot snapshot = diagnostics::detail::load();
+    diagnostics::detail::state.enabled.store(false, std::memory_order_relaxed);
+    diagnostics::detail::reset();
+
+    EXPECT_EQ(calls, 0U);
+    EXPECT_EQ(snapshot.phase, diagnostics::preprocessing_phase::exact_factorization);
 }
 
 TEST(PreCheckTest, CombinedClassificationPreservesTheStrictBoundaryInOneTraversal)

@@ -195,6 +195,38 @@ TEST(ComponentPipelineTest, UnresolvedConnectedMatrixDelegatesTheOriginalMatrixW
     EXPECT_EQ(calls, 1U);
 }
 
+TEST(ComponentPipelineTest, NegativePartPositiveDefinitenessResolvesAConnectedIndefiniteMatrix)
+{
+    const matrix_integer matrix = symmetric_matrix(4, {2, -3, 10, 10, 6, -1, 10, 2, -1, 2});
+    size_t calls = 0;
+    const auto result = component_pipeline::classify(matrix, {}, [&](const matrix_integer&) {
+        ++calls;
+        return model::copositivity_classification{false, false};
+    });
+    EXPECT_TRUE(result.is_copositive);
+    EXPECT_TRUE(result.is_strictly_copositive);
+    EXPECT_EQ(calls, 0U);
+}
+
+TEST(ComponentPipelineTest, SingularNegativePartKeepsTheOriginalMatrixForStrictDelegation)
+{
+    const matrix_integer matrix = symmetric_matrix(4, {1, -1, 10, 10, 2, -1, 10, 2, -1, 1});
+    diagnostics::detail::reset();
+    diagnostics::detail::state.enabled.store(true, std::memory_order_relaxed);
+    const auto result = component_pipeline::detail::preprocess<pre_check::detail::query::combined>(matrix, 0, 0);
+    const diagnostics::snapshot snapshot = diagnostics::detail::load();
+    diagnostics::detail::state.enabled.store(false, std::memory_order_relaxed);
+    diagnostics::detail::reset();
+    ASSERT_EQ(result.components.size(), 1U);
+    const auto& component = result.components.front();
+    EXPECT_TRUE(component.partial_result.copositive_known);
+    EXPECT_TRUE(component.partial_result.value.is_copositive);
+    EXPECT_FALSE(component.partial_result.strict_known);
+    ASSERT_TRUE(component.has_matrix());
+    EXPECT_EQ(&component.matrix(), &matrix);
+    EXPECT_EQ(snapshot.phase, diagnostics::preprocessing_phase::negative_part_factorization);
+}
+
 TEST(ComponentPipelineTest, DisconnectedUnresolvedComponentsDelegateOnlyTheirPrincipalMatrices)
 {
     const matrix_integer hard = unresolved_matrix();

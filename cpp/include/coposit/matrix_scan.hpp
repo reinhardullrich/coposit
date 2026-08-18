@@ -29,6 +29,7 @@ struct matrix_scan_result {
     bool all_diagonals_nonnegative = true;
     bool all_diagonals_positive = true;
     bool has_negative_off_diagonal = false;
+    bool has_positive_off_diagonal = false;
     bool all_principal_pairs_copositive = true;
     bool all_principal_pairs_strictly_copositive = true;
     bool is_motzkin_straus_pattern = false;
@@ -120,9 +121,12 @@ inline void observe_off_diagonal(matrix_scan_result& result, const matrix_scan_r
                 small_copositivity::check_2x2<model::copositivity_mode::strictly_copositive>(
                     row_diagonal, entry, column_diagonal);
         }
-    } else if (entry.sign() > 0 && requirements.off_diagonal_sign_counts) {
-        ++result.positive_off_diagonal_counts[row];
-        ++result.positive_off_diagonal_counts[column];
+    } else if (entry.sign() > 0) {
+        result.has_positive_off_diagonal = true;
+        if (requirements.off_diagonal_sign_counts) {
+            ++result.positive_off_diagonal_counts[row];
+            ++result.positive_off_diagonal_counts[column];
+        }
     }
     if (entry.sign() <= 0 && requirements.nonpositive_graph) {
         result.nonpositive_neighbors[row].set(column);

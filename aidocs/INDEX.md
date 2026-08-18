@@ -25,6 +25,11 @@ This file routes to every other Markdown document under `aidocs/` without duplic
 
 ## Research
 
+- `XXX_IMPLEMENTATION_PLAN.md` — **research implementation plan** — planned exact SAT-guided KKT support search without cardinality
+  traversal, shared fraction-free integer $LDL^T$, singular nullspace-to-boundary navigation, exact upward/downward blocks, guarded
+  heuristic exclusions, staged tests, and unresolved design choices.
+- `KKT_GUIDED_DICKINSON_COVERAGE_LOOP.md` — **research design** — alternating numerical KKT-support discovery, exact upward and
+  downward verification, SAT-selected uncovered supports, and ordinary Dickinson completion.
 - `SINGULAR_LIFT_DICKINSON_RESEARCH.md` — **research finding** — exact border and root-cone lifting theorems, completeness and
   accessibility counterexamples, BFS/A* guarantees, safe pruning rules, direct kernel-space alternatives, and order-45 evidence.
 - `ORDINARY_DICKINSON_CERTIFICATE_ENGINE_RESEARCH.md` — **research finding** — transfer of singular-support results to bounded
@@ -33,6 +38,8 @@ This file routes to every other Markdown document under `aidocs/` without duplic
   digit-growth evidence, ten-second outcomes, and the order-25 matrix-12580 diagnostics trace.
 - `BPQY_N50_RAYS_LONG_RUN.md` — **research result** — per-layer timing and certificate upper-cardinality distributions for the
   long SAT-Halfspace-Rays Dickinson run on three order-50 BPQY COP matrices with $\rho_0=12,25,38$.
+- `HILDEBRAND_CIRCULANT_SAT_HALFSPACE_RAYS_LIVE.md` — **research result** — final order-20–24 outcome plus the captured
+  per-layer certificate and upper-cardinality distributions for the order-22 and order-23 Hildebrand circulants.
 - `AFFINE_RHS_DICKINSON_CERTIFICATE_GEOMETRY.md` — **research finding** — exact $L/U/d$ identities, affine right-hand-side path
   geometry, singularity distinctions, objective-equivalence theorems, and the order-25 BPQY two-path experiment.
 - `PREPROCESSING_PIPELINE_DESIGN.md` — **current implementation** — complete root-check, component, ordinary-check,

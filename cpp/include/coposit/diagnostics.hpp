@@ -56,6 +56,7 @@ enum class preprocessing_phase {
     z_matrix,
     frank_wolfe,
     exact_factorization,
+    negative_part_factorization,
     danninger,
     copomatrix,
     model_delegation,
@@ -112,6 +113,7 @@ struct snapshot {
     size_t preprocessing_model_delegations = 0;
     std::map<std::pair<size_t, size_t>, uint64_t> certificate_cardinality_free_index_counts;
     std::map<std::tuple<size_t, size_t, size_t>, uint64_t> certificate_cardinality_free_index_upper_size_counts;
+    std::map<std::tuple<size_t, size_t, size_t>, uint64_t> accepted_certificate_cardinality_free_index_upper_size_counts;
     std::map<std::tuple<size_t, size_t, size_t, size_t>, uint64_t> certificate_root_lifted_upper_lower_counts;
     std::map<std::pair<size_t, size_t>, uint64_t> singular_cardinality_nullity_counts;
 };
@@ -171,6 +173,7 @@ struct shared_state {
     std::mutex certificate_histogram_mutex;
     std::map<std::pair<size_t, size_t>, uint64_t> certificate_cardinality_free_index_counts;
     std::map<std::tuple<size_t, size_t, size_t>, uint64_t> certificate_cardinality_free_index_upper_size_counts;
+    std::map<std::tuple<size_t, size_t, size_t>, uint64_t> accepted_certificate_cardinality_free_index_upper_size_counts;
     std::map<std::tuple<size_t, size_t, size_t, size_t>, uint64_t> certificate_root_lifted_upper_lower_counts;
     std::map<std::pair<size_t, size_t>, uint64_t> singular_cardinality_nullity_counts;
     std::mutex diagnostics_mutex;
@@ -222,6 +225,7 @@ inline void reset_current_metric() noexcept
         std::lock_guard<std::mutex> lock(state.certificate_histogram_mutex);
         state.certificate_cardinality_free_index_counts.clear();
         state.certificate_cardinality_free_index_upper_size_counts.clear();
+        state.accepted_certificate_cardinality_free_index_upper_size_counts.clear();
         state.certificate_root_lifted_upper_lower_counts.clear();
         state.singular_cardinality_nullity_counts.clear();
     }
@@ -301,6 +305,8 @@ inline snapshot load() noexcept
         std::lock_guard<std::mutex> lock(state.certificate_histogram_mutex);
         result.certificate_cardinality_free_index_counts = state.certificate_cardinality_free_index_counts;
         result.certificate_cardinality_free_index_upper_size_counts = state.certificate_cardinality_free_index_upper_size_counts;
+        result.accepted_certificate_cardinality_free_index_upper_size_counts =
+            state.accepted_certificate_cardinality_free_index_upper_size_counts;
         result.certificate_root_lifted_upper_lower_counts = state.certificate_root_lifted_upper_lower_counts;
         result.singular_cardinality_nullity_counts = state.singular_cardinality_nullity_counts;
     }
@@ -416,6 +422,8 @@ inline const char* phase_text(preprocessing_phase phase) noexcept
         return "Frank-Wolfe";
     case preprocessing_phase::exact_factorization:
         return "exact factorization";
+    case preprocessing_phase::negative_part_factorization:
+        return "negative-part factorization";
     case preprocessing_phase::danninger:
         return "Danninger";
     case preprocessing_phase::copomatrix:
@@ -510,6 +518,17 @@ inline std::string format(const snapshot& value, std::chrono::seconds elapsed, d
             for (const auto& [key, count] : value.certificate_cardinality_free_index_counts) {
                 if (!first) output << ',';
                 output << '(' << key.first << ',' << key.second << ',' << count << ')';
+                first = false;
+            }
+            output << ']';
+        }
+        if (!value.accepted_certificate_cardinality_free_index_upper_size_counts.empty()) {
+            output << "  accepted_certificate_k_d_u_counts=[";
+            bool first = true;
+            for (const auto& [key, count] : value.accepted_certificate_cardinality_free_index_upper_size_counts) {
+                if (!first) output << ',';
+                const auto& [cardinality, free_indices, upper_size] = key;
+                output << '(' << cardinality << ',' << free_indices << ',' << upper_size << ',' << count << ')';
                 first = false;
             }
             output << ']';
@@ -860,6 +879,13 @@ public:
         if (!active_ || free_indices > upper_size || upper_size > maximum_) return;
         std::lock_guard<std::mutex> lock(detail::state.certificate_histogram_mutex);
         ++detail::state.certificate_cardinality_free_index_upper_size_counts[{current_, free_indices, upper_size}];
+    }
+
+    void accepted_certificate(size_t free_indices, size_t upper_size) noexcept
+    {
+        if (!active_ || free_indices > upper_size || upper_size > maximum_) return;
+        std::lock_guard<std::mutex> lock(detail::state.certificate_histogram_mutex);
+        ++detail::state.accepted_certificate_cardinality_free_index_upper_size_counts[{current_, free_indices, upper_size}];
     }
 
     void singular_support(size_t nullity) noexcept

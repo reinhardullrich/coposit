@@ -215,6 +215,38 @@ inline void observe_positive_certificate(classification_state& state, bool copos
     else if (copositive_passes) state.accept_copositive();
 }
 
+inline bool observe_negative_part_certificate(classification_state& state, const matrix_integer& matrix,
+                                               const matrix_scan_result& scan,
+                                               fraction_free_ldlt_factorization& factorization)
+{
+    // When A is already a Z-matrix, C=A and the preceding exact factorization is a complete copositivity test: a symmetric
+    // Z-matrix is copositive exactly when it is positive semidefinite, and a singular PSD Z-matrix is not strictly copositive.
+    // Record the remaining negative decision here instead of refactorizing A through maximal principal Z-blocks.
+    if (!scan.has_positive_off_diagonal) {
+        if (!factorization.is_positive_semidefinite()) state.reject_copositive();
+        else if (!factorization.is_positive_definite()) state.reject_strict();
+        return factorization.is_positive_semidefinite();
+    }
+
+    diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::negative_part_factorization,
+                                     matrix.rows(), 0, matrix.rows());
+    matrix_integer negative_part(matrix.rows(), matrix.rows());
+    for (size_t row = 0; row < matrix.rows(); ++row) {
+        timeout_checkpoint();
+        negative_part(row, row) = matrix(row, row);
+        for (size_t column = row + 1; column < matrix.rows(); ++column) {
+            if (matrix(row, column).sign() >= 0) continue;
+            negative_part(row, column) = matrix(row, column);
+            negative_part(column, row) = matrix(row, column);
+        }
+    }
+
+    factorization.factorize_inplace(negative_part, diagnostics::enabled());
+    const bool positive_semidefinite = factorization.is_positive_semidefinite();
+    observe_positive_certificate(state, positive_semidefinite, factorization.is_positive_definite());
+    return positive_semidefinite;
+}
+
 inline void observe_z_matrix_outcome(classification_state& state, z_matrix_precheck::outcome result)
 {
     classification_state evidence;
@@ -520,8 +552,12 @@ classification_state ordinary_checks_scanned(const matrix_integer& matrix, const
     z_matrix_precheck::request z_request = z_matrix_precheck::request::combined;
     if constexpr (requested == query::copositive) z_request = z_matrix_precheck::request::copositive;
     else if constexpr (requested == query::strict) z_request = z_matrix_precheck::request::strict;
-    observe_z_matrix_outcome(state, z_matrix_precheck::check(matrix, scan, z_request));
-    if (state.done<requested>()) return state;
+    // The exact Motzkin--Straus classifier is often the cheapest complete route for large graph matrices, so keep it ahead of both
+    // cubic factorizations. Every other matrix defers maximal-Z enumeration until those factorizations have failed.
+    if (scan.is_motzkin_straus_pattern) {
+        observe_z_matrix_outcome(state, z_matrix_precheck::check(matrix, scan, z_request));
+        if (state.done<requested>()) return state;
+    }
 
     diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::exact_factorization, dimension, 0, dimension);
     matrix_integer factored(matrix);
@@ -547,6 +583,18 @@ classification_state ordinary_checks_scanned(const matrix_integer& matrix, const
             if (has_positive && has_negative) state.accept_strict();
             else state.reject_strict();
         }
+    }
+    if (state.done<requested>()) return state;
+
+    const bool negative_part_positive_semidefinite = observe_negative_part_certificate(state, matrix, scan, factorization);
+    if (state.done<requested>()) return state;
+
+    // This work unit has a connected negative graph. If its negative part is PSD, every proper principal Z-block is positive
+    // definite. If there was no positive off-diagonal entry, the preceding factorization already completed the Z-matrix decision.
+    if (negative_part_positive_semidefinite) return state;
+
+    if (!scan.is_motzkin_straus_pattern) {
+        observe_z_matrix_outcome(state, z_matrix_precheck::check(matrix, scan, z_request));
     }
     return state;
 }
@@ -617,11 +665,11 @@ model::copositivity_classification run_scanned(const matrix_integer& matrix, con
         if (state.done<requested>()) return state.value;
     }
 
-    if (selected.z_matrix) {
-        z_matrix_precheck::request z_request = z_matrix_precheck::request::combined;
-        if constexpr (requested == query::copositive) z_request = z_matrix_precheck::request::copositive;
-        else if constexpr (requested == query::strict) z_request = z_matrix_precheck::request::strict;
+    z_matrix_precheck::request z_request = z_matrix_precheck::request::combined;
+    if constexpr (requested == query::copositive) z_request = z_matrix_precheck::request::copositive;
+    else if constexpr (requested == query::strict) z_request = z_matrix_precheck::request::strict;
 
+    if (selected.z_matrix && scan.is_motzkin_straus_pattern) {
         observe_z_matrix_outcome(state, z_matrix_precheck::check(matrix, scan, z_request));
         if (state.done<requested>()) return state.value;
     }
@@ -666,6 +714,16 @@ model::copositivity_classification run_scanned(const matrix_integer& matrix, con
                 if (state.done<requested>()) return state.value;
             }
         }
+
+        observe_negative_part_certificate(state, matrix, scan, factorization);
+        if (state.done<requested>()) return state.value;
+    }
+
+    // The individually selectable interface is not guaranteed to receive a connected negative graph, so unlike the complete
+    // component pipeline it retains the maximal principal-Z fallback after a singular PSD negative-part certificate.
+    if (selected.z_matrix && !scan.is_motzkin_straus_pattern) {
+        observe_z_matrix_outcome(state, z_matrix_precheck::check(matrix, scan, z_request));
+        if (state.done<requested>()) return state.value;
     }
 
     state.merge(final_classifier(matrix));

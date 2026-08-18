@@ -53,7 +53,10 @@ cpp/build/coposit \
 When enabled, the pipeline always performs its root checks, negative-entry component split, ordinary component checks, bounded
 Danninger reduction, and bounded COPOMATRIX reduction in that order. The `z-matrix` check examines maximal principal blocks
 with nonpositive off-diagonal entries. An indefinite block rejects both modes, while a singular positive-semidefinite block rejects
-only strict copositivity; Motzkin–Straus graph matrices bypass this check because maximal-clique enumeration is unproductive there.
+only strict copositivity. Exact Motzkin–Straus graph matrices instead take the complete maximum-clique classifier before matrix
+factorization. Every other component first factorizes its original matrix. If that matrix has no positive off-diagonal entry, this
+one factorization is already the complete Z-matrix decision. Otherwise its negative part is factorized, and maximal-Z is reached only
+when both complete-matrix checks leave it useful.
 Danninger and COPOMATRIX each run only when the selected pivot creates at most two order-reduced children. Every child repeats scan,
 root checks, component splitting, and ordinary checks. Children may create grandchildren because the internal maximum reduction
 depth is two; nodes at that depth create no further descendants and call no model. This depth is not a CLI option. If preprocessing

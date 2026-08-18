@@ -19,7 +19,8 @@ exact candidate calculation. CBDD and CZDD publish their decision-diagram counte
 
 The experiment command also reports its current preprocessing phase. Depending on the selected path, this is
 `matrix scan`, `root checks`, `connected components`, `component scan`, `principal submatrices`, `negative-part diagonal dominance`,
-`all-ones`, `Frank-Wolfe`, `Z-matrix`, `exact factorization`, `Danninger`, `COPOMATRIX`, or `model delegation`. Where a truthful unit exists,
+`all-ones`, `Frank-Wolfe`, `Motzkin-Straus`, `exact factorization`, `negative-part factorization`, `Z-matrix`, `Danninger`, `COPOMATRIX`, or
+`model delegation`. Where a truthful unit exists,
 `work=current/maximum` reports rows, graph vertices, principal-face centers, Frank–Wolfe iterations, exact factorization pivots, or
 candidate reduction pivots. The line also identifies the current matrix or component dimension. These counters show activity inside
 the current phase; they are not percentages or ETAs.

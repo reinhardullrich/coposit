@@ -24,7 +24,13 @@ from pycoposit import (
 )
 from pycoposit.core import coposit_path, matrix_parser_source, model_companion_path
 from pycoposit.mp import _max_pending_matrices
-from pycoposit.types import _resolve_model_parameter, _validate_algorithm, _validate_mode, _validate_preprocessing
+from pycoposit.types import (
+    PARAMETERIZED_ALGORITHMS,
+    _resolve_model_parameter,
+    _validate_algorithm,
+    _validate_mode,
+    _validate_preprocessing,
+)
 from run_results import _resolve_mode, _result_model_id
 
 
@@ -170,7 +176,7 @@ class WrapperTests(unittest.TestCase):
 
     def test_wide_certificate_runtime_percentage(self):
         self.assertNotIn("wide_75_certificate_cbdd_dickinson", ALGORITHMS)
-        for model in ("wide_certificate_cbdd_dickinson", "wide_certificate_sat_dickinson"):
+        for model in PARAMETERIZED_ALGORITHMS:
             with self.subTest(model=model):
                 with self.assertRaises(ValueError):
                     _resolve_model_parameter(model, None)
@@ -193,12 +199,14 @@ class WrapperTests(unittest.TestCase):
             "upper_endpoint_cbdd_dickinson",
             "czdd_dickinson",
             "sat_dickinson",
+            "sat_halfspace_rays_lookahead_dickinson",
+            "sat_halfspace_rays_wide_dickinson",
             "wide_certificate_sat_dickinson",
             "clingo_dickinson",
             "clingo_halfspace_dickinson",
         ):
             with self.subTest(model=model):
-                parameter = "50" if model == "wide_certificate_sat_dickinson" else None
+                parameter = "50" if model in PARAMETERIZED_ALGORITHMS else None
                 result = compute_matrix(
                     model,
                     Matrix("2#1,0,1"),
@@ -296,7 +304,7 @@ class WrapperTests(unittest.TestCase):
         self.assertEqual(set(help_output.partition("Models:\n")[2].split()), source_models)
         for algorithm in ALGORITHMS:
             with self.subTest(algorithm=algorithm):
-                parameter = "50" if algorithm in ("wide_certificate_cbdd_dickinson", "wide_certificate_sat_dickinson") else None
+                parameter = "50" if algorithm in PARAMETERIZED_ALGORITHMS else None
                 positive = run(
                     algorithm, Matrix("2#1,0,1", matrix_id=1), "strictly_copositive", model_parameter=parameter
                 )
@@ -314,7 +322,7 @@ class WrapperTests(unittest.TestCase):
         for algorithm in COPOSITIVE_MODE_ALGORITHMS:
             for preprocessing in ("none", "both"):
                 with self.subTest(algorithm=algorithm, preprocessing=preprocessing):
-                    parameter = "50" if algorithm in ("wide_certificate_cbdd_dickinson", "wide_certificate_sat_dickinson") else None
+                    parameter = "50" if algorithm in PARAMETERIZED_ALGORITHMS else None
                     boundary = run(
                         algorithm, Matrix("2#1,-1,1", matrix_id=1), "copositive", preprocessing,
                         model_parameter=parameter,
@@ -357,7 +365,7 @@ class WrapperTests(unittest.TestCase):
         for algorithm in COMBINED_CLASSIFICATION_ALGORITHMS:
             for matrix_id, (matrix, expected_copositive, expected_strict) in enumerate(cases, 1):
                 with self.subTest(algorithm=algorithm, matrix_id=matrix_id):
-                    parameter = "50" if algorithm in ("wide_certificate_cbdd_dickinson", "wide_certificate_sat_dickinson") else None
+                    parameter = "50" if algorithm in PARAMETERIZED_ALGORITHMS else None
                     result = run(algorithm, Matrix(matrix, matrix_id=matrix_id), model_parameter=parameter)
                     self.assertEqual(result["status"], StatusCode.OK)
                     self.assertEqual(result["mode"], "both")

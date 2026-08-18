@@ -36,6 +36,10 @@ Algorithm = Literal[
     "sat_dickinson",
     "sat_halfspace_dickinson",
     "sat_halfspace_rays_dickinson",
+    "sat_halfspace_lp_dickinson",
+    "sat_halfspace_milp_dickinson",
+    "sat_halfspace_rays_lookahead_dickinson",
+    "sat_halfspace_rays_wide_dickinson",
     "wide_certificate_sat_dickinson",
     "clingo_dickinson",
     "clingo_halfspace_dickinson",
@@ -84,6 +88,10 @@ COMBINED_CLASSIFICATION_ALGORITHMS: tuple[Algorithm, ...] = (
     "sat_dickinson",
     "sat_halfspace_dickinson",
     "sat_halfspace_rays_dickinson",
+    "sat_halfspace_lp_dickinson",
+    "sat_halfspace_milp_dickinson",
+    "sat_halfspace_rays_lookahead_dickinson",
+    "sat_halfspace_rays_wide_dickinson",
     "wide_certificate_sat_dickinson",
     "clingo_dickinson",
     "clingo_halfspace_dickinson",
@@ -129,6 +137,10 @@ ALGORITHMS: tuple[Algorithm, ...] = (
     "sat_dickinson",
     "sat_halfspace_dickinson",
     "sat_halfspace_rays_dickinson",
+    "sat_halfspace_lp_dickinson",
+    "sat_halfspace_milp_dickinson",
+    "sat_halfspace_rays_lookahead_dickinson",
+    "sat_halfspace_rays_wide_dickinson",
     "wide_certificate_sat_dickinson",
     "clingo_dickinson",
     "clingo_halfspace_dickinson",
@@ -150,6 +162,7 @@ ALGORITHMS: tuple[Algorithm, ...] = (
 )
 
 PARAMETERIZED_ALGORITHMS: tuple[Algorithm, ...] = (
+    "sat_halfspace_rays_wide_dickinson",
     "wide_certificate_cbdd_dickinson",
     "wide_certificate_sat_dickinson",
 )

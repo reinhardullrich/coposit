@@ -362,13 +362,26 @@ public:
 #ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
     bool check_support_for_testing(const matrix_integer& matrix, const std::vector<size_t>& indices)
     {
+        support lower(matrix.rows());
+        support upper(matrix.rows());
+        const bool result = optimize_support_for_testing(matrix, indices, lower, upper);
+        last_fixed_support_upper_size = 0;
+        for (size_t index = 0; index < matrix.rows(); ++index) last_fixed_support_upper_size += upper.contains(index);
+        return result;
+    }
+
+    bool optimize_support_for_testing(
+        const matrix_integer& matrix, const std::vector<size_t>& indices, support& lower, support& upper)
+    {
         optimized_certificate_count_ = 0;
         combined_ray_sweep_count_ = 0;
         combined_ray_improvement_count_ = 0;
-        supports_.emplace(matrix.rows());
         indices_ = indices;
+        captured_lower_ = &lower;
+        captured_upper_ = &upper;
         const bool result = process_subset(matrix);
-        last_fixed_support_upper_size = current_score_.upper_size;
+        captured_lower_ = nullptr;
+        captured_upper_ = nullptr;
         publish_test_counters();
         return result;
     }
@@ -929,6 +942,13 @@ private:
             else if (mode_ == copositivity_mode::strictly_copositive) return false;
         }
 
+#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+        if (captured_lower_ != nullptr) {
+            *captured_lower_ = lower;
+            *captured_upper_ = upper;
+            return true;
+        }
+#endif
         supports_->add_interval(lower, upper);
         if (diagnostics_.active()) diagnostics_.certificate(upper_size - lower_size, upper_size);
         return true;
@@ -985,6 +1005,8 @@ private:
     size_t optimized_certificate_count_ = 0;
     size_t combined_ray_sweep_count_ = 0;
     size_t combined_ray_improvement_count_ = 0;
+    support* captured_lower_ = nullptr;
+    support* captured_upper_ = nullptr;
 #endif
 };
 
@@ -1042,6 +1064,13 @@ bool sat_halfspace_rays_prefers_ray_candidate_for_testing(size_t candidate_upper
 bool sat_halfspace_rays_check_support_for_testing(const matrix_integer& matrix, const std::vector<size_t>& indices)
 {
     return dickinson_checker(matrix.rows(), copositivity_mode::strictly_copositive).check_support_for_testing(matrix, indices);
+}
+
+bool sat_halfspace_rays_certificate_for_testing(
+    const matrix_integer& matrix, const std::vector<size_t>& indices, support& lower, support& upper)
+{
+    return dickinson_checker(matrix.rows(), copositivity_mode::copositive)
+        .optimize_support_for_testing(matrix, indices, lower, upper);
 }
 
 size_t sat_halfspace_rays_fixed_support_upper_size_for_testing() noexcept
