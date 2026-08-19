@@ -107,6 +107,7 @@ set(COPOSIT_COMBINED_CLASSIFICATION_MODELS
     sat_halfspace_milp_dickinson sat_halfspace_rays_lookahead_dickinson
     sat_halfspace_rays_wide_dickinson
     wide_certificate_sat_dickinson
+    xxx xxx_two
     clingo_dickinson clingo_halfspace_dickinson
     support_pruned_dickinson nullity_support_pruned_dickinson rhs_dickinson frank_wolfe_dickinson
     one_step_frank_wolfe_dickinson pairwise_frank_wolfe_dickinson support_polished_frank_wolfe_dickinson
@@ -145,6 +146,8 @@ set(COPOSIT_COPOSITIVE_MODELS
     sat_halfspace_rays_lookahead_dickinson
     sat_halfspace_rays_wide_dickinson
     wide_certificate_sat_dickinson
+    xxx
+    xxx_two
     clingo_dickinson
     clingo_halfspace_dickinson
     support_pruned_dickinson
@@ -195,7 +198,9 @@ function(add_coposit_model_interfaces model_name)
            OR model_name STREQUAL "sat_halfspace_milp_dickinson"
            OR model_name STREQUAL "sat_halfspace_rays_lookahead_dickinson"
            OR model_name STREQUAL "sat_halfspace_rays_wide_dickinson"
-           OR model_name STREQUAL "wide_certificate_sat_dickinson")
+           OR model_name STREQUAL "wide_certificate_sat_dickinson"
+           OR model_name STREQUAL "xxx"
+           OR model_name STREQUAL "xxx_two")
             target_link_libraries(${model_target} PRIVATE coposit_cadical)
         elseif(model_name STREQUAL "clingo_dickinson" OR model_name STREQUAL "clingo_halfspace_dickinson")
             target_link_libraries(${model_target} PRIVATE libclingo)
@@ -239,6 +244,8 @@ add_coposit_model_interfaces(sat_halfspace_milp_dickinson)
 add_coposit_model_interfaces(sat_halfspace_rays_lookahead_dickinson)
 add_coposit_model_interfaces(sat_halfspace_rays_wide_dickinson)
 add_coposit_model_interfaces(wide_certificate_sat_dickinson)
+add_coposit_model_interfaces(xxx)
+add_coposit_model_interfaces(xxx_two)
 add_coposit_model_interfaces(clingo_dickinson)
 add_coposit_model_interfaces(clingo_halfspace_dickinson)
 add_coposit_model_interfaces(support_pruned_dickinson)
@@ -482,6 +489,27 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
         PRIVATE COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
     target_link_libraries(test_sat_halfspace_rays_dickinson PRIVATE coposit_core coposit_cadical GTest::gtest_main)
     add_test(NAME SatHalfspaceRaysDickinsonModelTests COMMAND test_sat_halfspace_rays_dickinson)
+
+    add_executable(test_xxx
+        ../models/hadeler-based/xxx/test_solver.cpp
+        ../models/hadeler-based/xxx/solver.cpp)
+    target_compile_definitions(test_xxx PRIVATE COPOSIT_XXX_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_xxx PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME XxxModelTests COMMAND test_xxx)
+
+    add_executable(test_xxx_two
+        ../models/hadeler-based/xxx_two/test_solver.cpp
+        ../models/hadeler-based/xxx_two/solver.cpp)
+    target_compile_definitions(test_xxx_two PRIVATE COPOSIT_XXX_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_xxx_two PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME XxxTwoModelTests COMMAND test_xxx_two)
+
+    add_executable(test_xxx_exact_greedy
+        ../experiments/exact_greedy_kkt_walk_2026-08-19/test_solver.cpp
+        ../experiments/exact_greedy_kkt_walk_2026-08-19/solver.cpp)
+    target_compile_definitions(test_xxx_exact_greedy PRIVATE COPOSIT_XXX_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_xxx_exact_greedy PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME XxxExactGreedyModelTests COMMAND test_xxx_exact_greedy)
 
     add_executable(test_sat_halfspace_lp_dickinson
         ../models/hadeler-based/sat_halfspace_lp_dickinson/test_solver.cpp

@@ -25,9 +25,9 @@ This file routes to every other Markdown document under `aidocs/` without duplic
 
 ## Research
 
-- `XXX_IMPLEMENTATION_PLAN.md` — **research implementation plan** — planned exact SAT-guided KKT support search without cardinality
-  traversal, shared fraction-free integer $LDL^T$, singular nullspace-to-boundary navigation, exact upward/downward blocks, guarded
-  heuristic exclusions, staged tests, and unresolved design choices.
+- `XXX_IMPLEMENTATION_PLAN.md` — **current implementation record** — retained SAT-Halfspace-Rays certificates, alternating complete
+  cardinality layers, exact KKT paths, singular nullspace-to-boundary navigation, additional upward/downward intervals, and the
+  proof-complete one-SAT invariant.
 - `KKT_GUIDED_DICKINSON_COVERAGE_LOOP.md` — **research design** — alternating numerical KKT-support discovery, exact upward and
   downward verification, SAT-selected uncovered supports, and ordinary Dickinson completion.
 - `SINGULAR_LIFT_DICKINSON_RESEARCH.md` — **research finding** — exact border and root-cone lifting theorems, completeness and

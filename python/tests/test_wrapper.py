@@ -133,6 +133,8 @@ class WrapperTests(unittest.TestCase):
             or algorithm == "dickinson_2019"
             or algorithm.endswith("_dickinson")
             or algorithm == "cbdd_dickinson_improved_1"
+            or algorithm == "xxx"
+            or algorithm == "xxx_two"
             or algorithm == "hadeler_1983"
             or algorithm.endswith("_hadeler")
             or algorithm == "fracessa"

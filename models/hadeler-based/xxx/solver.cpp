@@ -6,8 +6,6 @@
 
 #include <cadical.hpp>
 
-#include "source_diagnostics.hpp"
-
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -16,6 +14,8 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <set>
+#include <sstream>
 #include <stdexcept>
 #include <utility>
 #include <vector>
@@ -54,7 +54,7 @@ bool negative_orientation_has_larger_upper(size_t positive_products, size_t nega
     return negative_products > positive_products;
 }
 
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+#ifdef COPOSIT_XXX_TESTING
 size_t last_optimized_certificate_count = 0;
 size_t last_combined_ray_sweep_count = 0;
 size_t last_combined_ray_improvement_count = 0;
@@ -121,10 +121,27 @@ public:
         return true;
     }
 
+    bool available(const std::vector<size_t>& indices)
+    {
+        size_t selected = 0;
+        for (size_t index = 0; index < dimension_; ++index) {
+            const bool contains = selected < indices.size() && indices[selected] == index;
+            solver_.assume(contains ? variable(index) : -variable(index));
+            selected += contains;
+        }
+        assert(selected == indices.size());
+
+        const int status = solver_.solve();
+        if (status == CaDiCaL::UNSATISFIABLE) return false;
+        if (status == CaDiCaL::SATISFIABLE) return true;
+        timeout_checkpoint();
+        throw std::runtime_error("CaDiCaL returned an inconclusive result without a coposit timeout");
+    }
+
     void add_interval(const support& lower, const support& upper)
     {
         size_t upper_size = 0;
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+#ifdef COPOSIT_XXX_TESTING
         last_interval_clause_size_ = 0;
 #endif
         for (size_t index = 0; index < dimension_; ++index) {
@@ -132,31 +149,28 @@ public:
             if (in_upper) ++upper_size;
             if (lower.contains(index)) {
                 solver_.add(-variable(index));
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+#ifdef COPOSIT_XXX_TESTING
                 ++last_interval_clause_size_;
 #endif
             } else if (!in_upper) {
                 solver_.add(variable(index));
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+#ifdef COPOSIT_XXX_TESTING
                 ++last_interval_clause_size_;
 #endif
             }
         }
         if (upper_size < dimension_) {
             solver_.add(cardinality_outputs_[upper_size]);
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+#ifdef COPOSIT_XXX_TESTING
             ++last_interval_clause_size_;
 #endif
         }
         solver_.add(0);
-        ++interval_count_;
     }
 
-    size_t interval_count() const noexcept { return interval_count_; }
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+#ifdef COPOSIT_XXX_TESTING
     size_t last_interval_clause_size() const noexcept { return last_interval_clause_size_; }
 #endif
-
 private:
     int variable(size_t index) const noexcept { return static_cast<int>(index) + 1; }
 
@@ -216,14 +230,19 @@ private:
     size_t dimension_;
     int next_variable_ = 1;
     size_t cardinality_ = 0;
-    size_t interval_count_ = 0;
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+#ifdef COPOSIT_XXX_TESTING
     size_t last_interval_clause_size_ = 0;
 #endif
     timeout_terminator terminator_;
     CaDiCaL::Solver solver_;
     std::vector<int> cardinality_outputs_;
 };
+
+size_t alternating_cardinality(size_t dimension, size_t layer) noexcept
+{
+    assert(layer < dimension);
+    return layer % 2 == 0 ? layer / 2 + 1 : dimension - layer / 2;
+}
 
 struct coverage_score {
     size_t width = 0;
@@ -283,6 +302,26 @@ struct ray_pair {
     bool initialized = false;
 };
 
+struct face_result {
+    bool nonsingular = true;
+    bool consistent = true;
+    bool positive_semidefinite = true;
+    bool feasible = false;
+    bool is_kkt = false;
+    size_t nullity = 0;
+};
+
+struct pending_interval {
+    support lower;
+    support upper;
+};
+
+struct buffered_interval {
+    support lower;
+    support upper;
+    bool strict_safe = true;
+};
+
 bool better_pair(const ray_pair& candidate, const ray_pair& current) noexcept
 {
     if (!current.initialized) return true;
@@ -300,7 +339,9 @@ bool better_pair(const ray_pair& candidate, const ray_pair& current) noexcept
 class dickinson_checker {
 public:
     dickinson_checker(size_t dimension, copositivity_mode mode)
-        : factorization_(dimension)
+        : dimension_(dimension)
+        , factorization_(dimension)
+        , kkt_factorization_(dimension > 0 ? dimension - 1 : 0)
         , product_(dimension)
         , shortlist_limit_(ray_shortlist_limit(dimension, dimension))
         , mode_(mode)
@@ -313,7 +354,9 @@ public:
     }
 
     dickinson_checker(size_t dimension, copositivity_classification& classification)
-        : factorization_(dimension)
+        : dimension_(dimension)
+        , factorization_(dimension)
+        , kkt_factorization_(dimension > 0 ? dimension - 1 : 0)
         , product_(dimension)
         , shortlist_limit_(ray_shortlist_limit(dimension, dimension))
         , mode_(copositivity_mode::copositive)
@@ -328,38 +371,85 @@ public:
 
     bool check(const matrix_integer& matrix)
     {
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+#ifdef COPOSIT_XXX_TESTING
         optimized_certificate_count_ = 0;
         combined_ray_sweep_count_ = 0;
         combined_ray_improvement_count_ = 0;
+        last_committed_path_interval_count_ = 0;
+        last_path_reached_kkt_ = false;
 #endif
         supports_.emplace(matrix.rows());
-        for (size_t subset_dimension = 1; subset_dimension <= matrix.rows(); ++subset_dimension) {
-            diagnostics_.stage(subset_dimension);
-            supports_->start_cardinality(subset_dimension);
-            while (supports_->take_first(indices_)) {
-                timeout_checkpoint();
-                diagnostics_.visit_support();
-                diagnostics_.secondary();
-                COPOSIT_SAT_HALFSPACE_RAYS_DIAGNOSTICS("process", subset_dimension);
-                if (!process_subset(matrix)) {
+        std::vector<size_t> seed;
+        for (size_t layer = 0; layer < dimension_; ++layer) {
+            const size_t cardinality = alternating_cardinality(dimension_, layer);
+            supports_->start_cardinality(cardinality);
+            while (supports_->take_first(seed)) {
+                if (!process_path(matrix, seed)) {
                     diagnostics_.finish();
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
-                    publish_test_counters();
-#endif
                     return false;
                 }
             }
         }
 
         diagnostics_.finish();
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+#ifdef COPOSIT_XXX_TESTING
         publish_test_counters();
 #endif
         return true;
     }
 
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+    bool process_path(const matrix_integer& matrix, const std::vector<size_t>& seed)
+    {
+        path_intervals_.clear();
+        path_visited_.clear();
+        indices_ = seed;
+        for (;;) {
+            timeout_checkpoint();
+            const support exact = make_support(indices_);
+            if (!path_visited_.insert(exact).second)
+                throw std::runtime_error("XXX active-set path revisited a support before reaching a KKT point");
+
+            diagnostics_.stage(indices_.size());
+            diagnostics_.visit_support();
+            diagnostics_.secondary();
+            if (!process_subset(matrix)) {
+                record_terminal_event("dickinson_negative");
+                return false;
+            }
+
+            const face_result face = analyze_kkt(matrix);
+            if (!process_kkt_result(exact, face)) {
+                record_terminal_event("kkt_negative");
+                return false;
+            }
+            if (face.is_kkt) {
+#ifdef COPOSIT_XXX_TESTING
+                last_path_reached_kkt_ = true;
+#endif
+                commit_path_intervals();
+                return true;
+            }
+
+            std::optional<std::vector<size_t>> next =
+                face.nonsingular ? nonsingular_successor(exact, face) : singular_successor(face);
+            if (!next) {
+                commit_path_intervals();
+                return true;
+            }
+            indices_ = std::move(*next);
+        }
+    }
+
+#ifdef COPOSIT_XXX_TESTING
+    std::array<size_t, 4> buffered_path_for_testing(const matrix_integer& matrix, const std::vector<size_t>& seed)
+    {
+        supports_.emplace(matrix.rows());
+        last_committed_path_interval_count_ = 0;
+        last_path_reached_kkt_ = false;
+        if (!process_path(matrix, seed)) return {};
+        return {path_visited_.size(), last_committed_path_interval_count_, last_path_reached_kkt_, supports_->available(seed)};
+    }
+
     bool check_support_for_testing(const matrix_integer& matrix, const std::vector<size_t>& indices)
     {
         support lower(matrix.rows());
@@ -417,10 +507,7 @@ private:
             has_negative_entry = false;
         }
 
-        if (!has_negative_entry) {
-            if (classification_ != nullptr) classification_->is_strictly_copositive = false;
-            else if (mode_ == copositivity_mode::strictly_copositive) return false;
-        }
+        if (!has_negative_entry && !record_zero_witness()) return false;
 
         calculate_product(matrix, solution_, 0, product_);
         if (has_negative_entry) {
@@ -517,7 +604,7 @@ private:
         apply_candidate(direction, best_numerator_, best_denominator_);
         current_score_ = best_score_;
         improved = true;
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+#ifdef COPOSIT_XXX_TESTING
         ++optimized_certificate_count_;
 #endif
         return true;
@@ -790,10 +877,9 @@ private:
         bool selected = false;
         for (size_t ray = 0; ray < ray_count; ++ray) {
             install_combined_direction(ray);
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+#ifdef COPOSIT_XXX_TESTING
             ++combined_ray_sweep_count_;
 #endif
-            COPOSIT_SAT_HALFSPACE_RAYS_DIAGNOSTICS("combined_ray", ray + 1);
             if (!search_direction(0, false)) return false;
             if (!best_numerator_.is_zero() && better_score(best_score_, selected_score)) {
                 selected_score = best_score_;
@@ -809,7 +895,7 @@ private:
         install_combined_direction(selected_ray);
         apply_candidate(0, selected_numerator, selected_denominator);
         current_score_ = selected_score;
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+#ifdef COPOSIT_XXX_TESTING
         ++optimized_certificate_count_;
         ++combined_ray_improvement_count_;
 #endif
@@ -916,19 +1002,11 @@ private:
     {
         support lower(product_.size());
         support upper(product_.size());
-        size_t lower_size = 0;
-        size_t upper_size = 0;
         for (size_t local = 0; local < indices_.size(); ++local) {
-            if (!solution_(local, 0).is_zero()) {
-                lower.set(indices_[local]);
-                ++lower_size;
-            }
+            if (!solution_(local, 0).is_zero()) lower.set(indices_[local]);
         }
         for (size_t row = 0; row < product_.size(); ++row) {
-            if (product_[row].sign() >= 0) {
-                upper.set(row);
-                ++upper_size;
-            }
+            if (product_[row].sign() >= 0) upper.set(row);
         }
 
         bool solution_nonnegative = true;
@@ -938,19 +1016,17 @@ private:
             quadratic.addmul(solution_(local, 0), product_[indices_[local]]);
         }
         if (solution_nonnegative && quadratic.is_zero()) {
-            if (classification_ != nullptr) classification_->is_strictly_copositive = false;
-            else if (mode_ == copositivity_mode::strictly_copositive) return false;
+            if (!record_zero_witness()) return false;
         }
 
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+#ifdef COPOSIT_XXX_TESTING
         if (captured_lower_ != nullptr) {
             *captured_lower_ = lower;
             *captured_upper_ = upper;
             return true;
         }
 #endif
-        supports_->add_interval(lower, upper);
-        if (diagnostics_.active()) diagnostics_.certificate(upper_size - lower_size, upper_size);
+        offer_interval(lower, upper, true);
         return true;
     }
 
@@ -963,7 +1039,300 @@ private:
         }
     }
 
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+    face_result analyze_kkt(const matrix_integer& matrix)
+    {
+        const size_t cardinality = indices_.size();
+        face_result result;
+        kkt_solution_.resize(cardinality, 1);
+        kkt_products_.resize(dimension_, 1);
+
+        if (cardinality == 1) {
+            kkt_denominator_.set_one();
+            kkt_solution_(0, 0).set_one();
+            kkt_payoff_ = matrix(indices_[0], indices_[0]);
+        } else {
+            const size_t reduced_dimension = cardinality - 1;
+            const size_t reference = indices_.back();
+            kkt_reduced_.resize(reduced_dimension, reduced_dimension);
+            kkt_rhs_.resize(reduced_dimension, 1);
+            for (size_t row = 0; row < reduced_dimension; ++row) {
+                const size_t original_row = indices_[row];
+                kkt_rhs_(row, 0).set_difference(matrix(reference, reference), matrix(original_row, reference));
+                for (size_t column = 0; column <= row; ++column) {
+                    const size_t original_column = indices_[column];
+                    kkt_reduced_(row, column) = matrix(original_row, original_column);
+                    kkt_reduced_(row, column) -= matrix(original_row, reference);
+                    kkt_reduced_(row, column) -= matrix(reference, original_column);
+                    kkt_reduced_(row, column) += matrix(reference, reference);
+                }
+            }
+
+            result.nonsingular = kkt_factorization_.factorize_inplace(kkt_reduced_) != 0;
+            result.nullity = reduced_dimension - kkt_factorization_.rank();
+            result.positive_semidefinite = kkt_factorization_.is_positive_semidefinite();
+            if (result.nonsingular) {
+                kkt_factorization_.solve_inplace(kkt_rhs_, kkt_denominator_, kkt_reduced_);
+            } else {
+                kkt_original_rhs_ = kkt_rhs_;
+                result.consistent =
+                    kkt_factorization_.solve_consistent_inplace(kkt_rhs_, kkt_denominator_, kkt_reduced_);
+                if (!result.consistent) return result;
+            }
+
+            integer sum;
+            for (size_t row = 0; row < reduced_dimension; ++row) {
+                kkt_solution_(row, 0) = kkt_rhs_(row, 0);
+                sum += kkt_rhs_(row, 0);
+            }
+            kkt_solution_(cardinality - 1, 0).set_difference(kkt_denominator_, sum);
+            kkt_payoff_.set_zero();
+            for (size_t position = 0; position < cardinality; ++position)
+                kkt_payoff_.addmul(matrix(reference, indices_[position]), kkt_solution_(position, 0));
+        }
+
+        result.feasible = true;
+        for (size_t position = 0; position < cardinality; ++position)
+            result.feasible &= kkt_solution_(position, 0).sign() >= 0;
+        if (!result.feasible) return result;
+
+        result.is_kkt = true;
+        for (size_t row = 0; row < dimension_; ++row) {
+            kkt_products_(row, 0).set_zero();
+            for (size_t position = 0; position < cardinality; ++position)
+                kkt_products_(row, 0).addmul(matrix(row, indices_[position]), kkt_solution_(position, 0));
+            if (kkt_products_(row, 0).compare(kkt_payoff_) < 0) result.is_kkt = false;
+        }
+        return result;
+    }
+
+    bool process_kkt_result(const support& exact, const face_result& face)
+    {
+        if (!face.consistent) return true;
+        record_face_stationary_event(face);
+        if (face.feasible && kkt_payoff_.sign() < 0) return false;
+        if (face.feasible && kkt_payoff_.is_zero() && !record_zero_witness()) return false;
+
+        if (face.positive_semidefinite && kkt_payoff_.sign() >= 0) {
+            support empty(dimension_);
+            offer_interval(empty, exact, kkt_payoff_.sign() > 0);
+        }
+        if (face.is_kkt && kkt_payoff_.sign() >= 0) {
+            support full(dimension_);
+            for (size_t index = 0; index < dimension_; ++index) full.set(index);
+            offer_interval(kkt_positive_support(), full, kkt_payoff_.sign() > 0);
+        }
+        return true;
+    }
+
+    void record_face_stationary_event(const face_result& face) const
+    {
+        if (!diagnostics_.active() || !face.feasible) return;
+
+        std::ostringstream event;
+        event << "event=xxx_face_stationary k=" << indices_.size() << " support=[";
+        for (size_t position = 0; position < indices_.size(); ++position) {
+            if (position != 0) event << ',';
+            event << indices_[position] + 1;
+        }
+        event << "] positive_support=[";
+        bool first = true;
+        for (size_t position = 0; position < indices_.size(); ++position) {
+            if (kkt_solution_(position, 0).sign() <= 0) continue;
+            if (!first) event << ',';
+            event << indices_[position] + 1;
+            first = false;
+        }
+        event << "] kkt=" << (face.is_kkt ? "yes" : "no")
+              << " psd=" << (face.positive_semidefinite ? "yes" : "no") << " nullity=" << face.nullity
+              << " payoff_sign=" << kkt_payoff_.sign();
+        diagnostics::record_event(event.str());
+    }
+
+    void record_terminal_event(const char* outcome) const
+    {
+        if (!diagnostics_.active()) return;
+        std::ostringstream event;
+        event << "event=xxx_terminal outcome=" << outcome << " k=" << indices_.size() << " support=[";
+        for (size_t position = 0; position < indices_.size(); ++position) {
+            if (position != 0) event << ',';
+            event << indices_[position] + 1;
+        }
+        event << ']';
+        diagnostics::record_event(event.str());
+    }
+
+    std::optional<std::vector<size_t>> nonsingular_successor(const support& exact, const face_result& face)
+    {
+        std::vector<size_t> candidates;
+        for (size_t position = 0; position < indices_.size(); ++position)
+            if (kkt_solution_(position, 0).sign() < 0) candidates.push_back(position);
+        std::sort(candidates.begin(), candidates.end(), [&](size_t left, size_t right) {
+            const int comparison = kkt_solution_(left, 0).compare(kkt_solution_(right, 0));
+            return comparison != 0 ? comparison < 0 : indices_[left] < indices_[right];
+        });
+        for (const size_t removed : candidates) {
+            std::vector<size_t> next = indices_;
+            next.erase(next.begin() + static_cast<std::ptrdiff_t>(removed));
+            if (admissible(next)) return next;
+        }
+        if (!candidates.empty()) return std::nullopt;
+
+        std::vector<size_t> nonzero;
+        nonzero.reserve(indices_.size());
+        std::vector<size_t> zeros;
+        for (size_t position = 0; position < indices_.size(); ++position)
+            if (!kkt_solution_(position, 0).is_zero())
+                nonzero.push_back(indices_[position]);
+            else
+                zeros.push_back(position);
+        if (nonzero.size() != indices_.size()) {
+            if (admissible(nonzero)) return nonzero;
+            for (const size_t removed : zeros) {
+                std::vector<size_t> next = indices_;
+                next.erase(next.begin() + static_cast<std::ptrdiff_t>(removed));
+                if (next != nonzero && admissible(next)) return next;
+            }
+            return std::nullopt;
+        }
+        if (face.is_kkt) return std::nullopt;
+
+        candidates.clear();
+        for (size_t index = 0; index < dimension_; ++index) {
+            if (exact.contains(index)) continue;
+            if (kkt_products_(index, 0).compare(kkt_payoff_) < 0) candidates.push_back(index);
+        }
+        std::sort(candidates.begin(), candidates.end(), [&](size_t left, size_t right) {
+            const int comparison = kkt_products_(left, 0).compare(kkt_products_(right, 0));
+            return comparison != 0 ? comparison < 0 : left < right;
+        });
+        for (const size_t added : candidates) {
+            std::vector<size_t> next = indices_;
+            next.insert(std::lower_bound(next.begin(), next.end(), added), added);
+            if (admissible(next)) return next;
+        }
+        return std::nullopt;
+    }
+
+    std::optional<std::vector<size_t>> singular_successor(const face_result& face)
+    {
+        const size_t reduced_dimension = indices_.size() - 1;
+        kkt_basis_.resize(reduced_dimension, face.nullity);
+        kkt_factorization_.nullspace_basis(kkt_basis_, kkt_reduced_);
+
+        if (face.consistent) {
+            for (size_t column = 0; column < face.nullity; ++column) {
+                if (auto next = boundary_support(column, 1)) return next;
+                if (auto next = boundary_support(column, -1)) return next;
+            }
+            return std::nullopt;
+        }
+
+        bool found_separating_direction = false;
+        for (size_t column = 0; column < face.nullity; ++column) {
+            integer dot;
+            for (size_t row = 0; row < reduced_dimension; ++row)
+                dot.addmul(kkt_basis_(row, column), kkt_original_rhs_(row, 0));
+            if (dot.is_zero()) continue;
+            found_separating_direction = true;
+            if (auto next = boundary_support(column, dot.sign() > 0 ? 1 : -1)) return next;
+        }
+        if (found_separating_direction) return std::nullopt;
+        throw std::logic_error("an inconsistent symmetric system has no separating nullspace direction");
+    }
+
+    std::optional<std::vector<size_t>> boundary_support(size_t column, int orientation)
+    {
+        kkt_direction_.clear();
+        kkt_direction_.resize(indices_.size());
+        for (size_t row = 0; row + 1 < indices_.size(); ++row) {
+            kkt_direction_[row] = kkt_basis_(row, column);
+            if (orientation < 0) kkt_direction_[row].negate();
+            kkt_direction_.back() -= kkt_direction_[row];
+        }
+
+        std::optional<size_t> minimum;
+        for (size_t position = 0; position < kkt_direction_.size(); ++position) {
+            if (kkt_direction_[position].sign() >= 0) continue;
+            if (!minimum || kkt_direction_[position].compare(kkt_direction_[*minimum]) < 0) minimum = position;
+        }
+        assert(minimum);
+        std::vector<size_t> next;
+        next.reserve(indices_.size() - 1);
+        for (size_t position = 0; position < indices_.size(); ++position)
+            if (kkt_direction_[position].compare(kkt_direction_[*minimum]) != 0) next.push_back(indices_[position]);
+        if (admissible(next)) return next;
+        return std::nullopt;
+    }
+
+    bool admissible(const std::vector<size_t>& indices)
+    {
+        if (indices.empty()) return false;
+        const support candidate = make_support(indices);
+        return path_visited_.find(candidate) == path_visited_.end() && supports_->available(indices);
+    }
+
+    support make_support(const std::vector<size_t>& indices) const
+    {
+        support result(dimension_);
+        for (const size_t index : indices) result.set(index);
+        return result;
+    }
+
+    support kkt_positive_support() const
+    {
+        support result(dimension_);
+        for (size_t position = 0; position < indices_.size(); ++position)
+            if (kkt_solution_(position, 0).sign() > 0) result.set(indices_[position]);
+        assert(!result.empty());
+        return result;
+    }
+
+    void offer_interval(const support& lower, const support& upper, bool strict_safe)
+    {
+        path_intervals_.push_back({lower, upper, strict_safe});
+    }
+
+    void commit_path_intervals()
+    {
+#ifdef COPOSIT_XXX_TESTING
+        last_committed_path_interval_count_ = path_intervals_.size();
+#endif
+        for (const buffered_interval& interval : path_intervals_) {
+            if (classification_ == nullptr) {
+                if (mode_ != copositivity_mode::strictly_copositive || interval.strict_safe)
+                    install_interval(interval.lower, interval.upper);
+            } else if (classification_->is_strictly_copositive && !interval.strict_safe) {
+                pending_.push_back({interval.lower, interval.upper});
+            } else {
+                install_interval(interval.lower, interval.upper);
+            }
+        }
+        path_intervals_.clear();
+    }
+
+    void install_interval(const support& lower, const support& upper)
+    {
+        supports_->add_interval(lower, upper);
+        size_t lower_size = 0;
+        size_t upper_size = 0;
+        for (size_t index = 0; index < dimension_; ++index) {
+            lower_size += lower.contains(index);
+            upper_size += upper.contains(index);
+        }
+        diagnostics_.certificate(upper_size - lower_size, upper_size);
+    }
+
+    bool record_zero_witness()
+    {
+        if (classification_ == nullptr) return mode_ != copositivity_mode::strictly_copositive;
+        if (!classification_->is_strictly_copositive) return true;
+        classification_->is_strictly_copositive = false;
+        for (const pending_interval& interval : pending_) install_interval(interval.lower, interval.upper);
+        pending_.clear();
+        return true;
+    }
+
+#ifdef COPOSIT_XXX_TESTING
     void publish_test_counters() const noexcept
     {
         last_optimized_certificate_count = optimized_certificate_count_;
@@ -972,7 +1341,9 @@ private:
     }
 #endif
 
+    size_t dimension_;
     fraction_free_ldlt_factorization factorization_;
+    fraction_free_ldlt_factorization kkt_factorization_;
     matrix_integer principal_;
     matrix_integer solution_;
     matrix_integer directions_;
@@ -993,6 +1364,18 @@ private:
     integer ray_best_numerator_;
     integer ray_best_denominator_;
     integer scratch_;
+    matrix_integer kkt_reduced_;
+    matrix_integer kkt_rhs_;
+    matrix_integer kkt_original_rhs_;
+    matrix_integer kkt_solution_;
+    matrix_integer kkt_products_;
+    matrix_integer kkt_basis_;
+    integer kkt_denominator_;
+    integer kkt_payoff_;
+    std::vector<integer> kkt_direction_;
+    std::vector<pending_interval> pending_;
+    std::vector<buffered_interval> path_intervals_;
+    std::set<support> path_visited_;
     size_t ray_best_gains_ = 0;
     size_t ray_best_losses_ = 0;
     bool ray_best_initialized_ = false;
@@ -1001,12 +1384,14 @@ private:
     copositivity_classification* classification_ = nullptr;
     diagnostics::tracker diagnostics_;
     std::optional<interval_sat> supports_;
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+#ifdef COPOSIT_XXX_TESTING
     size_t optimized_certificate_count_ = 0;
     size_t combined_ray_sweep_count_ = 0;
     size_t combined_ray_improvement_count_ = 0;
     support* captured_lower_ = nullptr;
     support* captured_upper_ = nullptr;
+    size_t last_committed_path_interval_count_ = 0;
+    bool last_path_reached_kkt_ = false;
 #endif
 };
 
@@ -1026,7 +1411,7 @@ copositivity_classification classify(const matrix_integer& matrix)
     return result;
 }
 
-#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+#ifdef COPOSIT_XXX_TESTING
 bool sat_halfspace_rays_prefers_negative_singular_orientation_for_testing(size_t positive_products,
                                                                            size_t negative_products) noexcept
 {
@@ -1064,6 +1449,11 @@ bool sat_halfspace_rays_prefers_ray_candidate_for_testing(size_t candidate_upper
 bool sat_halfspace_rays_check_support_for_testing(const matrix_integer& matrix, const std::vector<size_t>& indices)
 {
     return dickinson_checker(matrix.rows(), copositivity_mode::strictly_copositive).check_support_for_testing(matrix, indices);
+}
+
+std::array<size_t, 4> xxx_buffered_path_for_testing(const matrix_integer& matrix, const std::vector<size_t>& seed)
+{
+    return dickinson_checker(matrix.rows(), copositivity_mode::copositive).buffered_path_for_testing(matrix, seed);
 }
 
 bool sat_halfspace_rays_certificate_for_testing(
@@ -1115,6 +1505,27 @@ size_t sat_halfspace_rays_interval_clause_size(size_t dimension, uint64_t lower_
     }
     diagram.add_interval(lower, upper);
     return diagram.last_interval_clause_size();
+}
+
+size_t xxx_cardinality_at_for_testing(size_t dimension, size_t layer)
+{
+    return alternating_cardinality(dimension, layer);
+}
+
+bool xxx_support_available_for_testing(
+    size_t dimension, uint64_t lower_mask, uint64_t upper_mask, uint64_t candidate_mask)
+{
+    interval_sat diagram(dimension);
+    support lower(dimension);
+    support upper(dimension);
+    std::vector<size_t> candidate;
+    for (size_t bit = 0; bit < dimension; ++bit) {
+        if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
+        if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
+        if ((candidate_mask & (uint64_t{1} << bit)) != 0) candidate.push_back(bit);
+    }
+    diagram.add_interval(lower, upper);
+    return diagram.available(candidate);
 }
 #endif
 

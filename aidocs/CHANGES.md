@@ -2,6 +2,83 @@
 
 This append-only file records meaningful decisions, results, and evidence that are not clear from Git. Do not log routine edits here.
 
+## 2026-08-19 — Binary64 KKT-path experiment (`xxx_two`)
+
+- Added `xxx_two`, an isolated copy of XXX whose active-set walk uses a one-time normalized binary64 matrix and a pivoted symmetric
+  Bunch--Kaufman solve. Floating point chooses only the next support; an exact fraction-free KKT solve must verify the terminal point
+  before any upward or downward interval enters the proof SAT instance.
+- Added explicit depth-first backtracking over each support's ordered preferred successors. A blocked branch, current-path cycle,
+  earlier-path collision, numerically inconclusive floating solve, or failed exact terminal proposal pops to the previous support and
+  tries its next candidate. Every support visited on successful and dead-end branches joins separate non-proof path memory.
+- After exact KKT intervals are installed, SAT now checks the original path seed. Only when that seed remains open, the retained exact
+  Halfspace-Rays engine computes and installs one Dickinson interval for it. This closes the seed without charging every floating
+  path support for exact arithmetic.
+- A floating intermediate point that appears nonnegative with negative payoff now triggers the existing exact face solve immediately.
+  Only an exactly nonnegative negative-payoff vector terminates; a failed proposal adds no interval and leaves the path unchanged.
+- Added twelve focused checks for exact classifications, the order-two criterion, alternative-pivot selection, complete backtracking,
+  repeated-path seed closure, conditional seed closure, alternating cardinalities, exact SAT intervals, diagnostics, and timeout
+  propagation. The complete Release build passed all 82 checks.
+- The final 46-row Smoke integration run completed every matrix with the exact expected combined CP/SCP classification, zero timeout,
+  and zero execution error. This supersedes the two earlier diagnostic binaries whose one-way walks terminated on path collisions or
+  floating singularities.
+
+## 2026-08-18 — Preprocessing decision times are now canonical for preprocessing-complete matrices
+
+- Registered the 14 exact complete depth-2 60-second continuation results and 22 exact complete ten-minute Motzkin--Straus results
+  that existed only in retained CSVs. Each is now an exact, referencable `preprocessing_depth_2` combined diagnostic row; no solver
+  or preprocessing work was rerun.
+- For all 2,765 `preprocessing_solved` matrices, `fastest_elapsed_ns` and `fastest_result_ref` now identify the shortest complete
+  shared-preprocessing decision. Non-preprocessing-complete rows retain their normal shortest eligible combined model result.
+
+## 2026-08-18 — Truth and fastest-time refresh after XXX completions
+
+- Added the unanimous exact combined classifications for matrices 12649 and 12693. Both are non-copositive, reducing the number of
+  matrices without a CP/SCP classification from 105 to 103.
+- Refreshed only `fastest_elapsed_ns` and `fastest_result_ref` from completed combined diagnostic rows agreeing with the now-current
+  truth. The 3,351 eligible timings are current; no solver or preprocessing run was repeated.
+- Verified all 2,729 complete preprocessing decisions retained in the central diagnostics database against corpus truth and
+  `preprocessing_solved`. No flag was missing or removed, and the additive total remains 2,765.
+
+## 2026-08-18 — XXX KKT paths confined to uncovered supports
+
+- Corrected XXX's local-walk policy: every proposed successor is now tested under a complete assignment against the existing SAT
+  proof clauses. Covered proposals are skipped, alternative pivots are tried in deterministic order, and the local walk stops when
+  no uncovered successor remains; the global SAT traversal then supplies another uncovered seed.
+- Reused the one persistent SAT instance. No second proof state, visited-support database, or new search abstraction was added.
+- Removed the now-redundant path-local visited set: every processed support's mandatory Dickinson interval already makes an exact
+  revisit unsatisfiable.
+- Removed the arbitrary $2n$ path cap. A local walk now ends exactly when all deterministic successor candidates are empty or already
+  covered; finiteness still follows because each entered support is newly open and becomes covered immediately.
+- Added an exhaustive dimension-four regression over every $L\subseteq U$ interval and every nonempty candidate, proving that
+  interval-covered KKT proposals are rejected and uncovered alternatives remain admissible.
+- The final changed binary passed all 19 focused XXX checks, classified all 46 Smoke matrices exactly in combined mode with both
+  preprocessing stages and no timeout or error, and passed all 81 Release checks.
+
+## 2026-08-18 — XXX proof-complete interval integration
+
+- Superseded XXX's KKT-only stalled-search design. Every visited support now runs the retained SAT-Halfspace-Rays certificate engine
+  and immediately installs its ordinary Dickinson interval; KKT downward and full-ceiling intervals are additional proofs.
+- Replaced guarded tried-support clauses and separate proof/exploration SAT views with one persistent SAT instance containing only
+  mathematical intervals. A KKT path may pass through globally covered supports but rejects path-local repetition.
+- Restored explicit cardinality-layer exhaustion in the order $1,n,2,n-1,\ldots$. Cardinality-aware clauses become satisfied outside
+  their $[|L|,|U|]$ range, so no explicit certificate deletion or SAT rebuild is needed after a low or high layer finishes.
+- Added focused regressions for the full inherited halfspace-rays engine, alternating layer order, the ordinary interval produced by
+  a previously stalled six-dimensional support, and complete CP/SCP classification of that matrix.
+- The new-binary 46-row Smoke run in combined mode with both preprocessing stages completed all 46 with exact reference matches,
+  zero timeout, and zero execution error. The earlier KKT-only binary had completed one row and stalled on 45.
+
+## 2026-08-18 — Exact SAT-guided KKT experiment
+
+- Replaced the copied `xxx` placeholder with exact SAT-selected KKT active-set paths. The model reuses the shared fraction-free
+  symmetric LDLT factorization, alternates minimum- and maximum-cardinality uncovered seeds, and adds exact downward convex-face
+  blocks and full-ceiling Dickinson coverage clauses.
+- Kept heuristic tried-support clauses behind one selector so they cannot prove completion. If those clauses exhaust the bounded
+  search while proof SAT still contains a support, the model raises `xxx KKT search stalled`; the existing companion reports
+  execution-error status 4 with no Boolean fields. There is no ordinary Dickinson fallback or model-specific public status.
+- The first 46-row Smoke run with both predicates and preprocessing completed one matrix and explicitly stalled on 45. It produced
+  no conflicting Boolean result and no timeout, showing that the first bounded policy is mathematically guarded but not a generally
+  complete practical classifier.
+
 ## 2026-08-18 — Additive truth, preprocessing, and timing refresh
 
 - Added 17 previously missing exact truth classifications from unanimous completed combined diagnostic rows: 16 strictly copositive
