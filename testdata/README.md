@@ -9,9 +9,9 @@ measurements remain in the ignored local `experiments/diagnostics.sqlite3` datab
 - Dimensions: 1 through 5,000
 - Strictly copositive: 1,002
 - Copositive but not strictly copositive: 1,332
-- Not copositive: 1,084
+- Not copositive: 1,086
 - Copositive with strict status not yet established: 0
-- Strict and non-strict copositivity not yet established: 105
+- Strict and non-strict copositivity not yet established: 103
 - Schema: the `sources` and `matrices` tables, with no views, triggers, or manually created indexes
 
 The maintained directory contains this database, its `schema.sql`, the reproducible `diagnostics_schema.sql`, this README, and the
@@ -58,8 +58,11 @@ definitions.
 exact representative per order, removes their obsolete diagnostics, and refills six boundary Core slots at the same orders.
 `fastest_elapsed_ns` stores the shortest eligible completed native time, and `fastest_result_ref` identifies its exact diagnostic row
 by model, mode, preprocessing, and binary SHA-256. An eligible row must be `ok`, use combined `both` classification, and agree with
-every known corpus truth. Its preprocessing selection may be `none` or `both`; predicate-only measurements never enter this cache.
-The reference runner refreshes affected cache rows in the same serialized batch transaction used to write diagnostics.
+every known corpus truth. For a `preprocessing_solved` row, those fields instead intentionally record the shortest complete shared-
+preprocessing decision: this isolates the cost that actually solved that matrix before any model traversal. The 36 retained raw
+depth-2 continuations are represented by exact `preprocessing_depth_2` diagnostic rows for this purpose. Predicate-only measurements
+never enter either selection. The reference runner refreshes ordinary cache rows in the same serialized batch transaction used to
+write diagnostics.
 Free-form source strings preserve the provenance of the stored occurrence; every retained representative also preserves the origins
 of projectively equivalent matrices removed on 2026-08-09 and 2026-08-14. `source_id` points to the earliest located paper, archive, repository, or
 reproducible local generator for the matrix. `additional_source_ids` is a compact JSON list of other sources that explicitly print,

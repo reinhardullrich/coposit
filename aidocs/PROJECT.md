@@ -20,14 +20,14 @@ variants, `ceiling_pruned_dickinson`, `layered_singular_lift_dickinson`, `breadt
 `sat_halfspace_rays_lookahead_dickinson`,
 `sat_halfspace_rays_wide_dickinson`, `cbdd_halfspace_dickinson`,
 `kernel_cone_dickinson`, `affine_companion_dickinson`,
-`wide_certificate_sat_dickinson`, `clingo_dickinson`, and `clingo_halfspace_dickinson` support
+`wide_certificate_sat_dickinson`, `xxx`, `xxx_two`, `clingo_dickinson`, and `clingo_halfspace_dickinson` support
 separately selected CP and SCP.
 Hadeler 1983, Dickinson 2019, Dense-Bitset Dickinson, Danninger 1990, all CBDD Dickinson variants,
 Ceiling-Pruned Dickinson, Kernel-Cone Dickinson, Layered Singular-Lift Dickinson, SAT Dickinson, SAT-Halfspace Dickinson,
 SAT-Halfspace-Rays Dickinson, SAT-Halfspace-LP Dickinson, SAT-Halfspace-MILP Dickinson,
 SAT-Halfspace-Rays Lookahead Dickinson, SAT-Halfspace-Rays Wide Dickinson,
 Wide-Certificate SAT Dickinson,
-Affine-Companion Dickinson, Clingo Dickinson, and Clingo-Halfspace Dickinson can additionally classify both predicates in one traversal.
+XXX, XXX Two, Affine-Companion Dickinson, Clingo Dickinson, and Clingo-Halfspace Dickinson can additionally classify both predicates in one traversal.
 Other coposit-created models reject CP and combined mode explicitly.
 
 ## Repository Structure
@@ -221,6 +221,8 @@ Their canonical source directories and compact lineage inventory are under
 | `sat_halfspace_rays_lookahead_dickinson` | SAT-Halfspace-Rays with one-cardinality child analysis, one-layer exact-result caching, and immediate insertion of every child interval not contained in its current parent interval; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_rays_lookahead_dickinson/ALGORITHM.md). |
 | `sat_halfspace_rays_wide_dickinson` | Parameterized SAT-Halfspace-Rays model retaining a full interval only for $d>\lfloor p(n-k)/100\rfloor$; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_rays_wide_dickinson/ALGORITHM.md). |
 | `wide_certificate_sat_dickinson` | Parameterized SAT Dickinson that retains only intervals with $d>\lfloor p(n-k)/100\rfloor$ and otherwise blocks exactly the processed support; [`ALGORITHM.md`](../models/hadeler-based/wide_certificate_sat_dickinson/ALGORITHM.md). |
+| `xxx` | SAT-Halfspace-Rays intervals plus exact KKT active-set paths; each path buffers its intervals until it reaches a KKT point or has no open proposed move, then commits the batch and resumes alternating complete layers $1,n,2,n-1,\ldots$; [`ALGORITHM.md`](../models/hadeler-based/xxx/ALGORITHM.md). |
+| `xxx_two` | Binary64 KKT paths with depth-first alternative-pivot backtracking, exact verification of proposed intermediate negative witnesses, and global visited-path avoidance; exact KKT intervals and a conditional exact Halfspace-Rays seed certificate are the only SAT proofs; [`ALGORITHM.md`](../models/hadeler-based/xxx_two/ALGORITHM.md). |
 | `clingo_dickinson` | Clingo/clasp backtracking enumeration with native cardinality layers and one persistent clause per Dickinson interval; [`ALGORITHM.md`](../models/hadeler-based/clingo_dickinson/ALGORITHM.md). |
 | `clingo_halfspace_dickinson` | Clingo Dickinson with the cumulative exact coordinate search over strictly positive right-hand sides from SAT-Halfspace Dickinson; [`ALGORITHM.md`](../models/hadeler-based/clingo_halfspace_dickinson/ALGORITHM.md). |
 | `support_pruned_dickinson` | Dickinson with upward support pruning; [`ALGORITHM.md`](../models/hadeler-based/support_pruned_dickinson/ALGORITHM.md). |
@@ -320,7 +322,9 @@ second and replaced by the final
 delegation is a completed copositivity decision. The serialized result writer refreshes only the affected matrix cache rows; eligibility
 requires `ok` status and agreement with all known corpus truth values. Combined results are eligible; an SCP-only result must be
 positive, while a CP-only result must be negative or positively confirm a known copositive-boundary matrix. A negative SCP-only result
-cannot stand in for a non-copositivity classification.
+cannot stand in for a non-copositivity classification. For `preprocessing_solved` matrices, the two cache fields deliberately retain
+the shortest complete shared-preprocessing decision instead of a later model traversal; the 36 older complete depth-2 CSV outcomes
+are registered as exact `preprocessing_depth_2` diagnostic rows so these references remain concrete.
 
 The immutable source snapshot is `testdata/archive/copos_testdata.original.sqlite3.xz`; its decompressed SHA-256 is
 `a6691d68241f496a9876f9da59772e07fb92b5ae9df1cca954d645696a0c488d`. Historical migration utilities and generators are retained

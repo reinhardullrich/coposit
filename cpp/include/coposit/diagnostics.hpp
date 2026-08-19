@@ -14,6 +14,7 @@
 #include <ostream>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <thread>
 #include <tuple>
 
@@ -640,6 +641,13 @@ inline std::string format(const snapshot& value, std::chrono::seconds elapsed, d
 inline bool enabled() noexcept
 {
     return detail::state.enabled.load(std::memory_order_relaxed);
+}
+
+inline void record_event(std::string_view event)
+{
+    if (!enabled()) return;
+    std::lock_guard<std::mutex> lock(detail::state.diagnostics_mutex);
+    detail::state.diagnostics.append(event).push_back('\n');
 }
 
 inline void preprocessing_stage(preprocessing_phase phase, size_t dimension, size_t current = 0, size_t maximum = 0) noexcept

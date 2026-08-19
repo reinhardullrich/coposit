@@ -48,6 +48,8 @@ sat_halfspace_milp_dickinson
 sat_halfspace_rays_lookahead_dickinson
 sat_halfspace_rays_wide_dickinson
 wide_certificate_sat_dickinson
+xxx
+xxx_two
 clingo_dickinson
 clingo_halfspace_dickinson
 support_pruned_dickinson
