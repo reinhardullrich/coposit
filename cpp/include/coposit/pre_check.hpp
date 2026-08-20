@@ -1,6 +1,7 @@
 #pragma once
 
 #include <coposit/fraction_free_ldlt.hpp>
+#include <coposit/heuristic_kkt_search.hpp>
 #include <coposit/matrix_scan.hpp>
 #include <coposit/matrix_integer.hpp>
 #include <coposit/small_copositivity.hpp>
@@ -549,6 +550,10 @@ classification_state ordinary_checks_scanned(const matrix_integer& matrix, const
     search.run(matrix, scan, observer);
     if (state.done<requested>()) return state;
 
+    diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::heuristic_kkt_search, dimension, 0, dimension);
+    if (const auto kkt = run_heuristic_kkt_search(matrix); kkt.sign) observe_nonpositive_value(state, *kkt.sign);
+    if (state.done<requested>()) return state;
+
     z_matrix_precheck::request z_request = z_matrix_precheck::request::combined;
     if constexpr (requested == query::copositive) z_request = z_matrix_precheck::request::copositive;
     else if constexpr (requested == query::strict) z_request = z_matrix_precheck::request::strict;
@@ -682,6 +687,10 @@ model::copositivity_classification run_scanned(const matrix_integer& matrix, con
             return state.done<requested>();
         };
         search.run(matrix, scan, observer);
+        if (state.done<requested>()) return state.value;
+
+        diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::heuristic_kkt_search, dimension, 0, dimension);
+        if (const auto kkt = run_heuristic_kkt_search(matrix); kkt.sign) observe_nonpositive_value(state, *kkt.sign);
         if (state.done<requested>()) return state.value;
     }
 

@@ -1,25 +1,24 @@
 # XXX Two
 
-Classification: coposit-created experimental CP/SCP classifier. `xxx_two` is copied from [`xxx`](../xxx/ALGORITHM.md), but replaces
-the exact active-set walk with a binary64 floating-point walk. Exact arithmetic is used when the floating walk proposes either a
-negative witness or a KKT point. The name means “the second XXX experiment”; it is intentionally temporary while the method is evaluated.
+Classification: coposit-created experimental CP/SCP classifier. `xxx_two` is copied from
+[`xxx`](../xxx/ALGORITHM.md), but uses a bounded binary64 active-set walk to search cheaply for a KKT support. It always computes an
+exact Dickinson certificate at the starting support unless that support is itself confirmed as KKT. A verified KKT endpoint uses only
+its stronger KKT-derived intervals. The name means “the second XXX experiment”; it is intentionally temporary while the method is evaluated.
 
 The model combines three ideas:
 
-1. a persistent SAT representation of exactly proved support intervals;
-2. a fast floating-point active-set walk that proposes a KKT support;
-3. an exact fraction-free verification that alone may classify the matrix or add SAT intervals.
+1. a persistent SAT representation of exactly certified support intervals;
+2. a fast floating-point walk through candidate KKT supports; and
+3. an exact SAT-Halfspace-Rays Dickinson certificate at each non-KKT seed.
 
-Floating-point values never prove copositivity, strict copositivity, non-copositivity, positive semidefiniteness, or support coverage.
-An inconclusive floating solve, a failed exact proposal, or a walk with no admissible successor causes backtracking. There is no
-exact-walk fallback.
+Floating-point values never classify a matrix and never remove a support. They choose where exact work is performed.
 
 ## Optimization Problem
 
 For a symmetric matrix $A\in\mathbb Z^{n\times n}$, consider
 
 $$
-\min\{q(x)=x^TAx:x\geq0,\ \mathbf1^Tx=1\}.
+\min\{x^TAx:x\geq0,\ \mathbf1^Tx=1\}.
 $$
 
 The minimum is negative exactly when $A$ is not copositive, zero exactly when $A$ is copositive but not strictly copositive, and
@@ -41,35 +40,45 @@ x_S\geq0,
 (Ax)_j\geq\lambda\quad(j\notin S).
 $$
 
-At such a point, $q(x)=\lambda$.
+The floating walk tries to approach such a support. It does not prove that the endpoint is a KKT support.
 
-## SAT Support Family
+## SAT Support Family And Seed Order
 
 One CaDiCaL instance represents the nonempty supports not yet removed by exact certificates. A sorting network supplies exact
-cardinality assumptions. The scheduler maintains the lowest and highest cardinality that may still contain an open support. It runs
-one complete walk from one SAT-selected support at the lower cardinality, then one complete walk from one support at the upper
-cardinality, and repeats. An empty layer is skipped toward the centre. Thus walks, rather than whole layers, are interleaved as
+cardinality assumptions. The required runtime parameter selects one of two seed schedules:
+
+- `alternating` maintains the lowest and highest cardinalities that may still contain an open support and alternates one path from
+  each side,
 
 $$
-k_{\mathrm{low}},k_{\mathrm{high}},k_{\mathrm{low}},k_{\mathrm{high}},\ldots.
+k_{\rm low},k_{\rm high},k_{\rm low},k_{\rm high},\ldots.
 $$
 
-A side remains at the same cardinality while that layer still contains open supports, but yields to the opposite side after every
-walk. Certificates created by either walk are therefore available before the next seed is selected from the other side.
+- `ascending` exhausts open seeds from the smallest cardinality before advancing:
 
-An interval $[L,U]=\{J:L\subseteq J\subseteq U\}$ is represented by one blocking clause. A cardinality literal retires a finite-upper
-interval after its last relevant layer. SAT clauses are persistent across all layers.
+$$
+1,2,3,\ldots,n.
+$$
 
-Only exactly verified KKT intervals enter this SAT instance. Supports remembered as parts of earlier floating paths are not proof
-clauses and do not contribute to a positive classification.
+The selected side remains at the same cardinality while that layer contains open supports. An empty layer is skipped. The schedule
+changes only which SAT-selected support starts the next path; path construction and exact certification are identical.
 
-## Floating-Point Path
+An exact Dickinson interval
 
-The complete integer matrix is converted once to binary64 using one common power-of-two scale determined by its largest absolute
-entry. This preserves signs and relative values that remain representable; very small entries may underflow. Such loss can affect
-the proposed path but cannot affect a certificate because the terminal point is recomputed exactly.
+$$
+[L,U]=\{J:L\subseteq J\subseteq U\}
+$$
 
-For the current support $S=\{i_1,\ldots,i_k\}$, choose $i_k$ as reference. Write every normalized point on the affine hull as
+is represented by one blocking clause. A cardinality literal makes a finite-upper interval inactive after its last relevant layer.
+SAT clauses persist across the complete run.
+
+## Floating-Point Walk
+
+The integer matrix is converted once to binary64 using one common power-of-two scale determined by its largest absolute entry. This
+preserves signs and relative values that remain representable; very small entries may underflow. Such numerical loss can change the
+path, but it cannot change the result because only exact endpoint calculations add certificates.
+
+For the current support $S=\{i_1,\ldots,i_k\}$, choose $i_k$ as reference and write
 
 $$
 x=e_{i_k}+Zy,
@@ -87,8 +96,8 @@ H=Z^TA_{SS}Z,
 r=-Z^TA_{SS}e_{i_k}.
 $$
 
-The model forms $H$ in binary64, scales $H$ and $r$ by the largest absolute entry of $H$, and solves the symmetric system with a
-pivoted Bunch–Kaufman $LDL^T$ factorization adapted from FracESSA's fast candidate filter and LAPACK's `DSYTF2`/`DSYTRS` path.
+The model solves this symmetric system with a pivoted binary64 Bunch–Kaufman $LDL^T$ factorization adapted from FracESSA's fast
+candidate filter and LAPACK's `DSYTF2`/`DSYTRS` path.
 
 The floating tolerance is
 
@@ -97,150 +106,117 @@ $$
 \max\bigl(1,|\lambda|,\max_i|x_i|,\max_j|(Ax)_j|\bigr).
 $$
 
-It is only a pivot-selection tolerance. It is not a mathematical decision threshold.
+It is only a path-selection tolerance, not a mathematical threshold.
 
-The next support is selected as follows:
+The preferred successor order is:
 
-1. If some used coordinate is below the negative tolerance, try removing coordinates from most negative upward.
-2. Otherwise, if some used coordinate is within the zero tolerance, first try dropping all such coordinates, then try them
-   individually.
-3. Otherwise, if some unused coordinate violates $(Ax)_j\geq\lambda$, try adding indices from most violated upward.
-4. Otherwise, treat the support as a proposed terminal KKT support and verify it exactly.
+1. remove used coordinates whose values are below the negative tolerance, most negative first;
+2. otherwise remove coordinates within the zero tolerance, first together and then individually;
+3. otherwise add unused indices violating $(Ax)_j\geq\lambda$, most violated first;
+4. otherwise propose a floating KKT candidate and verify it exactly.
 
-Each list is deterministic, with the original index as final tie-breaker.
+Ties use the original matrix index. A candidate successor is unavailable if it already occurred in the current walk or is covered by
+SAT. The model may try the next candidate proposed at the current support, but it never returns to an earlier support.
 
-Before choosing a successor, a floating candidate with nonnegative coordinates within tolerance and payoff below negative tolerance
-is treated as a possible counterexample. The same face system is then solved exactly. If its exact normalized solution is
-nonnegative and has negative payoff, the matrix is not copositive and the model stops immediately. A failed proposal changes
-nothing: it adds no interval and the floating path continues normally.
+## Bounded Non-Backtracking Rule
 
-## Path Memory And Alternative Pivots
+Starting from the SAT-selected seed, the model performs at most $n$ support-to-support moves, where $n$ is the matrix order. The seed
+is step zero. The walk stops earlier when
 
-The model performs a depth-first search with an explicit stack. Each stack frame stores one support, its ordered preferred successors,
-and the next successor still to try. Every support visited anywhere in that search is remembered, including supports on branches that
-later become dead ends. This memory is separate from SAT.
+- the floating solve is inconclusive;
+- floating arithmetic proposes a negative value;
+- exact arithmetic confirms a proposed KKT point;
+- every preferred successor at the current support is unavailable; or
+- the external timeout is reached.
 
-When choosing a successor, candidates are tried in their mathematical priority order. A candidate is rejected when it
+There is no backtracking. Supports visited during ordinary floating steps are kept only in the temporary current-path set to prevent a
+cycle. They are discarded when the path ends and never enter SAT or a global path cache.
 
-- already occurred on the current path;
-- occurred on an earlier completed path; or
-- is covered by an exact SAT interval.
+### Critical-point exception
 
-The search tries the next candidate in the current frame. If the frame has no candidate left, it pops that frame and resumes at its
-parent's next candidate. Thus a collision does not terminate the search: it causes ordinary depth-first backtracking. The floating
-search stops only after finding an exactly verified KKT point or after popping the root because every preferred route from the seed
-has been exhausted.
+When floating arithmetic proposes a KKT point, the model solves that face system exactly. If exact arithmetic confirms the KKT
+conditions, the path ends. If it disproves them, the support is a **critical point**: floating arithmetic has lost information needed
+to choose the next move. From that support onward, the same forward path remains in exact arithmetic. It never returns to floating
+arithmetic and still cannot exceed the original $n$-move limit.
 
-When a search finishes, all supports visited by it—including dead ends—join the global forbidden-path memory. This memory is partitioned
-by support cardinality, so a lookup examines only supports of the candidate's size. Once SAT proves that a cardinality layer contains no
-uncovered support, that bucket is discarded: SAT itself will reject every later attempt to enter the exhausted layer. If SAT nevertheless
-selects a remembered support as a new uncovered seed before its layer is exhausted, the model does not skip that unresolved support: it
-calculates the exact Halfspace-Rays certificate for that seed immediately.
+At every exact step, the model buffers every valid exact KKT-derived interval already established by that calculation:
 
-An earlier path does not logically prove that its supports are copositive. Consequently, path memory may redirect search but may
-never be inserted into the proof SAT instance.
+- a feasible nonnegative KKT point with nonnegative payoff supplies the upward interval from its positive support to $[n]$;
+- a feasible stationary point whose reduced Hessian is positive semidefinite and whose payoff is nonnegative supplies the downward
+  interval from the empty support to the current support.
 
-## Exact Terminal Verification
+The buffered intervals enter SAT together only after the forward path stops. They therefore cannot block the exact continuation that
+produced them. If the exact point is not yet KKT, its exact signs choose the next forward successor. If that successor was already
+unavailable before this path began, or belongs to the current path, the path stops; it does not backtrack.
 
-When the floating walk reports no negative used coordinate, no zero used coordinate, and no violated unused coordinate, the model
-rebuilds the reduced KKT system from the original arbitrary-precision integers. Coposit's fraction-free symmetric $LDL^T$
-factorization computes:
+## Exact Seed Dickinson Certificate
 
-- exact consistency and nullity;
-- an exact normalized stationary vector;
-- the exact payoff sign;
-- every exact outside KKT inequality; and
-- exact positive semidefiniteness of $H$.
+Let $S_0$ be the seed. After a path that does not finish at $S_0$ as a verified KKT point, the model calculates an exact
+SAT-Halfspace-Rays Dickinson certificate for $S_0$. It never calculates this ordinary certificate for a verified KKT endpoint: the
+KKT calculation already supplies the maximal upward interval and, when its reduced Hessian is positive semidefinite, the maximal
+downward interval. A step-limit, blocked-successor, negative-candidate, or numerically inconclusive stop therefore triggers only the
+seed calculation and never an otherwise unused exact factorization of the final support.
 
-The proposal is accepted only when the exact vector is feasible and satisfies every full-simplex KKT inequality. If floating point
-proposed a terminal point that fails this test, that support is called a **critical point**. The model reuses the exact result to
-select the first admissible successor by the same pivot rules above. This correction requires no second exact factorization.
-
-After the first critical point in a path, every later support in that path is solved exactly; the model does not return to floating
-arithmetic. Exact mode ends when the path reaches an exact KKT point, finds an exact negative witness, exhausts every admissible
-successor, or is interrupted by its external resource limit. Backtracking may choose another stored branch, but its supports are
-also processed exactly because the path has already entered critical mode.
-
-An exact negative payoff is a nonnegative negative witness, so the matrix is not copositive. An exact zero payoff proves that strict
-copositivity is false; ordinary copositivity remains open.
-
-## The Two Exact KKT Intervals
-
-Let $P=\operatorname{supp}(x)$ be the positive support of the exactly verified KKT vector.
-
-### Upward interval
-
-Every nonnegative KKT point with nonnegative payoff supplies the Dickinson interval
+For a nonsingular principal matrix $A_{SS}$, the exact engine starts from
 
 $$
-[P,[n]].
+A_{SS}z=\mathbf1.
 $$
 
-It excludes those supports as inclusion-minimal obstructions. If the payoff is positive, the interval is valid for CP and SCP. If the
-payoff is zero, it is retained for ordinary copositivity after strict copositivity has been rejected.
+It reuses the fraction-free $LDL^T$ factorization to sweep coordinate directions and up to two complementary combined rays. Among the
+exact candidates it prefers a larger upper support and then a wider interval. For a singular principal matrix, it obtains an exact
+nullspace vector, checks both orientations when necessary, and retains the orientation with the larger upper support.
 
-### Downward interval
-
-If the exact reduced Hessian satisfies $H\succeq0$ and the exact payoff is nonnegative, the stationary point is a global minimum on
-face $S$. Therefore $A_{SS}$ and every principal submatrix indexed by $J\subseteq S$ are copositive. This supplies
+For the selected embedded vector $u$, define
 
 $$
-[\varnothing,S].
+L(u)=\operatorname{supp}(u),
+\qquad
+U(u)=\{j:(Au)_j\geq0\}.
 $$
 
-The interval also proves strict copositivity only when the payoff is positive.
+Dickinson's certificate removes every support in $[L(u),U(u)]$. The calculation uses arbitrary-precision integers throughout. A
+nonnegative vector with negative quadratic value rejects copositivity immediately; a nonnegative zero records failure of strict
+copositivity while ordinary copositivity remains open.
 
-The upward interval is always added for an accepted nonnegative KKT point. The downward interval is added only when the exact
-positive-semidefiniteness condition holds. These are the only KKT-derived intervals produced by `xxx_two`.
-
-## Closing The Starting Support
-
-After a verified KKT point or complete backtracking exhaustion, the model asks SAT whether the original path seed is now covered. If
-it remains open, the model runs the inherited exact SAT-Halfspace-Rays Dickinson calculation once on that seed and installs its
-interval. A Dickinson interval produced from a support contains that support, so this closes the seed. The same direct calculation
-is used when SAT selects a support already present in the forbidden-path memory. If the exact seed calculation gives a negative
-witness, the matrix is rejected immediately; if its interval somehow fails to cover the seed, the model reports an explicit error.
-
-The extra Halfspace-Rays calculation is therefore conditional. It is not paid when the KKT intervals already contain the starting
-support, and it is never run on the floating intermediate supports.
+Each exact certificate contains the support from which it was constructed. A verified KKT seed is covered by its KKT intervals;
+otherwise the seed certificate removes it. Every completed path therefore makes proof-level progress. If an exact certificate failed
+to contain its own support, the model would report an explicit invariant error rather than silently continue.
 
 ## Combined CP/SCP Classification
 
 In `both` mode, the model begins with both claims provisionally true.
 
-- A negative exactly verified intermediate or KKT value rejects CP and SCP immediately.
-- A zero exact KKT value rejects SCP and releases zero-safe ordinary intervals.
-- Positive intervals are valid for both claims.
+- An exact negative KKT or seed-certificate witness rejects CP and SCP immediately.
+- An exact zero KKT or seed-certificate witness rejects SCP and releases zero-safe ordinary intervals.
+- Positive Dickinson intervals are valid for both claims.
 - Complete exact SAT coverage proves every still-live claim.
 
-Timeouts and impossible exact-certificate invariant failures remain unresolved errors; neither is converted to `false`. Floating
-numerical failures, failed exact terminal proposals, and blocked branches cause backtracking, not a Boolean decision.
+Timeouts and invariant failures remain unresolved errors; neither is converted to `false`. A floating failure ends the current walk
+and triggers only its exact seed calculation, except that a floating KKT proposal rejected exactly activates exact continuation.
 
 ## Diagnostics
 
-With diagnostics enabled, every chosen floating transition is recorded as `xxx_two_path_step`, and every exhausted frame as
-`xxx_two_path_backtrack`. A completed search records its identifier, number of distinct visited supports, and either its exact terminal
-support or root exhaustion. Exact terminal candidates are recorded separately as `xxx_two_exact_kkt`; a conditional exact certificate
-on the original seed records `xxx_two_seed_certificate`. An exactly confirmed negative candidate before a terminal KKT support records
-`xxx_two_terminal outcome=intermediate_negative`.
+With diagnostics enabled, `xxx_two_path_seed` records the selected seed and `xxx_two_path_step` records every floating move. A
+completed walk records its outcome, final support, and number of moves. Every exact seed calculation records
+`xxx_two_path_certificate` with `role=seed`. Verified KKT endpoints do not emit an ordinary path-certificate event. A rejected floating
+KKT proposal records `xxx_two_critical_point`; every exact stationary calculation records `xxx_two_exact_kkt`. No backtracking event
+exists in this model.
 
 ## Origin And References
 
 The interval certificate follows Peter J. C. Dickinson, “A New Certificate for Copositivity,” *Linear Algebra and its Applications*
-569 (2019), 15–37, especially Theorem 4.6. The SAT interval representation and alternating layer scheduler come from Coposit's
-`sat_halfspace_rays_dickinson` and `xxx` experiments. The reduced KKT equations and floating symmetric solve derive from FracESSA's
-fast candidate filter. The adapted Bunch–Kaufman kernel retains the LAPACK copyright notice in `solver.cpp`.
+569 (2019), 15–37, especially Theorem 4.6. The SAT interval representation, cardinality retirement, Halfspace-Rays certificate engine,
+and alternating scheduler come from Coposit's `sat_halfspace_rays_dickinson` and `xxx` experiments. The floating symmetric solve derives
+from FracESSA's fast candidate filter. The adapted Bunch–Kaufman kernel retains the LAPACK copyright notice in `solver.cpp`.
 
-The floating walk, depth-first backtracking, global forbidden-path memory, and exactly verified proposal policy are Coposit experiments,
-not claims about Dickinson's published algorithm.
+The bounded non-backtracking walk and two-endpoint policy are Coposit experiments, not claims about Dickinson's published algorithm.
 
 ## Known Difficult Inputs
 
-- A nearly singular reduced KKT system may be numerically inconclusive even when the exact system is regular, forcing backtracking.
-- Extreme entry ranges may underflow during the one-time binary64 conversion and lead to a failed exact terminal proposal.
-- A genuinely singular stationary family is not traversed in floating point; that branch is abandoned and may force exact seed work.
-- Different active-set paths can merge. Path memory and backtracking avoid repeating them, but extensive merging can exhaust many
-  alternative branches before the seed is certified.
-- KKT points with indefinite face restrictions supply only upward intervals, which may leave a large part of the support lattice open.
-- Exact terminal verification can still be expensive for matrices with very large integer entries, although it occurs once per
-  completed path rather than once per visited support.
+- A numerically inconclusive floating factorization stops the path; exact continuation is reserved for a floating KKT proposal that
+  can be checked and rejected exactly.
+- Once a false floating KKT proposal activates exact mode, every remaining step is more expensive.
+- Extreme entry ranges may underflow during binary64 conversion and lead to an unhelpful endpoint.
+- A path blocked by an existing SAT interval stops instead of searching another branch from an earlier support.
+- Exact seed certificates can still be expensive for matrices with very large entries.

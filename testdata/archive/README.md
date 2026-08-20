@@ -37,6 +37,8 @@ runtime.
 - `replace_hildebrand_circulants_2026_08_16.py` replaces the 17 order-15–25 Hildebrand points by one diversified low-digit exact
   representative per order, deletes their obsolete local diagnostics and four payloads, and preserves the 512-row Core set with six
   same-order boundary replacements.
+- `add_independent_angle_hildebrand_2026_08_19.py` adds one exact Hildebrand circulant at each order 15–30 using independently
+  selected rational angle parameters. The original equally spaced-angle representatives and their diagnostics remain unchanged.
 - `add_literature_sources_2026_08_14.py` preserves the initial normalized 78-source migration and 901 literature links.
 - `complete_source_links_2026_08_14.py` adds collection, repository, and local-generator sources and completes all current matrix
   source links.
@@ -84,6 +86,12 @@ runtime.
 - `generate_bpqy_julia185_matrices.jl` reproduces the 450 seeded Julia 1.8.5 numerical constructions from Bomze-Peng-Qiu-Yildirim;
   `import_bpqy_julia185_matrices_2026_08_14.py` imports their exact primitive dyadic upper triangles. Their intended boundary
   classification is recorded as provenance but is not assigned to the rounded numerical materializations.
+- `generate_bpqy_julia185_extension_2026_08_19.jl` applies the same Julia 1.8.5 Float64 recipes to COP and PSD matrices of orders
+  20, 30, 35, 40, and 45, with the paper's three designated support sizes and reported seeds 1 through 25.
+  `import_bpqy_julia185_extension_2026_08_19.py` imports the resulting 750 primitive dyadic integer materializations without assigning
+  either copositivity truth field; `bpqy_julia185_extension_2026_08_19.tsv` is the reproducible generated artifact.
+  `classify_bpqy_extension_from_sat_halfspace_rays_2026_08_19.py` copies only completed ten-second exact combined classifications
+  into corpus truth and verifies their fastest-result cache; timeouts remain unknown.
 - The dated `.sql` files preserve applied schema, classification, result, and benchmark-set migrations.
 
 The maintained corpus is `../copos_testdata.sqlite3`; its current schema is `../schema.sql`, and externally stored matrices are under

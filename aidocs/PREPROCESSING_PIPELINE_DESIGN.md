@@ -280,6 +280,8 @@ Their maintained order is:
 ```text
 ordinary_checks(A):
     run the small-face and cheap component checks
+    run bounded Frank--Wolfe witness search
+    run one heuristic KKT walk from the center of the full simplex
     if A has the exact Motzkin--Straus form:
         classify A by maximum clique and return
 
@@ -360,7 +362,43 @@ evaluates the resulting quadratic form with exact integers. Only that exact sign
 
 Frank--Wolfe never accepts a component.
 
-### 8.6 Motzkin--Straus Fast Path
+### 8.6 Heuristic KKT Search
+
+This stage makes one bounded active-set walk for the simplex problem
+
+$$
+\min\{x^TAx:x\geq0,\ \mathbf1^Tx=1\}.
+$$
+
+It begins at the center $x_i=1/n$, whose active support is the full index set. On an active support $S$, the walk solves the face
+stationarity equations
+
+$$
+A_{SS}x_S=\lambda\mathbf1,
+\qquad
+\mathbf1^Tx_S=1.
+$$
+
+A pivoted binary64 $LDL^T$ solve proposes the path. Negative active coordinates are removed first; when the face point is
+nonnegative, an unused coordinate with $(Ax)_j<\lambda$ is added. The most violated coordinate is tried first, and a current-path
+support is never revisited. The walk performs at most $n$ face visits and does not backtrack.
+
+Floating arithmetic never decides copositivity. At every floating-feasible face point whose value appears negative, the same face
+system is solved exactly; an exact negative value immediately disproves copositivity without waiting for a KKT point. When floating
+arithmetic claims that all KKT conditions hold, the candidate is also verified exactly. If the exact signs disagree, every remaining
+step in that one walk uses exact arithmetic, preventing repeated attraction to the same false floating KKT point.
+
+The first exact KKT point ends the walk:
+
+- a negative value disproves copositivity;
+- zero disproves strict copositivity;
+- a positive value gives no decision.
+
+A KKT point exists because the simplex is compact, but this bounded heuristic is not a complete KKT enumerator. A numerically
+inconclusive floating factorization, an exhausted successor path, or the $n$-visit limit therefore leaves the stage unresolved and
+preprocessing continues normally.
+
+### 8.7 Motzkin--Straus Fast Path
 
 This stage recognizes the two-level Motzkin--Straus form:
 
@@ -399,7 +437,7 @@ Only an exact pattern match enters this branch. Its exact result classifies the 
 factorization nor maximal principal-$Z$ enumeration follows. A matrix with any third coefficient value continues with the ordinary
 factorization flow.
 
-### 8.7 Exact Positive-(Semi)definiteness
+### 8.8 Exact Positive-(Semi)definiteness
 
 The current work unit is copied once and factorized exactly with fraction-free LDLT:
 
@@ -413,7 +451,7 @@ The current work unit is copied once and factorized exactly with fraction-free L
 This check is deliberately component-local because exact factorization is one of the most expensive preprocessing operations and can
 be substantially cheaper on separated principal components.
 
-### 8.8 Exact Negative-Part Positive-(Semi)definiteness
+### 8.9 Exact Negative-Part Positive-(Semi)definiteness
 
 This check runs only when the preceding factorization leaves the requested result unresolved. Define the exact symmetric matrix
 $C$ by retaining the diagonal and every negative off-diagonal entry of the current work unit $A$, while replacing each positive
@@ -446,7 +484,7 @@ PSD is equivalent to copositivity, positive definiteness is equivalent to strict
 boundary. This avoids both constructing $C$ and refactorizing $A$ as a maximal Z-block. This is the fixed, easily checked SPN
 certificate $A=C+N$; it does not solve a semidefinite feasibility problem.
 
-### 8.9 Maximal Principal Z-Matrix Fallback
+### 8.10 Maximal Principal Z-Matrix Fallback
 
 A principal Z-matrix is a principal block of the original $A$ whose off-diagonal entries are all nonpositive. The fallback searches
 maximal such blocks, which are maximal cliques in the graph with edges $a_{ij}\leq0$. It then:
@@ -633,6 +671,7 @@ ordinary: principal triples
 ordinary: negative-part diagonal dominance
 ordinary: all-ones
 ordinary: Frank-Wolfe
+ordinary: heuristic KKT search
 ordinary: Motzkin-Straus fast path
 ordinary: exact factorization
 ordinary: negative-part factorization
@@ -667,6 +706,8 @@ The ordering deliberately places cheap decisions and structural decomposition be
 - negative-component traversal uses the packed multiword support representation and is cheap after the scan;
 - principal-triple work can grow rapidly with negative degrees, so it is component-local;
 - bounded Frank--Wolfe uses only order-many floating iterations, followed by exact verification of proposed witnesses;
+- heuristic KKT search visits at most the component order in supports; ordinary steps are floating, while a proposed negative value
+  or KKT endpoint pays for exact verification and one floating/exact disagreement makes the remainder of that walk exact;
 - the Motzkin--Straus maximum-clique branch-and-bound and maximal-Z search are both exponential in the worst case; the exact pattern
   takes its complete specialized path, while maximal-Z runs only after both complete-matrix factorizations remain insufficient;
 - exact fraction-free LDLT has bounded pivot count but can suffer severe arbitrary-precision coefficient growth;
@@ -684,8 +725,8 @@ The maintained implementation preserves these invariants:
 2. make root checks and ordinary checks separate return-value stages rather than nested delegation callbacks;
 3. run cardinality-three faces only after component decomposition;
 4. avoid repeating negative-part diagonal dominance and all-ones decisions at root and component level;
-5. run Frank--Wolfe and the exact Motzkin--Straus fast path before factorizing the original component and its negative part, then run
-   maximal-Z enumeration only when those exact complete-matrix checks leave it useful;
+5. run Frank--Wolfe, one bounded heuristic KKT walk, and the exact Motzkin--Straus fast path before factorizing the original component
+   and its negative part, then run maximal-Z enumeration only when those complete-matrix checks leave it useful;
 6. reuse each matrix scan and collect Z/reduction sign data without an extra full-matrix sign pass;
 7. fix the internal maximum reduction depth at two, with no settings-file, CLI, or Python control;
 8. make the enabled profile execute connected components, every check, Danninger, and COPOMATRIX in the documented fixed order;

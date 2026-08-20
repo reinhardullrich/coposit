@@ -133,6 +133,13 @@ class WrapperTests(unittest.TestCase):
             or algorithm == "dickinson_2019"
             or algorithm.endswith("_dickinson")
             or algorithm == "cbdd_dickinson_improved_1"
+            or algorithm == "sat_b1"
+            or algorithm == "sat_b2"
+            or algorithm == "sat_a1"
+            or algorithm == "sat_a2"
+            or algorithm == "sat_a3"
+            or algorithm == "sat_a4"
+            or algorithm == "sat_a5"
             or algorithm == "xxx"
             or algorithm == "xxx_two"
             or algorithm == "hadeler_1983"
@@ -178,7 +185,7 @@ class WrapperTests(unittest.TestCase):
 
     def test_wide_certificate_runtime_percentage(self):
         self.assertNotIn("wide_75_certificate_cbdd_dickinson", ALGORITHMS)
-        for model in PARAMETERIZED_ALGORITHMS:
+        for model in (model for model in PARAMETERIZED_ALGORITHMS if model != "xxx_two"):
             with self.subTest(model=model):
                 with self.assertRaises(ValueError):
                     _resolve_model_parameter(model, None)
@@ -192,6 +199,12 @@ class WrapperTests(unittest.TestCase):
                 self.assertEqual(result["model_parameter"], "75")
                 self.assertEqual((result["is_copositive"], result["is_strictly_copositive"]), (True, True))
         with self.assertRaises(ValueError):
+            _resolve_model_parameter("xxx_two", None)
+        self.assertEqual(_resolve_model_parameter("xxx_two", "alternating"), "alternating")
+        self.assertEqual(_resolve_model_parameter("xxx_two", "ascending"), "ascending")
+        with self.assertRaises(ValueError):
+            _resolve_model_parameter("xxx_two", "50")
+        with self.assertRaises(ValueError):
             _resolve_model_parameter("hadeler_1983", "75")
 
     def test_serial_dickinson_experiments_collect_sparse_certificate_joint_distributions(self):
@@ -201,6 +214,12 @@ class WrapperTests(unittest.TestCase):
             "upper_endpoint_cbdd_dickinson",
             "czdd_dickinson",
             "sat_dickinson",
+            "sat_b1",
+            "sat_a1",
+            "sat_a2",
+            "sat_a3",
+            "sat_a4",
+            "sat_a5",
             "sat_halfspace_rays_lookahead_dickinson",
             "sat_halfspace_rays_wide_dickinson",
             "wide_certificate_sat_dickinson",
@@ -208,7 +227,7 @@ class WrapperTests(unittest.TestCase):
             "clingo_halfspace_dickinson",
         ):
             with self.subTest(model=model):
-                parameter = "50" if model in PARAMETERIZED_ALGORITHMS else None
+                parameter = "alternating" if model == "xxx_two" else "50" if model in PARAMETERIZED_ALGORITHMS else None
                 result = compute_matrix(
                     model,
                     Matrix("2#1,0,1"),
@@ -306,7 +325,7 @@ class WrapperTests(unittest.TestCase):
         self.assertEqual(set(help_output.partition("Models:\n")[2].split()), source_models)
         for algorithm in ALGORITHMS:
             with self.subTest(algorithm=algorithm):
-                parameter = "50" if algorithm in PARAMETERIZED_ALGORITHMS else None
+                parameter = "alternating" if algorithm == "xxx_two" else "50" if algorithm in PARAMETERIZED_ALGORITHMS else None
                 positive = run(
                     algorithm, Matrix("2#1,0,1", matrix_id=1), "strictly_copositive", model_parameter=parameter
                 )
@@ -324,7 +343,7 @@ class WrapperTests(unittest.TestCase):
         for algorithm in COPOSITIVE_MODE_ALGORITHMS:
             for preprocessing in ("none", "both"):
                 with self.subTest(algorithm=algorithm, preprocessing=preprocessing):
-                    parameter = "50" if algorithm in PARAMETERIZED_ALGORITHMS else None
+                    parameter = "alternating" if algorithm == "xxx_two" else "50" if algorithm in PARAMETERIZED_ALGORITHMS else None
                     boundary = run(
                         algorithm, Matrix("2#1,-1,1", matrix_id=1), "copositive", preprocessing,
                         model_parameter=parameter,
@@ -367,7 +386,7 @@ class WrapperTests(unittest.TestCase):
         for algorithm in COMBINED_CLASSIFICATION_ALGORITHMS:
             for matrix_id, (matrix, expected_copositive, expected_strict) in enumerate(cases, 1):
                 with self.subTest(algorithm=algorithm, matrix_id=matrix_id):
-                    parameter = "50" if algorithm in PARAMETERIZED_ALGORITHMS else None
+                    parameter = "alternating" if algorithm == "xxx_two" else "50" if algorithm in PARAMETERIZED_ALGORITHMS else None
                     result = run(algorithm, Matrix(matrix, matrix_id=matrix_id), model_parameter=parameter)
                     self.assertEqual(result["status"], StatusCode.OK)
                     self.assertEqual(result["mode"], "both")

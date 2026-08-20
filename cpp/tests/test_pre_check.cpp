@@ -478,6 +478,38 @@ TEST(PreCheckTest, FloatingFrankWolfeHandlesTheFormerExactDenominatorGrowthCase)
     EXPECT_EQ(calls, 1U);
 }
 
+TEST(PreCheckTest, HeuristicKktSearchReportsOnlyExactlyVerifiedSigns)
+{
+    const auto negative = pre_check::detail::run_heuristic_kkt_search(symmetric_matrix(2, {1, -2, 1}));
+    ASSERT_TRUE(negative.sign);
+    EXPECT_EQ(*negative.sign, -1);
+    EXPECT_TRUE(negative.reached_kkt);
+
+    const auto zero = pre_check::detail::run_heuristic_kkt_search(symmetric_matrix(2, {1, -1, 1}));
+    ASSERT_TRUE(zero.sign);
+    EXPECT_EQ(*zero.sign, 0);
+    EXPECT_TRUE(zero.reached_kkt);
+}
+
+TEST(PreCheckTest, HeuristicKktSearchContinuesExactlyAfterFloatingDisagreement)
+{
+    const matrix_integer matrix = symmetric_matrix(
+        3, {4503599627370522, 4503599627370516, 4503599627370514, 4503599627370485, 4503599627370513,
+            4503599627370493});
+    const auto result = pre_check::detail::run_heuristic_kkt_search(matrix);
+    EXPECT_TRUE(result.exact_continuation);
+    EXPECT_GT(result.visited, 1U);
+}
+
+TEST(PreCheckTest, HeuristicKktSearchVerifiesNegativeIntermediateValuesBeforeKkt)
+{
+    const auto result = pre_check::detail::run_heuristic_kkt_search(symmetric_matrix(3, {-2, 1, -6, 19, -14, -5}));
+    ASSERT_TRUE(result.sign);
+    EXPECT_EQ(*result.sign, -1);
+    EXPECT_FALSE(result.reached_kkt);
+    EXPECT_EQ(result.visited, 2U);
+}
+
 TEST(PreCheckTest, OneExactFactorizationDecidesDefinitenessAndNullityOneByMode)
 {
     pre_check::options selected = pre_check::options::none();

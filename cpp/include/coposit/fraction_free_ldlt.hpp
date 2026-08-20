@@ -155,6 +155,7 @@ public:
 
     integer::const_reference determinant() const noexcept { return integer::const_reference(determinant_); }
     size_t rank() const noexcept { return rank_; }
+    size_t negative_inertia() const noexcept { return rank_ - positive_inertia_; }
     bool is_positive_definite() const noexcept { return nonsingular_ && positive_inertia_ == dimension_; }
     bool is_positive_semidefinite() const noexcept { return positive_inertia_ == rank_; }
 

@@ -13,9 +13,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <limits>
-#include <numeric>
 #include <optional>
-#include <random>
 #include <set>
 #include <sstream>
 #include <stdexcept>
@@ -25,6 +23,10 @@
 namespace coposit::model {
 
 namespace {
+
+enum class seed_order { alternating, ascending };
+
+seed_order configured_seed_order = seed_order::alternating;
 
 struct positive_ratio {
     integer numerator;
@@ -486,21 +488,13 @@ struct floating_face_result {
     bool negative_witness_candidate = false;
 };
 
-struct path_frame {
-    std::vector<size_t> indices;
-    std::vector<std::vector<size_t>> successors;
-    size_t next_successor = 0;
-    bool expanded = false;
-};
-
 struct blocked_successors {
     size_t current_path = 0;
-    size_t known_path = 0;
     size_t sat = 0;
     size_t empty = 0;
 };
 
-enum class successor_state : std::uint8_t { available, current_path, known_path, sat, empty };
+enum class successor_state : std::uint8_t { available, current_path, sat, empty };
 
 struct pending_interval {
     support lower;
@@ -538,7 +532,6 @@ public:
         , mode_(mode)
         , diagnostics_(diagnostics::metric::support, dimension)
     {
-        completed_path_supports_.resize(dimension + 1);
         indices_.reserve(dimension);
         ray_shortlist_.reserve(shortlist_limit_);
         shortlist_uppers_.reserve(shortlist_limit_);
@@ -555,7 +548,6 @@ public:
         , classification_(&classification)
         , diagnostics_(diagnostics::metric::support, dimension)
     {
-        completed_path_supports_.resize(dimension + 1);
         indices_.reserve(dimension);
         ray_shortlist_.reserve(shortlist_limit_);
         shortlist_uppers_.reserve(shortlist_limit_);
@@ -581,7 +573,6 @@ public:
             size_t& cardinality = take_lower ? lower_cardinality : upper_cardinality;
             supports_->start_cardinality(cardinality);
             while (!supports_->take_first(seed)) {
-                completed_path_supports_[cardinality].clear();
                 if (take_lower) ++lower_cardinality;
                 else --upper_cardinality;
                 if (lower_cardinality > upper_cardinality) break;
@@ -592,7 +583,7 @@ public:
                 diagnostics_.finish();
                 return false;
             }
-            take_lower = !take_lower;
+            if (configured_seed_order == seed_order::alternating) take_lower = !take_lower;
         }
 
         diagnostics_.finish();
@@ -602,7 +593,7 @@ public:
         return true;
     }
 
-    bool process_path(const matrix_integer& matrix, const std::vector<size_t>& seed, bool exact_from_start = false)
+    bool process_path(const matrix_integer& matrix, const std::vector<size_t>& seed)
     {
         path_intervals_.clear();
         path_visited_.clear();
@@ -614,117 +605,93 @@ public:
             append_support(event, seed);
             diagnostics::record_event(event.str());
         }
-        if (contains(completed_path_supports_, make_support(seed), seed.size())) {
-            if (!certify_seed_if_open(matrix, seed, path_id)) return false;
-            record_path_event(path_id, "known_seed_certified", 0);
-            return true;
-        }
+        path_visited_.insert(make_support(seed));
 
-        std::vector<path_frame> stack;
-        stack.push_back({seed});
-        remember_current_path(seed);
-        bool critical_mode = exact_from_start;
-        while (!stack.empty()) {
+        const char* outcome = "step_limit";
+        size_t steps = 0;
+        bool exact_mode = false;
+        bool reached_kkt = false;
+        while (steps < dimension_) {
             timeout_checkpoint();
-            path_frame& frame = stack.back();
-            indices_ = frame.indices;
-            if (!frame.expanded) {
-                frame.expanded = true;
-                diagnostics_.stage(indices_.size());
-                diagnostics_.visit_support();
-                diagnostics_.secondary();
-                const support exact = make_support(indices_);
-                const bool exact_step = critical_mode;
-                const floating_face_result floating = exact_step ? floating_face_result{} : analyze_floating_kkt();
-                std::optional<face_result> exact_face;
-                if (exact_step || (!floating.inconclusive && (floating.negative_witness_candidate || floating.terminal_candidate)))
-                    exact_face = analyze_kkt(matrix);
-                if (exact_face && exact_face->consistent && exact_face->feasible
-                    && kkt_payoff_.sign() < 0) {
-                    record_face_stationary_event(*exact_face);
-                    record_terminal_event("intermediate_negative");
+            diagnostics_.stage(indices_.size());
+            diagnostics_.visit_support();
+            diagnostics_.secondary();
+            const support exact = make_support(indices_);
+            std::optional<std::vector<size_t>> next;
+            if (exact_mode) {
+                const face_result face = analyze_kkt(matrix);
+                if (!process_kkt_result(exact, face)) {
+                    record_terminal_event("exact_path_negative");
                     return false;
                 }
-                if (exact_step || (!floating.inconclusive && floating.terminal_candidate)) {
-                    const face_result& face = *exact_face;
+                if (face.consistent && face.feasible && face.is_kkt) {
+                    reached_kkt = true;
+#ifdef COPOSIT_XXX_TESTING
+                    last_path_reached_kkt_ = true;
+#endif
+                    outcome = "exact_kkt";
+                    break;
+                }
+                next = face.nonsingular ? nonsingular_successor(exact, face) : singular_successor(face);
+                if (!next) {
+                    outcome = "exact_blocked";
+                    break;
+                }
+            } else {
+                const floating_face_result floating = analyze_floating_kkt();
+                if (floating.inconclusive) {
+                    outcome = "floating_inconclusive";
+                    break;
+                }
+                if (floating.negative_witness_candidate) {
+                    outcome = "floating_negative_candidate";
+                    break;
+                }
+                if (floating.terminal_candidate) {
+                    const face_result face = analyze_kkt(matrix);
+                    if (!process_kkt_result(exact, face)) {
+                        record_terminal_event("critical_negative");
+                        return false;
+                    }
                     if (face.consistent && face.feasible && face.is_kkt) {
-                        if (!process_kkt_result(exact, face)) {
-                            record_terminal_event("kkt_negative");
-                            return false;
-                        }
+                        reached_kkt = true;
 #ifdef COPOSIT_XXX_TESTING
                         last_path_reached_kkt_ = true;
 #endif
-                        commit_path_intervals();
-                        const std::vector<size_t> terminal = indices_;
-                        if (!certify_seed_if_open(matrix, seed, path_id)) return false;
-                        indices_ = terminal;
-                        record_path_event(path_id, "verified_kkt", path_visited_.size());
-                        return true;
+                        outcome = "verified_kkt";
+                        break;
                     }
-                    if (!exact_step) {
-                        critical_mode = true;
-                        record_path_event(path_id, "critical_point", stack.size());
+                    exact_mode = true;
+                    record_critical_point(path_id);
+                    next = face.nonsingular ? nonsingular_successor(exact, face) : singular_successor(face);
+                    if (!next) {
+                        outcome = "critical_blocked";
+                        break;
                     }
-                    std::optional<std::vector<size_t>> exact_next = face.nonsingular
-                        ? nonsingular_successor(exact, face)
-                        : singular_successor(face);
-                    if (exact_next) frame.successors.push_back(std::move(*exact_next));
+                } else {
+                    blocked_successors blocked;
+                    next = floating_successor(exact, floating, blocked);
+                    if (!next) {
+                        outcome = "floating_blocked";
+                        break;
+                    }
                 }
-                if (!exact_step && !floating.inconclusive && !floating.terminal_candidate)
-                    frame.successors = floating_successors(exact, floating);
             }
-
-            bool descended = false;
-            while (frame.next_successor < frame.successors.size()) {
-                std::vector<size_t> next = frame.successors[frame.next_successor++];
-                if (successor_status(next) != successor_state::available) continue;
-                record_path_step(path_id, frame.indices, next);
-                remember_current_path(next);
-                stack.push_back({std::move(next)});
-                descended = true;
-                break;
-            }
-            if (descended) continue;
-
-            record_path_backtrack(path_id, frame.indices);
-            stack.pop_back();
+            record_path_step(path_id, indices_, *next);
+            indices_ = std::move(*next);
+            path_visited_.insert(make_support(indices_));
+            ++steps;
         }
 
-        if (!certify_seed_if_open(matrix, seed, path_id)) return false;
-        indices_ = seed;
-        record_path_event(path_id, "root_exhausted", path_visited_.size());
+        const std::vector<size_t> terminal = indices_;
+        commit_path_intervals();
+        if ((!reached_kkt || terminal != seed) && !certify_path_support(matrix, seed, path_id, "seed")) return false;
+        indices_ = terminal;
+        record_path_event(path_id, outcome, steps);
         return true;
     }
 
 #ifdef COPOSIT_XXX_TESTING
-    size_t exact_random_paths_for_testing(const matrix_integer& matrix, size_t requested, uint64_t random_seed)
-    {
-        prepare_floating_matrix(matrix);
-        supports_.emplace(matrix.rows());
-        std::mt19937_64 random(random_seed);
-        std::uniform_int_distribution<size_t> cardinality(1, dimension_);
-        std::vector<size_t> seed(dimension_);
-        std::iota(seed.begin(), seed.end(), 0);
-
-        size_t processed = 0;
-        for (size_t attempts = 0; processed < requested && attempts < requested * 1000; ++attempts) {
-            std::shuffle(seed.begin(), seed.end(), random);
-            seed.resize(cardinality(random));
-            std::sort(seed.begin(), seed.end());
-            if (!supports_->available(seed) || contains(completed_path_supports_, make_support(seed), seed.size())) {
-                seed.resize(dimension_);
-                std::iota(seed.begin(), seed.end(), 0);
-                continue;
-            }
-            ++processed;
-            if (!process_path(matrix, seed, true)) break;
-            seed.resize(dimension_);
-            std::iota(seed.begin(), seed.end(), 0);
-        }
-        return processed;
-    }
-
     std::array<size_t, 4> buffered_path_for_testing(const matrix_integer& matrix, const std::vector<size_t>& seed)
     {
         prepare_floating_matrix(matrix);
@@ -766,11 +733,10 @@ public:
     {
         prepare_floating_matrix(matrix);
         supports_.emplace(matrix.rows());
-        for (auto& bucket : completed_path_supports_) bucket.clear();
-        for (const auto& path_support : known) remember(completed_path_supports_, path_support);
         indices_ = current;
         path_visited_.clear();
-        remember_current_path(current);
+        for (const auto& path_support : known) path_visited_.insert(make_support(path_support));
+        path_visited_.insert(make_support(current));
         const floating_face_result face = analyze_floating_kkt();
         if (face.terminal_candidate) return {};
         blocked_successors blocked;
@@ -778,36 +744,9 @@ public:
         return next ? *next : std::vector<size_t>{};
     }
 
-    void completed_path_seed_for_testing(const matrix_integer& matrix, const std::vector<size_t>& seed)
-    {
-        prepare_floating_matrix(matrix);
-        supports_.emplace(matrix.rows());
-        remember(completed_path_supports_, seed);
-        static_cast<void>(process_path(matrix, seed));
-    }
 #endif
 
 private:
-    using support_buckets = std::vector<std::set<support>>;
-
-    static bool contains(const support_buckets& buckets, const support& value, size_t cardinality)
-    {
-        const auto& bucket = buckets[cardinality];
-        return bucket.find(value) != bucket.end();
-    }
-
-    void remember(support_buckets& buckets, const std::vector<size_t>& indices)
-    {
-        buckets[indices.size()].insert(make_support(indices));
-    }
-
-    void remember_current_path(const std::vector<size_t>& indices)
-    {
-        support value = make_support(indices);
-        path_visited_.insert(value);
-        completed_path_supports_[indices.size()].insert(std::move(value));
-    }
-
     void prepare_floating_matrix(const matrix_integer& matrix)
     {
         floating_game_.resize(dimension_, dimension_);
@@ -927,7 +866,6 @@ private:
         if (candidate.empty()) return successor_state::empty;
         const support candidate_support = make_support(candidate);
         if (path_visited_.find(candidate_support) != path_visited_.end()) return successor_state::current_path;
-        if (contains(completed_path_supports_, candidate_support, candidate.size())) return successor_state::known_path;
         if (!supports_->available(candidate)) return successor_state::sat;
         return successor_state::available;
     }
@@ -937,7 +875,6 @@ private:
         switch (state) {
         case successor_state::available: break;
         case successor_state::current_path: ++blocked.current_path; break;
-        case successor_state::known_path: ++blocked.known_path; break;
         case successor_state::sat: ++blocked.sat; break;
         case successor_state::empty: ++blocked.empty; break;
         }
@@ -1035,35 +972,37 @@ private:
         diagnostics::record_event(event.str());
     }
 
-    void record_seed_certificate_event(size_t path_id, const std::vector<size_t>& seed) const
+    void record_path_certificate_event(
+        size_t path_id, const std::vector<size_t>& path_support, const char* role) const
     {
         if (!diagnostics_.active()) return;
         std::ostringstream event;
-        event << "event=xxx_two_seed_certificate path=" << path_id << " support=";
-        append_support(event, seed);
+        event << "event=xxx_two_path_certificate path=" << path_id << " role=" << role << " support=";
+        append_support(event, path_support);
         diagnostics::record_event(event.str());
     }
 
-    void record_path_backtrack(size_t path_id, const std::vector<size_t>& support_indices) const
+    void record_critical_point(size_t path_id) const
     {
         if (!diagnostics_.active()) return;
         std::ostringstream event;
-        event << "event=xxx_two_path_backtrack path=" << path_id << " support=";
-        append_support(event, support_indices);
+        event << "event=xxx_two_critical_point path=" << path_id << " support=";
+        append_support(event, indices_);
         diagnostics::record_event(event.str());
     }
 
-    bool certify_seed_if_open(const matrix_integer& matrix, const std::vector<size_t>& seed, size_t path_id)
+    bool certify_path_support(
+        const matrix_integer& matrix, const std::vector<size_t>& path_support, size_t path_id, const char* role)
     {
-        if (!supports_->available(seed)) return true;
-        record_seed_certificate_event(path_id, seed);
-        indices_ = seed;
+        record_path_certificate_event(path_id, path_support, role);
+        path_intervals_.clear();
+        indices_ = path_support;
         if (!process_subset(matrix)) {
-            record_terminal_event("seed_certificate_negative");
+            record_terminal_event("path_certificate_negative");
             return false;
         }
         commit_path_intervals();
-        if (supports_->available(seed)) fail_path(path_id, "seed_certificate_did_not_cover_seed", {});
+        if (supports_->available(path_support)) fail_path(path_id, "path_certificate_did_not_cover_support", {});
         return true;
     }
 
@@ -1081,15 +1020,15 @@ private:
         if (diagnostics_.active()) {
             std::ostringstream event;
             event << "event=xxx_two_path path=" << path_id << " outcome=error reason=" << reason
-                  << " blocked_current=" << blocked.current_path << " blocked_known=" << blocked.known_path
-                  << " blocked_sat=" << blocked.sat << " blocked_empty=" << blocked.empty << " support=";
+                  << " blocked_current=" << blocked.current_path << " blocked_sat=" << blocked.sat
+                  << " blocked_empty=" << blocked.empty << " support=";
             append_support(event, indices_);
             diagnostics::record_event(event.str());
         }
         std::ostringstream message;
         message << "XXX_TWO KKT path error: " << reason << " at support cardinality " << indices_.size()
-                << " (blocked current=" << blocked.current_path << ", known=" << blocked.known_path
-                << ", SAT=" << blocked.sat << ", empty=" << blocked.empty << ')';
+                << " (blocked current=" << blocked.current_path << ", SAT=" << blocked.sat
+                << ", empty=" << blocked.empty << ')';
         throw std::runtime_error(message.str());
     }
 
@@ -1733,7 +1672,7 @@ private:
         }
         if (face.is_kkt && kkt_payoff_.sign() >= 0) {
             support full(dimension_);
-            for (size_t index = 0; index < dimension_; ++index) full.set(index);
+            full.set_all();
             offer_interval(kkt_positive_support(), full, kkt_payoff_.sign() > 0);
         }
         return true;
@@ -1796,10 +1735,8 @@ private:
         nonzero.reserve(indices_.size());
         std::vector<size_t> zeros;
         for (size_t position = 0; position < indices_.size(); ++position)
-            if (!kkt_solution_(position, 0).is_zero())
-                nonzero.push_back(indices_[position]);
-            else
-                zeros.push_back(position);
+            if (!kkt_solution_(position, 0).is_zero()) nonzero.push_back(indices_[position]);
+            else zeros.push_back(position);
         if (nonzero.size() != indices_.size()) {
             if (admissible(nonzero)) return nonzero;
             for (const size_t removed : zeros) {
@@ -1879,11 +1816,11 @@ private:
         return std::nullopt;
     }
 
-    bool admissible(const std::vector<size_t>& indices)
+    bool admissible(const std::vector<size_t>& candidate_indices)
     {
-        if (indices.empty()) return false;
-        const support candidate = make_support(indices);
-        return path_visited_.find(candidate) == path_visited_.end() && supports_->available(indices);
+        if (candidate_indices.empty()) return false;
+        const support candidate = make_support(candidate_indices);
+        return path_visited_.find(candidate) == path_visited_.end() && supports_->available(candidate_indices);
     }
 
     support make_support(const std::vector<size_t>& indices) const
@@ -1998,7 +1935,6 @@ private:
     std::vector<pending_interval> pending_;
     std::vector<buffered_interval> path_intervals_;
     std::set<support> path_visited_;
-    support_buckets completed_path_supports_;
     size_t next_path_id_ = 1;
     size_t ray_best_gains_ = 0;
     size_t ray_best_losses_ = 0;
@@ -2020,6 +1956,13 @@ private:
 };
 
 } // namespace
+
+void configure(std::string_view parameter)
+{
+    if (parameter == "alternating") configured_seed_order = seed_order::alternating;
+    else if (parameter == "ascending") configured_seed_order = seed_order::ascending;
+    else throw std::invalid_argument("XXX Two traversal must be 'alternating' or 'ascending'");
+}
 
 bool solve(const matrix_integer& matrix, copositivity_mode mode)
 {
@@ -2080,23 +2023,11 @@ std::array<size_t, 4> xxx_buffered_path_for_testing(const matrix_integer& matrix
     return dickinson_checker(matrix.rows(), copositivity_mode::copositive).buffered_path_for_testing(matrix, seed);
 }
 
-size_t xxx_two_exact_random_paths_for_testing(
-    const matrix_integer& matrix, size_t requested, uint64_t random_seed)
-{
-    return dickinson_checker(matrix.rows(), copositivity_mode::copositive)
-        .exact_random_paths_for_testing(matrix, requested, random_seed);
-}
-
 std::vector<size_t> xxx_two_floating_successor_for_testing(const matrix_integer& matrix, const std::vector<size_t>& current,
                                                            const std::vector<std::vector<size_t>>& known)
 {
     return dickinson_checker(matrix.rows(), copositivity_mode::copositive)
         .floating_successor_for_testing(matrix, current, known);
-}
-
-void xxx_two_completed_path_seed_for_testing(const matrix_integer& matrix, const std::vector<size_t>& seed)
-{
-    dickinson_checker(matrix.rows(), copositivity_mode::copositive).completed_path_seed_for_testing(matrix, seed);
 }
 
 bool sat_halfspace_rays_certificate_for_testing(

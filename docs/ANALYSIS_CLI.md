@@ -53,7 +53,9 @@ cpp/build/coposit \
 When enabled, the pipeline always performs its root checks, negative-entry component split, ordinary component checks, bounded
 Danninger reduction, and bounded COPOMATRIX reduction in that order. The `z-matrix` check examines maximal principal blocks
 with nonpositive off-diagonal entries. An indefinite block rejects both modes, while a singular positive-semidefinite block rejects
-only strict copositivity. Exact Motzkin–Straus graph matrices instead take the complete maximum-clique classifier before matrix
+only strict copositivity. After Frank–Wolfe, one center-started heuristic KKT walk uses floating-point path selection but verifies
+every proposed negative value and terminal KKT point exactly; a floating/exact KKT disagreement switches that walk to exact arithmetic.
+Exact Motzkin–Straus graph matrices then take the complete maximum-clique classifier before matrix
 factorization. Every other component first factorizes its original matrix. If that matrix has no positive off-diagonal entry, this
 one factorization is already the complete Z-matrix decision. Otherwise its negative part is factorized, and maximal-Z is reached only
 when both complete-matrix checks leave it useful.

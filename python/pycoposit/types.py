@@ -36,6 +36,13 @@ Algorithm = Literal[
     "sat_dickinson",
     "sat_halfspace_dickinson",
     "sat_halfspace_rays_dickinson",
+    "sat_b1",
+    "sat_b2",
+    "sat_a1",
+    "sat_a2",
+    "sat_a3",
+    "sat_a4",
+    "sat_a5",
     "sat_halfspace_lp_dickinson",
     "sat_halfspace_milp_dickinson",
     "sat_halfspace_rays_lookahead_dickinson",
@@ -90,6 +97,13 @@ COMBINED_CLASSIFICATION_ALGORITHMS: tuple[Algorithm, ...] = (
     "sat_dickinson",
     "sat_halfspace_dickinson",
     "sat_halfspace_rays_dickinson",
+    "sat_b1",
+    "sat_b2",
+    "sat_a1",
+    "sat_a2",
+    "sat_a3",
+    "sat_a4",
+    "sat_a5",
     "sat_halfspace_lp_dickinson",
     "sat_halfspace_milp_dickinson",
     "sat_halfspace_rays_lookahead_dickinson",
@@ -141,6 +155,13 @@ ALGORITHMS: tuple[Algorithm, ...] = (
     "sat_dickinson",
     "sat_halfspace_dickinson",
     "sat_halfspace_rays_dickinson",
+    "sat_b1",
+    "sat_b2",
+    "sat_a1",
+    "sat_a2",
+    "sat_a3",
+    "sat_a4",
+    "sat_a5",
     "sat_halfspace_lp_dickinson",
     "sat_halfspace_milp_dickinson",
     "sat_halfspace_rays_lookahead_dickinson",
@@ -171,6 +192,7 @@ PARAMETERIZED_ALGORITHMS: tuple[Algorithm, ...] = (
     "sat_halfspace_rays_wide_dickinson",
     "wide_certificate_cbdd_dickinson",
     "wide_certificate_sat_dickinson",
+    "xxx_two",
 )
 
 
@@ -213,6 +235,10 @@ def _resolve_model_parameter(algorithm: Algorithm, model_parameter: str | None) 
     if algorithm in PARAMETERIZED_ALGORITHMS:
         if model_parameter is None:
             raise ValueError(f"{algorithm} requires model_parameter")
+        if algorithm == "xxx_two":
+            if model_parameter not in ("alternating", "ascending"):
+                raise ValueError("xxx_two model_parameter must be 'alternating' or 'ascending'")
+            return model_parameter
         value = model_parameter
         if not value.isascii() or not value.isdecimal() or not 0 <= int(value) <= 100:
             raise ValueError("wide-certificate model_parameter must be an integer percentage from 0 through 100")

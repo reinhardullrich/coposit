@@ -42,6 +42,8 @@ This file routes to every other Markdown document under `aidocs/` without duplic
   per-layer certificate and upper-cardinality distributions for the order-22 and order-23 Hildebrand circulants.
 - `AFFINE_RHS_DICKINSON_CERTIFICATE_GEOMETRY.md` — **research finding** — exact $L/U/d$ identities, affine right-hand-side path
   geometry, singularity distinctions, objective-equivalence theorems, and the order-25 BPQY two-path experiment.
+- `RIGHT_HAND_SIDE_DICKINSON_CERTIFICATE_COMPLEX.md` — **research finding** — fixed-support upper-endpoint complexes, incomparable
+  certificate facets, hyperplane-arrangement dimension, Helly--Farkas conflicts, IIS-hypergraph duality, and guarded enumeration.
 - `PREPROCESSING_PIPELINE_DESIGN.md` — **current implementation** — complete root-check, component, ordinary-check,
   bounded-reduction, child-pipeline, single-switch, outcome, scan-reuse, and diagnostics specification.
 - `KUZMANOVIC_100000_MATRIX_SCREEN.md` — **completed screen** — exact reconstruction, complete ordinary-copositivity results,

@@ -16,7 +16,7 @@ reported as `false`.
 
 The eight literature baselines, `adaptive_sponsel_copomatrix`, `dense_bitset_dickinson`, all CBDD Dickinson
 variants, `ceiling_pruned_dickinson`, `layered_singular_lift_dickinson`, `breadth_first_singular_lift_dickinson`, `sat_dickinson`,
-`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_halfspace_lp_dickinson`, `sat_halfspace_milp_dickinson`,
+`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_b1`, `sat_b2`, `sat_a1`, `sat_a2`, `sat_a3`, `sat_a4`, `sat_a5`, `sat_halfspace_lp_dickinson`, `sat_halfspace_milp_dickinson`,
 `sat_halfspace_rays_lookahead_dickinson`,
 `sat_halfspace_rays_wide_dickinson`, `cbdd_halfspace_dickinson`,
 `kernel_cone_dickinson`, `affine_companion_dickinson`,
@@ -25,6 +25,8 @@ separately selected CP and SCP.
 Hadeler 1983, Dickinson 2019, Dense-Bitset Dickinson, Danninger 1990, all CBDD Dickinson variants,
 Ceiling-Pruned Dickinson, Kernel-Cone Dickinson, Layered Singular-Lift Dickinson, SAT Dickinson, SAT-Halfspace Dickinson,
 SAT-Halfspace-Rays Dickinson, SAT-Halfspace-LP Dickinson, SAT-Halfspace-MILP Dickinson,
+SAT-B1, SAT-A1, SAT-A2, SAT-A3, SAT-A5,
+SAT-B2,
 SAT-Halfspace-Rays Lookahead Dickinson, SAT-Halfspace-Rays Wide Dickinson,
 Wide-Certificate SAT Dickinson,
 XXX, XXX Two, Affine-Companion Dickinson, Clingo Dickinson, and Clingo-Halfspace Dickinson can additionally classify both predicates in one traversal.
@@ -122,7 +124,9 @@ supervisor process nor a watchdog thread.
 
 Enabled preprocessing applies exact negative-entry connected-component decomposition and the complete exact-decision pre-check
 profile. The implementation fuses them: one root scan supplies globally valid checks and the negative graph,
-then each component is visited. After Frank–Wolfe, an exact Motzkin–Straus pattern takes its specialized maximum-clique path.
+then each component is visited. After Frank–Wolfe, one bounded center-started heuristic KKT walk uses floating arithmetic for path
+selection and exact arithmetic for every proposed negative value or KKT endpoint. An exact Motzkin–Straus pattern then takes its
+specialized maximum-clique path.
 Otherwise preprocessing factorizes the original component. If it is already a Z-matrix, that factorization is the complete decision
 and neither the negative-part nor maximal-Z factorization is repeated. Other components then factorize their exact negative part and
 use maximal principal Z-matrices only when those complete-matrix certificates remain insufficient. A connected whole matrix is used
@@ -134,7 +138,8 @@ the next stage receives its original component unchanged.
 
 The pre-check profile contains the complete order-at-most-three criterion, selected principal faces through cardinality three,
 nonnegative off-diagonal acceptance, Qi negative-part diagonal dominance, the all-ones witness, a complete exact Motzkin–Straus
-graph-matrix classifier, bounded floating Frank-Wolfe witness proposals with exact verification, exact positive-(semi)definiteness,
+graph-matrix classifier, bounded floating Frank-Wolfe witness proposals with exact verification, one bounded heuristic KKT walk with
+exact sign verification and exact continuation after a floating disagreement, exact positive-(semi)definiteness,
 and the negative-only maximal-Z-matrix fallback. A recognized Motzkin–Straus matrix uses the Open-MCS-derived exact maximum-clique
 branch-and-bound and skips both factorization paths. The maximal-Z fallback rejects an indefinite maximal block in both modes and a
 singular positive-semidefinite block only in strict mode. Floating arithmetic may only propose a witness; an exact integer calculation
@@ -216,6 +221,13 @@ Their canonical source directories and compact lineage inventory are under
 | `sat_dickinson` | Incremental CaDiCaL encoding with one blocking clause per Dickinson interval and one shared exact-cardinality sorting network; [`ALGORITHM.md`](../models/hadeler-based/sat_dickinson/ALGORITHM.md). |
 | `sat_halfspace_dickinson` | SAT Dickinson with cumulative exact coordinate search over strictly positive right-hand sides; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_dickinson/ALGORITHM.md). |
 | `sat_halfspace_rays_dickinson` | U-first, width-second SAT-Halfspace path with an adaptive shortlist and at most two exact synthesized-ray sweeps; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_rays_dickinson/ALGORITHM.md). |
+| `sat_b1` | SAT-Halfspace-Rays preceded by exact strict-convex-face exclusions from pair curvature and each retained principal factorization; [`ALGORITHM.md`](../models/hadeler-based/sat_b1/ALGORITHM.md). |
+| `sat_b2` | Pure SAT face-curvature traversal with alternating low/high cardinalities and no Dickinson intervals; [`ALGORITHM.md`](../models/hadeler-based/sat_b2/ALGORITHM.md). |
+| `sat_a1` | SAT-Halfspace-Rays with the inclusion-maximal antichain of upper endpoints encountered by its existing exact sweeps; [`ALGORITHM.md`](../models/hadeler-based/sat_a1/ALGORITHM.md). |
+| `sat_a2` | SAT-Halfspace-Rays plus one bounded maximum-halfspace LP relaxation, exact candidate reconstruction, and one LP-guided monotone extension; [`ALGORITHM.md`](../models/hadeler-based/sat_a2/ALGORITHM.md). |
+| `sat_a3` | SAT-Halfspace-Rays followed by bounded monotone LP-feasibility probes that preserve the complete Rays upper endpoint and force one omitted index; every accepted extension is verified exactly; [`ALGORITHM.md`](../models/hadeler-based/sat_a3/ALGORITHM.md). |
+| `sat_a4` | Monotone-only SAT Dickinson: starts from the ordinary all-ones endpoint and applies bounded monotone LP-feasibility probes directly, without Halfspace-Rays; [`ALGORITHM.md`](../models/hadeler-based/sat_a4/ALGORITHM.md). |
+| `sat_a5` | SAT-A3 with best-improvement monotone target selection: every target reached within the shared deadline is evaluated against one incumbent and only the strongest exact extension is installed; [`ALGORITHM.md`](../models/hadeler-based/sat_a5/ALGORITHM.md). |
 | `sat_halfspace_lp_dickinson` | SAT-Halfspace-Rays plus a tiny numerical full-ceiling LP whose candidate must pass exact reconstruction and verification; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_lp_dickinson/ALGORITHM.md). |
 | `sat_halfspace_milp_dickinson` | SAT Dickinson with a bounded model-local MILP maximizing the upper endpoint; only exactly reconstructed improvements become certificates; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_milp_dickinson/ALGORITHM.md). |
 | `sat_halfspace_rays_lookahead_dickinson` | SAT-Halfspace-Rays with one-cardinality child analysis, one-layer exact-result caching, and immediate insertion of every child interval not contained in its current parent interval; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_rays_lookahead_dickinson/ALGORITHM.md). |
@@ -269,7 +281,7 @@ Standard local reference runs use parent CPU 3 and solver CPUs 4 through 7.
 
 ## Corpus And Evidence
 
-`testdata/copos_testdata.sqlite3` contains 3,523 exact matrices of orders 1 through 5,000 and uses SQLite `auto_vacuum=FULL` so
+`testdata/copos_testdata.sqlite3` contains 4,289 exact matrices of orders 1 through 5,000 and uses SQLite `auto_vacuum=FULL` so
 deleted or replaced result rows do not leave persistent free pages. The `matrices` table stores nullable strict and non-strict truth,
 free-form occurrence provenance and family text, an earliest-known primary `source_id`, an `additional_source_ids` JSON bibliography,
 a `references_solved` JSON array of source-linked literature solution claims, a parallel `references_unsolved` array of explicit
@@ -282,6 +294,13 @@ earliest located source or exact local generator. Another 513 matrices carry 837
 obtained from explicit catalog matches, stored occurrence provenance, exact positive-scale duplicates, and audited named or
 family-level reuse statements. These links are
 best-effort literature evidence, not a claim that a class-level paper prints every member's coefficients.
+The corpus includes 750 BPQY-style COP and PSD Float64 constructions at orders 20, 30, 35, 40, and 45. They use Julia 1.8.5,
+the manuscript's three support sizes and seeds 1 through 25, and exact primitive-integer lifting of the generated doubles. Their
+intended boundary classification is provenance only. A ten-second exact SAT-Halfspace-Rays combined run classified 404 integer
+materializations—255 strictly copositive and 149 non-copositive, with no boundary result—and left 346 timeouts unknown.
+It also retains the original Hildebrand circulant panel and a separate exact independent-angle panel with one boundary matrix at every
+order from 15 through 30. The latter uses independently selected rational unit-circle parameters to reduce primitive entry height
+without rounding, perturbing, or leaving Hildebrand's support-$n-2$ construction.
 The `preprocessing_solved` metadata flag identifies all 2,765 retained matrices completely classified by the current maintained
 depth-2 combined preprocessing workflow in the five-second corpus run, its sixty-second timeout continuation, the focused ten-minute
 Motzkin--Straus follow-up, or a stored combined diagnostic result with zero model delegations. They comprise 744 strictly copositive,

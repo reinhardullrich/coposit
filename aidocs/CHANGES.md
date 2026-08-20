@@ -2,6 +2,161 @@
 
 This append-only file records meaningful decisions, results, and evidence that are not clear from Git. Do not log routine edits here.
 
+## 2026-08-20 — Current preprocessing and unresolved BPQY corpus refresh
+
+- Ran the current combined preprocessing pipeline over all 4,289 matrices with a 10-second cutoff. It completed 3,426 matrices,
+  produced partial classifications for 270, and left 514 unresolved. The maintained corpus now marks 3,482 matrices as solved by
+  preprocessing and records complete CP/SCP truth for 4,127 matrices from this run and earlier evidence.
+- The new heuristic KKT step decided order-50 BPQY matrix 12693 as non-copositive in 5.284 milliseconds; its previous fastest
+  complete XXX2 decision took 42.439 milliseconds.
+- Ran SAT-Halfspace-Rays for 180 seconds on the 162 remaining BPQY matrices without a completed timing, smallest orders first. It
+  completed 47 strictly copositive cases: all 17 order-30 cases, 26 of 37 order-35 cases, and 4 of 38 order-40 cases. The remaining
+  115 timed out, including every tested order-45 and order-50 case.
+- After importing those exact decisions and timings, the corpus contains 4,174 complete truth classifications and 4,133 fastest
+  completion references. SQLite integrity and cache-consistency checks passed.
+
+## 2026-08-19 — SAT-A5 best-improvement monotone Dickinson
+
+- Added lowercase `sat_a5` as an isolated copy of SAT-A3. Halfspace, synthesized Rays, exact reconstruction, SAT traversal, and the
+  shared 20 millisecond monotone deadline remain unchanged.
+- Every monotone pass now evaluates all targets reached before that deadline against the same incumbent, retains the strongest exact
+  $(|U|,d)$ improvement, and installs only that one endpoint. If the deadline expires after an exact improvement was found, the best
+  result reached so far is installed before the optional search stops.
+- A focused fixed-support regression has a first exact target reaching $|U|=7$ and a later target reaching $|U|=8$, proving that A5
+  selects the latter rather than retaining A3's target-index-order result.
+- The single-job Release build and all 88 checks passed. A five-second combined/preprocessing Smoke run classified all 46 matrices,
+  matched every stored truth value, and had no timeout; the maintained corpus integrity check returned `ok`.
+
+## 2026-08-19 — SAT-A4 monotone-only Dickinson
+
+- Added lowercase `sat_a4` as an isolated SAT-Dickinson model. It starts from the ordinary exact all-ones right-hand side and applies
+  the A3 monotone feasibility extension directly, without coordinate sweeps, synthesized rays, shortlists, objective LPs, or MILP.
+- Every numerical proposal must preserve the incumbent upper endpoint and add an omitted index; exact integer reconstruction and exact
+  sign checks are the only operations allowed to enlarge the certificate or decide the matrix.
+- A focused regression proves strict enlargement of an all-ones endpoint while retaining all incumbent indices. The complete
+  single-job Release build and all 87 checks passed. A five-second combined/preprocessing Smoke run classified all 46 selected
+  matrices correctly with no timeout, and both SQLite integrity checks returned `ok`.
+- On the three previously selected order-25 BPQY COP cases, A4 completed in 2.378, 23.323, and 13.071 seconds. Its paired median was
+  28.65% slower than A3 and 8.24% slower than SAT-Halfspace-Rays; it processed a paired median 37.82% more supports than A3.
+- On the matching order-30 panel, A4 completed in 2.612, 5.053, and 14.777 seconds. Its paired median was 0.64% slower than A3 but
+  9.66% faster than SAT-Halfspace-Rays. One case was 19.01% faster than A3, while another was 94.50% slower.
+- All three matching order-50 cases timed out after 180 seconds at the same cardinalities as A3. A4 processed 13.48% to 45.50% more
+  exact supports without reaching a higher cardinality. The evidence is therefore mixed and does not support replacing the Rays
+  incumbent with monotone-only enlargement.
+
+## 2026-08-19 — SAT-A3 monotone enlargement of the Rays endpoint
+
+- Added lowercase `sat_a3` as an isolated copy of `sat_halfspace_rays_dickinson`. It first completes the unchanged Halfspace-Rays
+  search and sets $F=U(u_{\rm rays})$.
+- For each omitted outside index, A3 uses a bounded feasibility LP to seek a strictly positive right-hand side that preserves every
+  index of $F$ and adds the target. Only exact integer reconstruction and sign checks may enlarge $F$ or create a certificate;
+  numerical failure is not treated as a proof of infeasibility.
+- The focused regression raises a Rays endpoint from five to more than five elements and verifies that every original endpoint index
+  remains present. The LP uses no binaries, objective, big-$M$ constants, or new exact factorization.
+- The complete Release build and all 86 tests passed. A five-second combined/preprocessing Smoke run classified all 46 selected
+  matrices correctly with no timeout, and the maintained corpus integrity check returned `ok`.
+
+## 2026-08-19 — SAT-A2 LP-relaxation-guided endpoint
+
+- Added lowercase `sat_a2` as an isolated copy of `sat_halfspace_rays_dickinson`. After the exact ray incumbent, it solves one bounded
+  binary64 relaxation of the maximum-halfspace model, exactly reconstructs and verifies the proposed right-hand side, and makes one
+  LP-guided monotone extension only when the estimated upper-endpoint gap exceeds one. It performs no MILP branching and claims no
+  exact optimality from the floating objective.
+- Focused exact regressions exhibit both improvement paths: the root LP candidate raises one fixed-support upper endpoint from 10 to
+  11, while the monotone follow-up raises another from 5 to 6 under an estimated ceiling of 7.
+- A disposable five-second combined/preprocessing Smoke probe classified all 46 delegated matrices correctly. Against the latest
+  saved SAT-Halfspace-Rays rows, SAT-A2 processed 1,418 rather than 1,419 supports: 45 matrices were unchanged, while matrix 9561 fell
+  from 36 to 35 after replacing one `(k,d,|U|)=(3,3,6)` certificate by `(3,4,7)`. The paired median elapsed-time ratio was 1.037, so
+  this small set shows real but sparse extra pruning and a small median overhead, not a general speed advantage.
+- On the three order-25 BPQY COP `rho0=19` representatives previously used for the A1 comparison (IDs 12625, 12628, and 12631), a
+  180-second SAT-A2 run completed all three in 2.850, 11.778, and 11.703 seconds. Relative to saved SAT-Halfspace-Rays rows, SAT-A2
+  processed a paired median 6.16% fewer supports but was only 0.39% faster, so its LP cost consumed almost the entire pruning gain.
+  Relative to the latest A1 rows, SAT-A2 was 42.04% faster even though it processed a paired median 8.45% more supports; A1's multiple
+  retained intervals raised the corresponding certificate counts to 25,285, 97,148, and 79,684.
+- A simultaneous three-core-per-model comparison on strictly copositive order-30 BPQY COP `rho0=15` representatives 13145, 13147,
+  and 13152 completed every case. SAT-A2 processed 4.04%, 4.87%, and 4.50% fewer supports than SAT-Halfspace-Rays, but took 3.73%,
+  5.48%, and 8.01% longer. At this order the paired median pruning gain was 4.50%, while the paired median runtime loss was 5.48%.
+- The complete single-job Release build and all 85 tests passed; the maintained corpus integrity check returned `ok`.
+
+## 2026-08-19 — SAT-A1 upper-endpoint antichain
+
+- Added the lowercase `sat_a1` model as an isolated copy of `sat_halfspace_rays_dickinson`.
+- Each existing exact coordinate or synthesized-ray sweep now retains every inclusion-maximal upper endpoint it encounters. The model
+  inserts the corresponding anchored Dickinson intervals `[I,U]` while preserving the original interval when it contributes distinct
+  downward coverage. It adds no factorization, sweep, LP, or MILP call.
+- A focused regression verifies both antichain reduction and insertion of multiple incomparable intervals. The 46-matrix Smoke set
+  completed with 46 matching classifications and no timeouts; all 84 Release checks passed, and the corpus integrity check returned
+  `ok`.
+
+## 2026-08-19 — KKT endpoints no longer receive redundant Dickinson certificates
+
+- Removed the exact Halfspace-Rays calculation at every verified KKT endpoint in `xxx_two`. Its exact KKT calculation already supplies
+  the maximal upward interval and, for a positive-semidefinite face, the maximal downward interval.
+- A distinct non-KKT seed still receives its exact Halfspace-Rays certificate. When the seed itself is KKT, its KKT intervals cover it
+  and no ordinary seed certificate is calculated.
+- Added focused checks for both cases: a distinct seed remains certified, while neither a distinct KKT endpoint nor a KKT seed emits
+  an ordinary path-certificate event.
+
+## 2026-08-19 — KKT-gated XXX2 terminal certificates
+
+- Changed `xxx_two` so every path still receives an exact SAT-Halfspace-Rays certificate at its SAT-selected seed, but its distinct
+  terminal support receives that certificate only after exact arithmetic confirms a floating KKT claim. Step-limit, blocked,
+  negative-candidate, and numerically inconclusive endpoints are no longer factorized merely because the floating walk stopped there.
+- Preserved the critical-point rule: when floating arithmetic claims KKT and exact arithmetic rejects that claim, the path switches
+  to exact arithmetic and continues until an exact KKT or exact stopping condition. A focused regression proves that a non-KKT
+  endpoint emits no terminal-certificate event; all 83 Release checks passed.
+- Repeated the 30-second combined, complete-preprocessing order-15--30 independent-angle Hildebrand run with ascending seeds, parent
+  CPU 2, and worker CPUs 3 through 9. Binary SHA-256 was
+  `a2f965f26d334304abf71b26b182552e35754b9d45c948b6e1ff7da0cb9653ee`.
+- The changed model again completed orders 15--19 and timed out from order 20 onward. It was faster than the preceding XXX2 build on
+  all five common completions, with a median 25.811% reduction in elapsed time, but still took a median 1.367 times as long as
+  SAT-Halfspace-Rays. SAT-Halfspace-Rays remains the cached fastest model and uniquely completed order 20.
+
+## 2026-08-19 — Exact independent-angle Hildebrand panel
+
+- Added one exact Hildebrand circulant boundary matrix at every order from 15 through 30 while retaining all original representatives
+  and their diagnostics. The new rows are IDs 13795--13810 and use source ID 20.
+- Replaced the repeated rational rotation only within the new construction: each admissible angle has its own rational
+  $\tan(\zeta_j/4)$. Exact checks enforce angle order, Hildebrand's alternating-angle condition, positive zero-polynomial
+  coefficients, and the resulting zero equation. No rounding, perturbation, or near-Hildebrand family was introduced.
+- A bounded search approximated the theorem's equally spaced target angles with every denominator limit from 5 through 100, followed
+  by deterministic 20- and 30-second low-denominator refinements per order. A separate 60-second order-19 pass tested 18,447 further
+  exact tuples without improving its 118-digit result. These are documented best-found values, not claimed global minima.
+- Maximum primitive entry length ranges from 52 digits at order 15 to 360 digits at order 29. The existing order-15--25 panel ranges
+  from 294 to 2,423 digits, so the new panel isolates the same exact support-$n-2$ mathematics with substantially lower arithmetic
+  height. All new matrices remain inline; SQLite integrity and foreign-key checks passed.
+- Ran both `sat_halfspace_rays_dickinson` and `xxx_two@ascending` in combined mode with complete preprocessing and diagnostics, a
+  30-second matrix cutoff, parent CPU 2, and worker CPUs 3 through 9. SAT-Halfspace-Rays completed orders 15--20; ascending XXX2
+  completed orders 15--19. All completed decisions agreed with the construction: copositive but not strictly copositive.
+- On the five matrices completed by both models, SAT-Halfspace-Rays was faster in every case; the median paired time ratio was
+  2.043 for ascending XXX2 over SAT-Halfspace-Rays. SAT-Halfspace-Rays also uniquely completed order 20 in 23,343,422,080 ns.
+- The successful SAT-Halfspace-Rays rows now supply `fastest_elapsed_ns` and `fastest_result_ref` for orders 15--20. Orders 21--30
+  timed out in both runs and retain no fabricated completion time.
+
+## 2026-08-19 — Reproducible BPQY COP/PSD order extension
+
+- Applied the unmodified BPQY Julia 1.8.5 Float64 generation formulas to orders 20, 30, 35, 40, and 45, using the nearest-quarter,
+  half, and nearest-three-quarter designated support sizes and the 25 manuscript-reported seeds 1 through 25.
+- Generated and imported 75 COP and 75 PSD matrices at each order, for 750 new primitive dyadic integer materializations. The SPN
+  family was excluded because all 150 earlier SPN materializations have a negative diagonal and are immediate negative witnesses.
+- Retained the point of the experiment: the paper proves the ideal floating construction, but exact integer lifting can perturb its
+  boundary. Both truth fields therefore remain `NULL`; no copositivity claim was inferred from the intended class.
+- Reproduction is pinned by the Julia script and the 9.1 MiB TSV artifact with SHA-256
+  `cd5c4eb3aaf0bad236b375b934d23a142234008546ae98c6c3f25c644466a81f`. Direct positive-scaling duplicates were absent, all 750
+  rows have source ID 51, and SQLite integrity passed.
+- The older 450-row BPQY reconstruction remains unchanged and uses seeds 0 through 24. The upstream wrappers run 0 through 25 but
+  state that only seeds 1 onward are reported; the new extension follows the reported 1-through-25 set.
+- Ran exact `sat_halfspace_rays_dickinson` in combined mode with complete preprocessing and diagnostics, a ten-second matrix cutoff,
+  parent CPU 2, and worker CPUs 3 through 9. Binary SHA-256 was
+  `485b736c5a747fb998f85c7272099b5e657e64645c774c2b540f56d421affb16`; all 750 assignments finished in 546.577 seconds wall time.
+- Completed 404 classifications: 255 exact integer materializations are strictly copositive and 149 are non-copositive; none were
+  classified as copositive boundary. The other 346 timed out and retain both truth fields as `NULL`.
+- The intended COP family completed 123 of 375 rows (62 strict, 61 non-copositive), while intended PSD completed 281 of 375
+  (193 strict, 88 non-copositive). This is classification of the exact lifted integers, not validation of the ideal BPQY labels.
+- Copied only the 404 completed combined answers into corpus truth. Their `fastest_elapsed_ns` and `fastest_result_ref` fields exactly
+  match the stored diagnostic rows; timeout rows have neither cached completion nor inferred truth. Both databases passed integrity
+  and cross-database consistency checks.
+
 ## 2026-08-19 — Binary64 KKT-path experiment (`xxx_two`)
 
 - Added `xxx_two`, an isolated copy of XXX whose active-set walk uses a one-time normalized binary64 matrix and a pivoted symmetric
