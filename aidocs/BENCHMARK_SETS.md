@@ -9,11 +9,11 @@ its matrix row or expected classification.
 |---|---:|---:|---:|---:|---:|---:|---|
 | `smoke_set` | 46 | 4–15 | 20 | 26 | 0 | 0 | Fast correctness and integration checks |
 | `core_and_stress_test` | 469 | 4–3,361 | 215 | 245 | 9 | 0 | Routine comparisons and difficult model-search cases |
-| `n_le_100` | 731 | 4–100 | 247 | 293 | 86 | 105 | Every matrix of order at most 100 not solved by preprocessing |
+| `n_le_100` | 1,497 | 4–100 | 502 | 309 | 306 | 380 | Every matrix of order at most 100 not solved by preprocessing |
 | `n_gt_100_solved` | 0 | — | 0 | 0 | 0 | 0 | Higher-order literature-solved matrices not solved by preprocessing |
 
 All four sets exclude `preprocessing_solved = 1`: a benchmark member must reach the selected model rather than end in the shared
-preprocessing pipeline. The two stored curated flags and two generated flags cover 758 distinct rows. All 46 Smoke rows belong to
+preprocessing pipeline. The two stored curated flags and two generated flags cover 1,524 distinct rows. All 46 Smoke rows belong to
 Core and Stress and to N ≤ 100. Of the 469 Core and Stress rows, 442 belong to N ≤ 100 and 27 belong to neither generated set. The
 two generated sets are disjoint by definition.
 
@@ -85,6 +85,8 @@ replacement IDs. New rows default both stored curated flags to zero.
 rewriting either curated membership list.
 `testdata/archive/replace_hildebrand_circulants_2026_08_16.py` records the later one-per-order Hildebrand replacement and six Core
 refills.
+`testdata/archive/add_independent_angle_hildebrand_2026_08_19.py` adds the separate exact order-15--30 independent-angle panel; its
+16 preprocessing-unresolved rows enter the generated N ≤ 100 set automatically and leave both curated flags unchanged.
 
 The latest benchmark refresh was applied with:
 

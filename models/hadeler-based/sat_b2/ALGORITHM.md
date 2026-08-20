@@ -1,0 +1,273 @@
+# SAT-B2
+
+Classification: coposit-created exact CP/SCP experiment. SAT-B2 alternates between low and high cardinalities. The low frontier uses
+face curvature first and falls back to an exact Halfspace-Rays Dickinson certificate when curvature alone cannot prune upward. The
+high frontier is an opportunistic floating-point positive-definiteness scan; only candidates for downward pruning are verified
+exactly.
+
+Public mode boundary: `copositive` and `strictly_copositive` select one predicate. `both` classifies both predicates in one traversal
+and is the analysis-interface default.
+
+## Idea In Plain Language
+
+Every point of the standard simplex lies in the relative interior of exactly one face, identified by the indices of its positive
+coordinates. A quadratic function on the simplex has a global minimizer. Among all global minimizers, choose one whose support is as
+small as possible. On that support the quadratic form must be strictly convex along the face: otherwise a flat or descending tangent
+direction reaches the boundary without increasing the value and produces a minimizer with smaller support.
+
+SAT-B2 uses that observation as a search certificate.
+
+- If a face is not strictly convex, neither that support nor any superset can be the support of the chosen minimal-support global
+  minimizer. The model removes the whole upward closure.
+- If the principal matrix is positive definite, every nonzero vector supported inside that face has positive quadratic value. The
+  model removes the whole downward closure.
+- If a low-frontier face is strictly convex, the retained factorization is reused to build and optimize a Dickinson interval. This
+  replaces the former exact-support block.
+- A high-frontier face is first tested by a floating-point $LDL^T$ filter. A positive-definite candidate is factorized exactly and
+  contributes a downward closure only after exact verification. A rejected candidate is skipped only by the high scan and remains
+  available to the exact low-frontier proof.
+
+The remaining supports are represented by one incremental SAT instance. Two cardinality frontiers start at $1$ and $n$. The model
+processes one unresolved support from the low frontier, then one from the high frontier, and repeats. An empty low layer advances the
+low frontier immediately; an empty high layer moves the high frontier down immediately. Once the high frontier meets the low
+frontier, the exact low traversal continues alone until the proof is complete. Before that point, the support order has the form
+
+$$
+\text{one from }1,\ \text{one from }n,\ \text{one from }1,\ \text{one from }n,\ldots,
+$$
+
+until one frontier exhausts its current layer. This exposes cheap small-face and potentially decisive large-face curvature without
+requiring either layer to finish first.
+
+Pruning is directional. A low-frontier support either contributes an upward curvature closure or a Dickinson interval. A
+high-frontier support contributes a downward positive-definite closure or a high-scan-only rejection. It never pays for a
+Halfspace-Rays search. A support rejected by the high scan remains available to the low frontier and its exact Dickinson fallback.
+Floating point therefore changes only which exact downward checks are attempted; it cannot remove a support from the proof or cause
+the traversal to finish.
+
+## Name, Sources, And Classification
+
+The identifier is `sat_b2`.
+
+- **SAT** names the incremental Boolean representation of the unresolved supports.
+- **B2** means the second experiment in the curvature-based SAT line.
+
+The model is an independent experiment derived from [`sat_b1`](../sat_b1/ALGORITHM.md). It retains SAT-B1's exact low-frontier
+Halfspace-Rays machinery, adds the alternating floating-point high frontier, and deliberately omits Dickinson work on that high
+frontier. Its SAT cardinality network comes from [`sat_dickinson`](../sat_dickinson/ALGORITHM.md). Dickinson intervals come from Peter J. C.
+Dickinson, “A New Certificate for Copositivity,” *Linear Algebra and its Applications* 569 (2019), 15–37, DOI
+[`10.1016/j.laa.2018.12.025`](https://doi.org/10.1016/j.laa.2018.12.025), especially Theorem 4.6 and Algorithms 1–2.
+
+The existence of a global minimizer in the relative interior of a strictly convex face is Theorem 1 of Andrea Scozzari and Fabio
+Tardella, “A clique algorithm for standard quadratic programming,” *Discrete Applied Mathematics* 156 (2008), 2439–2448, DOI
+[`10.1016/j.dam.2007.09.020`](https://doi.org/10.1016/j.dam.2007.09.020). The inertia tests are standard consequences of inertia
+additivity for equality-constrained quadratic forms; see T. S. Han and H. Fujiwara, “An inertia theorem for projected matrices and
+its application to constrained optimization,” *Linear Algebra and its Applications* 72 (1985), 47–58, DOI
+[`10.1016/0024-3795(85)90141-7`](https://doi.org/10.1016/0024-3795(85)90141-7).
+
+Using these curvature facts as permanent SAT clauses, alternating the cardinality order, and using the search as a complete exact
+CP/SCP classifier are coposit experiments rather than algorithms from those papers. CaDiCaL 2.2.1 supplies incremental SAT solving.
+
+## Face Geometry
+
+Let $A\in\mathbb{R}^{n\times n}$ be symmetric. A nonempty index set $I\subseteq[n]$ identifies a simplex face. Write $B=A_I$ for
+the corresponding principal matrix. The tangent space of that face is
+
+$$
+\mathcal T_I=\{v\in\mathbb{R}^{|I|}:\mathbf 1^Tv=0\}.
+$$
+
+The quadratic form is strictly convex on the face exactly when
+
+$$
+v^TBv>0\qquad\text{for every nonzero }v\in\mathcal T_I.
+$$
+
+Equivalently, if the columns of $Z$ span $\mathcal T_I$, then $Z^TBZ$ is positive definite. The implementation does not construct
+$Z$. It obtains the answer from one exact fraction-free $LDL^T$ factorization of $B$.
+
+### Nonsingular principal matrix
+
+Suppose $B$ is nonsingular and define
+
+$$
+\delta=\mathbf 1^TB^{-1}\mathbf 1.
+$$
+
+The reduced Hessian on $\mathcal T_I$ is positive definite exactly when either
+
+1. $B$ is positive definite; or
+2. $B$ has exactly one negative eigenvalue and $\delta<0$.
+
+The first case gives a downward certificate when the support was proposed by the high floating-point filter and the exact
+factorization confirms it. On the low frontier it proceeds to the Dickinson construction instead. In the second case, SAT-B2 solves
+$Bx=\mathbf 1$ using the existing factorization. The sign of $\delta$ is the sign of the sum of the integer numerators of $x$ because
+their common denominator is positive.
+
+If $x\leq0$, then $y=-x\geq0$ and
+
+$$
+y^TBy=\mathbf 1^Tx=\delta<0.
+$$
+
+After embedding $y$ in the full space by adding zeros, this is an exact non-copositivity witness. This branch is normally reached by
+the low frontier. It can also be reached when the floating high filter produces a false positive and exact verification rejects
+positive definiteness. On the low frontier, the same exact solution becomes the starting vector for Halfspace-Rays optimization and
+a Dickinson interval.
+
+### Singular principal matrix
+
+The reduced Hessian is positive definite exactly when all three conditions hold:
+
+1. $B$ is positive semidefinite;
+2. $B$ has nullity one; and
+3. a nonzero kernel vector $z$ satisfies $\mathbf 1^Tz\neq0$.
+
+If these conditions fail, the upward curvature exclusion applies on the low frontier. A singular high support is normally rejected
+by the floating filter without exact work and remains available to the low frontier. If the conditions hold and either $z\geq0$ or
+$-z\geq0$, the embedded kernel vector is an exact copositive zero. It disproves strict copositivity but not ordinary copositivity. On
+the low frontier, the kernel ray is oriented toward the larger Dickinson upper set and stored as an interval.
+
+## Low-Frontier Dickinson Fallback
+
+When low-frontier curvature does not already remove the upward closure, SAT-B2 reuses the retained exact factorization. For a
+nonsingular principal matrix it begins with the exact solution of
+
+$$
+B x=\mathbf1.
+$$
+
+For a singular principal matrix it uses the recovered kernel ray. The local vector is embedded in $\mathbb R^n$ by inserting zeros
+outside $I$. For an embedded vector $u$, define
+
+$$
+L(u)=\operatorname{supp}(u),\qquad
+U(u)=\{j\in[n]:(Au)_j\geq0\}.
+$$
+
+Dickinson's theorem certifies every support $J$ satisfying
+
+$$
+L(u)\subseteq J\subseteq U(u).
+$$
+
+For a nonsingular $B$, the same factorization also solves all coordinate right-hand sides. SAT-B2 performs the inherited exact
+breakpoint sweeps along those directions, preferring larger $|U|$ and then larger width $|U|-|L|$. It retains a bounded shortlist of
+coordinate rays and tests at most two complementary combined rays after a coordinate-wise stall. Every accepted candidate is
+represented with exact integers; no floating-point comparison enters the search or certificate.
+
+The SAT clause for the interval is
+
+$$
+\left(\bigvee_{i\in L(u)}\neg s_i\right)
+\lor
+\left(\bigvee_{j\notin U(u)}s_j\right)
+\lor c_{|U(u)|+1}.
+$$
+
+The last literal retires the clause automatically at cardinalities above $|U(u)|$, where no support can lie inside the interval.
+
+## SAT Clauses
+
+Each original index has a Boolean variable $s_i$, true exactly when that index belongs to the selected support. A Batcher bitonic
+sorting network supplies exact-cardinality assumptions for any requested layer.
+
+### Upward closure
+
+If the reduced Hessian on $I$ is not positive definite, SAT receives
+
+$$
+\bigvee_{i\in I}\neg s_i.
+$$
+
+This removes $I$ and every support containing it. The rule is sound because strict convexity is inherited by subfaces: if a larger
+face containing $I$ were strictly convex, its restriction to $\mathcal T_I$ would also be strictly convex.
+
+Before traversal, the model applies the same rule to every pair. For $I=\{i,j\}$, strict face convexity is the single exact test
+
+$$
+A_{ii}+A_{jj}-2A_{ij}>0.
+$$
+
+Every failing pair immediately contributes $\neg s_i\lor\neg s_j$.
+
+### Downward closure
+
+If $B=A_I$ is positive definite, every principal submatrix indexed by a nonempty subset of $I$ is positive definite. SAT therefore
+receives
+
+$$
+\bigvee_{j\notin I}s_j.
+$$
+
+This removes $I$ and every nonempty subset of $I$. For $I=[n]$ the clause is empty, so no support remains and the proof is complete.
+
+Strict convexity only on the simplex face is not enough for this downward rule. The implementation requires positive definiteness of
+the entire principal matrix.
+
+### Floating high-frontier filter
+
+Before the first high query, the complete integer matrix is converted once to a symmetric binary64 matrix using one common
+power-of-two scale. Every high support then copies only its floating principal submatrix and runs an unpivoted $LDL^T$
+positive-definiteness filter. Its pivot margin is relative to the largest magnitude in that selected submatrix, so an unrelated
+large entry elsewhere in the matrix cannot suppress a useful candidate. The filter accepts a candidate only when every pivot is
+finite and comfortably positive. Acceptance is not a certificate: the integer
+principal matrix is then copied and factorized exactly before a downward clause is installed.
+
+A floating rejection must not remove a support from the mathematical proof because rounding can reject an exactly positive-definite
+matrix. SAT therefore has one high-frontier activation variable $h$. The rejection clause at $k=|I|$ is
+
+$$
+\left(\bigvee_{i\in I}\neg s_i\right)\lor c_{k+1}\lor\neg h,
+$$
+
+where $c_{k+1}$ is the sorting-network output meaning that at least $k+1$ indices are selected. At cardinality $k$, $c_{k+1}$ is
+false. High queries assume $h$, so the clause skips exactly $I$ in future high scans. Low queries assume $\neg h$, disabling the
+clause completely. Thus a rejected support is still handled by the exact low-frontier proof. This uses one SAT solver and one extra
+literal per high rejection; it does not duplicate the cardinality network.
+
+## Complete Decision Flow
+
+1. Build one incremental SAT instance and one exact-cardinality sorting network.
+2. Install every failed pair-curvature clause.
+3. Start a low frontier at cardinality $1$ and a high frontier at cardinality $n$.
+4. Ask SAT for one unresolved low-frontier support. Advance across empty low layers, but do not exhaust a nonempty layer.
+5. Copy and exactly factor its principal matrix. Add an upward closure when strict face convexity fails. Otherwise reuse that
+   factorization to construct and optimize one Halfspace-Rays Dickinson interval, unless an exact witness decides the problem.
+6. Ask SAT for one unresolved high-frontier support under the high activation literal. Descend across high layers after every support
+   in a layer has either been globally pruned or rejected by the floating filter.
+7. Copy its floating principal matrix and run the fast $LDL^T$ filter. Add a high-only rejection when it is not a positive-definite
+   candidate. Otherwise copy and exactly factor the integer principal matrix, adding a downward closure only after exact verification.
+8. When the high frontier meets the low frontier, stop the optional high scan and let the exact low frontier continue upward.
+9. If an exact nonnegative negative-value witness is found, return not copositive.
+10. If an exact nonnegative kernel vector is found, record not strictly copositive and continue ordinary CP classification when
+    required.
+11. Continue the low traversal until no globally unresolved support remains. Then the matrix is copositive; it is strictly
+    copositive unless a zero was found.
+
+The proof search is finite because every low-selected support is removed permanently, and the Boolean lattice contains $2^n-1$
+nonempty supports. High-only rejections affect only optional high selection and cannot terminate the proof.
+
+## Exact Representation And Diagnostics
+
+All proof-producing matrix entries, factorization state, right-hand-side directions, breakpoint comparisons, products, inertia
+signs, kernel vectors, and witnesses use arbitrary-precision integers. Binary64 is used only to nominate high supports for exact
+positive-definiteness verification. A floating rejection is guarded by the high activation literal and cannot affect the low proof
+or final classification.
+
+Runtime diagnostics report the current low or high cardinality, selected and processed supports, installed SAT exclusions, and the
+joint singular-cardinality/nullity distribution. Source diagnostics distinguish low- and high-selected visits, including which side
+selected a support when the frontiers meet, as well as floating high rejections, pair-upward, support-upward, Dickinson, downward,
+and exact-support clauses in the focused model tests.
+
+## Known Difficult Inputs
+
+SAT-B2 still omits Dickinson intervals on the high frontier. It is difficult when many large principal matrices fail the floating
+positive-definiteness filter: the high scan can cheaply reject many supports, but those supports still require later exact
+low-frontier proof. The low Halfspace-Rays fallback can prune sideways and upward, but it may also be expensive when many exact
+directions are swept before finding only a narrow interval.
+
+Individual alternation can expose many large floating principal factorizations before small-cardinality exclusions have accumulated.
+It can spend time optimizing low Dickinson certificates before a later large positive-definite face supplies a downward closure that
+would have removed those supports. SAT clauses remain compact, but a large family of high-only rejections can still make SAT search
+expensive.

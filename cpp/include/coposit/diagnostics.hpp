@@ -56,6 +56,7 @@ enum class preprocessing_phase {
     motzkin_straus,
     z_matrix,
     frank_wolfe,
+    heuristic_kkt_search,
     exact_factorization,
     negative_part_factorization,
     danninger,
@@ -421,6 +422,8 @@ inline const char* phase_text(preprocessing_phase phase) noexcept
         return "Z-matrix";
     case preprocessing_phase::frank_wolfe:
         return "Frank-Wolfe";
+    case preprocessing_phase::heuristic_kkt_search:
+        return "heuristic KKT search";
     case preprocessing_phase::exact_factorization:
         return "exact factorization";
     case preprocessing_phase::negative_part_factorization:

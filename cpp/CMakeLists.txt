@@ -83,12 +83,13 @@ if(COPOSIT_BUILD_APPS OR COPOSIT_BUILD_PYTHON OR (COPOSIT_BUILD_TESTS AND BUILD_
     endforeach()
 endif()
 
-add_library(coposit_core INTERFACE)
-target_include_directories(coposit_core INTERFACE
+add_library(coposit_core STATIC heuristic_kkt_search.cpp)
+target_compile_definitions(coposit_core PUBLIC COPOSIT_ENABLE_TIMEOUTS=1)
+target_include_directories(coposit_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
     ${FLINT_INCLUDE_DIR}
 )
-target_link_libraries(coposit_core INTERFACE ${FLINT_LIBRARY} ${MPFR_LIBRARY} ${GMP_LIBRARY})
+target_link_libraries(coposit_core PUBLIC ${FLINT_LIBRARY} ${MPFR_LIBRARY} ${GMP_LIBRARY})
 add_library(coposit::core ALIAS coposit_core)
 
 if(COPOSIT_BUILD_APPS)
@@ -103,7 +104,8 @@ set(COPOSIT_COMBINED_CLASSIFICATION_MODELS
     multithreaded_cbdd_dickinson ceiling_pruned_dickinson kernel_cone_dickinson affine_companion_dickinson
     layered_singular_lift_dickinson
     breadth_first_singular_lift_dickinson
-    czdd_dickinson sat_dickinson sat_halfspace_dickinson sat_halfspace_rays_dickinson sat_halfspace_lp_dickinson
+    czdd_dickinson sat_dickinson sat_halfspace_dickinson sat_halfspace_rays_dickinson sat_b1 sat_b2 sat_a1 sat_a2 sat_a3 sat_a4 sat_a5
+    sat_halfspace_lp_dickinson
     sat_halfspace_milp_dickinson sat_halfspace_rays_lookahead_dickinson
     sat_halfspace_rays_wide_dickinson
     wide_certificate_sat_dickinson
@@ -141,6 +143,13 @@ set(COPOSIT_COPOSITIVE_MODELS
     sat_dickinson
     sat_halfspace_dickinson
     sat_halfspace_rays_dickinson
+    sat_b1
+    sat_b2
+    sat_a1
+    sat_a2
+    sat_a3
+    sat_a4
+    sat_a5
     sat_halfspace_lp_dickinson
     sat_halfspace_milp_dickinson
     sat_halfspace_rays_lookahead_dickinson
@@ -188,12 +197,19 @@ function(add_coposit_model_interfaces model_name)
             target_compile_definitions(${model_target} PRIVATE COPOSIT_SUPPORTS_COPOSITIVE=1)
         endif()
         if(model_name STREQUAL "wide_certificate_cbdd_dickinson" OR model_name STREQUAL "wide_certificate_sat_dickinson"
-           OR model_name STREQUAL "sat_halfspace_rays_wide_dickinson")
+           OR model_name STREQUAL "sat_halfspace_rays_wide_dickinson" OR model_name STREQUAL "xxx_two")
             target_compile_definitions(${model_target} PRIVATE COPOSIT_HAS_MODEL_PARAMETER=1)
         endif()
         target_link_libraries(${model_target} PRIVATE coposit_core Threads::Threads)
         if(model_name STREQUAL "sat_dickinson" OR model_name STREQUAL "sat_halfspace_dickinson"
            OR model_name STREQUAL "sat_halfspace_rays_dickinson"
+           OR model_name STREQUAL "sat_b1"
+           OR model_name STREQUAL "sat_b2"
+           OR model_name STREQUAL "sat_a1"
+           OR model_name STREQUAL "sat_a2"
+           OR model_name STREQUAL "sat_a3"
+           OR model_name STREQUAL "sat_a4"
+           OR model_name STREQUAL "sat_a5"
            OR model_name STREQUAL "sat_halfspace_lp_dickinson"
            OR model_name STREQUAL "sat_halfspace_milp_dickinson"
            OR model_name STREQUAL "sat_halfspace_rays_lookahead_dickinson"
@@ -239,6 +255,13 @@ add_coposit_model_interfaces(czdd_dickinson)
 add_coposit_model_interfaces(sat_dickinson)
 add_coposit_model_interfaces(sat_halfspace_dickinson)
 add_coposit_model_interfaces(sat_halfspace_rays_dickinson)
+add_coposit_model_interfaces(sat_b1)
+add_coposit_model_interfaces(sat_b2)
+add_coposit_model_interfaces(sat_a1)
+add_coposit_model_interfaces(sat_a2)
+add_coposit_model_interfaces(sat_a3)
+add_coposit_model_interfaces(sat_a4)
+add_coposit_model_interfaces(sat_a5)
 add_coposit_model_interfaces(sat_halfspace_lp_dickinson)
 add_coposit_model_interfaces(sat_halfspace_milp_dickinson)
 add_coposit_model_interfaces(sat_halfspace_rays_lookahead_dickinson)
@@ -489,6 +512,55 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
         PRIVATE COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
     target_link_libraries(test_sat_halfspace_rays_dickinson PRIVATE coposit_core coposit_cadical GTest::gtest_main)
     add_test(NAME SatHalfspaceRaysDickinsonModelTests COMMAND test_sat_halfspace_rays_dickinson)
+
+    add_executable(test_sat_b1
+        ../models/hadeler-based/sat_b1/test_solver.cpp
+        ../models/hadeler-based/sat_b1/solver.cpp)
+    target_compile_definitions(test_sat_b1 PRIVATE COPOSIT_SAT_B1_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_sat_b1 PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME SatB1ModelTests COMMAND test_sat_b1)
+
+    add_executable(test_sat_b2
+        ../models/hadeler-based/sat_b2/test_solver.cpp
+        ../models/hadeler-based/sat_b2/solver.cpp)
+    target_compile_definitions(test_sat_b2 PRIVATE COPOSIT_SAT_B2_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_sat_b2 PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME SatB2ModelTests COMMAND test_sat_b2)
+
+    add_executable(test_sat_a1
+        ../models/hadeler-based/sat_a1/test_solver.cpp
+        ../models/hadeler-based/sat_a1/solver.cpp)
+    target_compile_definitions(test_sat_a1 PRIVATE COPOSIT_SAT_A1_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_sat_a1 PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME SatA1ModelTests COMMAND test_sat_a1)
+
+    add_executable(test_sat_a2
+        ../models/hadeler-based/sat_a2/test_solver.cpp
+        ../models/hadeler-based/sat_a2/solver.cpp)
+    target_compile_definitions(test_sat_a2 PRIVATE COPOSIT_SAT_A2_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_sat_a2 PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME SatA2ModelTests COMMAND test_sat_a2)
+
+    add_executable(test_sat_a3
+        ../models/hadeler-based/sat_a3/test_solver.cpp
+        ../models/hadeler-based/sat_a3/solver.cpp)
+    target_compile_definitions(test_sat_a3 PRIVATE COPOSIT_SAT_A3_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_sat_a3 PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME SatA3ModelTests COMMAND test_sat_a3)
+
+    add_executable(test_sat_a4
+        ../models/hadeler-based/sat_a4/test_solver.cpp
+        ../models/hadeler-based/sat_a4/solver.cpp)
+    target_compile_definitions(test_sat_a4 PRIVATE COPOSIT_SAT_A4_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_sat_a4 PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME SatA4ModelTests COMMAND test_sat_a4)
+
+    add_executable(test_sat_a5
+        ../models/hadeler-based/sat_a5/test_solver.cpp
+        ../models/hadeler-based/sat_a5/solver.cpp)
+    target_compile_definitions(test_sat_a5 PRIVATE COPOSIT_SAT_A5_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_sat_a5 PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME SatA5ModelTests COMMAND test_sat_a5)
 
     add_executable(test_xxx
         ../models/hadeler-based/xxx/test_solver.cpp

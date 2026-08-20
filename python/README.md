@@ -43,6 +43,13 @@ czdd_dickinson
 sat_dickinson
 sat_halfspace_dickinson
 sat_halfspace_rays_dickinson
+sat_b1
+sat_b2
+sat_a1
+sat_a2
+sat_a3
+sat_a4
+sat_a5
 sat_halfspace_lp_dickinson
 sat_halfspace_milp_dickinson
 sat_halfspace_rays_lookahead_dickinson
@@ -80,6 +87,9 @@ Set either `COPOSIT_DENSE_BITSET_MAX_N` or `COPOSIT_DENSE_BITSET_MAX_GIB`; setti
 `model_parameter="50"`, `"75"`, `"90"`, or any other integer percentage from 0 through 100. The argument is required. The
 percentage applies to the remaining width $n-k$; each model has one implementation and one internal companion.
 
+`xxx_two` requires `model_parameter="alternating"` or `model_parameter="ascending"`. The former alternates low and high seed
+cardinalities; the latter exhausts seed cardinalities from smallest to largest.
+
 `multithreaded_cbdd_dickinson` defaults to seven C++ worker threads pinned consecutively to CPUs 3–9 inside one matrix call. Set
 `COPOSIT_CBDD_WORKERS` to another positive count and `COPOSIT_CBDD_FIRST_CPU` to the first CPU. When it is called through
 `run_multiprocessing()`, multiply the process count by this internal thread count when budgeting CPUs and exact-arithmetic scratch
@@ -87,7 +97,7 @@ memory. With `diagnostics=True`, completed supports and certificates appear afte
 decision-diagram status line.
 
 Serial `cbdd_dickinson`, `cbdd_halfspace_dickinson`, `upper_endpoint_cbdd_dickinson`, `czdd_dickinson`, `sat_dickinson`,
-`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_halfspace_lp_dickinson`, `sat_halfspace_milp_dickinson`,
+`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_a1`, `sat_a2`, `sat_a3`, `sat_a4`, `sat_a5`, `sat_halfspace_lp_dickinson`, `sat_halfspace_milp_dickinson`,
 `sat_halfspace_rays_lookahead_dickinson`,
 `sat_halfspace_rays_wide_dickinson`, `wide_certificate_sat_dickinson`, `clingo_dickinson`, and `clingo_halfspace_dickinson`
 diagnostics also print the sparse
@@ -244,8 +254,9 @@ derived `references_unsolved` selector. Without a set selector, the runner selec
 `--results-database PATH` overrides the diagnostics database. A custom `--database` without this option keeps the historical single-file
 behavior, which is useful for disposable test databases.
 
-`--model-parameter PERCENTAGE` is required for all three wide-certificate models. Parameterized result rows append `@PERCENTAGE` to the
-selected model identifier so different values of the same binary do not overwrite one another.
+`--model-parameter VALUE` is required for parameterized models. The three wide-certificate models use an integer percentage;
+`xxx_two` uses `alternating` or `ascending`. Parameterized result rows append `@VALUE` to the selected model identifier so different
+values of the same binary do not overwrite one another.
 
 For `dense_bitset_dickinson`, the mutually exclusive `--dense-bitset-max-n N` and `--dense-bitset-max-gib GIB` options pass the
 corresponding allocation limit to every persistent worker.

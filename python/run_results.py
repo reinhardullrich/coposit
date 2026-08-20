@@ -812,7 +812,7 @@ def main() -> None:
     parser.add_argument("--preprocessing", choices=PREPROCESSING_MODES, default="both")
     parser.add_argument(
         "--model-parameter",
-        help="model-specific value; wide-certificate models require an integer percentage",
+        help="model-specific value; wide-certificate models use a percentage and xxx_two uses alternating or ascending",
     )
     dense_limit = parser.add_mutually_exclusive_group()
     dense_limit.add_argument("--dense-bitset-max-n", type=int, metavar="N")
