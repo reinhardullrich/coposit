@@ -45,6 +45,7 @@ sat_halfspace_dickinson
 sat_halfspace_rays_dickinson
 sat_b1
 sat_b2
+sat_b3
 sat_a1
 sat_a2
 sat_a3

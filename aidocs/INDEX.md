@@ -25,6 +25,10 @@ This file routes to every other Markdown document under `aidocs/` without duplic
 
 ## Research
 
+- `HADELER_DICKINSON_ALL_ONES_AND_CURVATURE.md` — **theory note** — the precise all-ones inverse criterion under principal-support
+  induction, its KKT interpretation, its relationship to the reduced Hessian, and Dickinson's interval reuse.
+- `SIMPLEX_FACE_CONVEXITY_PRUNING_THEORY.md` — **theory note** — how minimal-support global minimizers, tangent-space strict
+  convexity, exact inertia tests, and upward/downward support pruning preserve or certify copositivity and strict copositivity.
 - `XXX_IMPLEMENTATION_PLAN.md` — **current implementation record** — retained SAT-Halfspace-Rays certificates, alternating complete
   cardinality layers, exact KKT paths, singular nullspace-to-boundary navigation, additional upward/downward intervals, and the
   proof-complete one-SAT invariant.

@@ -16,7 +16,7 @@ reported as `false`.
 
 The eight literature baselines, `adaptive_sponsel_copomatrix`, `dense_bitset_dickinson`, all CBDD Dickinson
 variants, `ceiling_pruned_dickinson`, `layered_singular_lift_dickinson`, `breadth_first_singular_lift_dickinson`, `sat_dickinson`,
-`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_b1`, `sat_b2`, `sat_a1`, `sat_a2`, `sat_a3`, `sat_a4`, `sat_a5`, `sat_halfspace_lp_dickinson`, `sat_halfspace_milp_dickinson`,
+`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_b1`, `sat_b2`, `sat_b3`, `sat_a1`, `sat_a2`, `sat_a3`, `sat_a4`, `sat_a5`, `sat_halfspace_lp_dickinson`, `sat_halfspace_milp_dickinson`,
 `sat_halfspace_rays_lookahead_dickinson`,
 `sat_halfspace_rays_wide_dickinson`, `cbdd_halfspace_dickinson`,
 `kernel_cone_dickinson`, `affine_companion_dickinson`,
@@ -26,7 +26,7 @@ Hadeler 1983, Dickinson 2019, Dense-Bitset Dickinson, Danninger 1990, all CBDD D
 Ceiling-Pruned Dickinson, Kernel-Cone Dickinson, Layered Singular-Lift Dickinson, SAT Dickinson, SAT-Halfspace Dickinson,
 SAT-Halfspace-Rays Dickinson, SAT-Halfspace-LP Dickinson, SAT-Halfspace-MILP Dickinson,
 SAT-B1, SAT-A1, SAT-A2, SAT-A3, SAT-A5,
-SAT-B2,
+SAT-B2, SAT-B3,
 SAT-Halfspace-Rays Lookahead Dickinson, SAT-Halfspace-Rays Wide Dickinson,
 Wide-Certificate SAT Dickinson,
 XXX, XXX Two, Affine-Companion Dickinson, Clingo Dickinson, and Clingo-Halfspace Dickinson can additionally classify both predicates in one traversal.
@@ -222,7 +222,8 @@ Their canonical source directories and compact lineage inventory are under
 | `sat_halfspace_dickinson` | SAT Dickinson with cumulative exact coordinate search over strictly positive right-hand sides; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_dickinson/ALGORITHM.md). |
 | `sat_halfspace_rays_dickinson` | U-first, width-second SAT-Halfspace path with an adaptive shortlist and at most two exact synthesized-ray sweeps; [`ALGORITHM.md`](../models/hadeler-based/sat_halfspace_rays_dickinson/ALGORITHM.md). |
 | `sat_b1` | SAT-Halfspace-Rays preceded by exact strict-convex-face exclusions from pair curvature and each retained principal factorization; [`ALGORITHM.md`](../models/hadeler-based/sat_b1/ALGORITHM.md). |
-| `sat_b2` | Pure SAT face-curvature traversal with alternating low/high cardinalities and no Dickinson intervals; [`ALGORITHM.md`](../models/hadeler-based/sat_b2/ALGORITHM.md). |
+| `sat_b2` | Alternating low/high SAT traversal: low supports use curvature then Halfspace-Rays Dickinson; high supports use floating positive-definiteness proposals with exact downward verification; [`ALGORITHM.md`](../models/hadeler-based/sat_b2/ALGORITHM.md). |
+| `sat_b3` | SAT-B2 with a broader high-frontier filter and exact downward pruning for singular PSD supports whose all-ones system is consistent; [`ALGORITHM.md`](../models/hadeler-based/sat_b3/ALGORITHM.md). |
 | `sat_a1` | SAT-Halfspace-Rays with the inclusion-maximal antichain of upper endpoints encountered by its existing exact sweeps; [`ALGORITHM.md`](../models/hadeler-based/sat_a1/ALGORITHM.md). |
 | `sat_a2` | SAT-Halfspace-Rays plus one bounded maximum-halfspace LP relaxation, exact candidate reconstruction, and one LP-guided monotone extension; [`ALGORITHM.md`](../models/hadeler-based/sat_a2/ALGORITHM.md). |
 | `sat_a3` | SAT-Halfspace-Rays followed by bounded monotone LP-feasibility probes that preserve the complete Rays upper endpoint and force one omitted index; every accepted extension is verified exactly; [`ALGORITHM.md`](../models/hadeler-based/sat_a3/ALGORITHM.md). |

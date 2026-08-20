@@ -135,6 +135,7 @@ class WrapperTests(unittest.TestCase):
             or algorithm == "cbdd_dickinson_improved_1"
             or algorithm == "sat_b1"
             or algorithm == "sat_b2"
+            or algorithm == "sat_b3"
             or algorithm == "sat_a1"
             or algorithm == "sat_a2"
             or algorithm == "sat_a3"
