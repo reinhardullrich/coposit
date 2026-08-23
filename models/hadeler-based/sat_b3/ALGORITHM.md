@@ -281,10 +281,20 @@ signs, kernel vectors, and witnesses use arbitrary-precision integers. Binary64 
 positive-semidefiniteness verification. A floating rejection is guarded by the high activation literal and cannot affect the low proof
 or final classification.
 
-Runtime diagnostics report the current low or high cardinality, selected and processed supports, installed SAT exclusions, and the
-joint singular-cardinality/nullity distribution. Source diagnostics distinguish low- and high-selected visits, including which side
-selected a support when the frontiers meet, as well as floating high rejections, pair-upward, support-upward, Dickinson, downward,
-and exact-support clauses in the focused model tests.
+Runtime diagnostics report the current low or high cardinality, selected and processed supports, retained mathematical certificates, and the
+joint singular-cardinality/nullity distribution. Captured diagnostics also retain a chronological support history. Every mathematical
+certificate identifies its generating support and compact covered region: $L\subseteq J\subseteq U$ for a Dickinson interval,
+$I\subseteq J\subseteq[n]$ for pair or support curvature, and every nonempty $J\subseteq I$ for a positive-definite or consistent
+singular-PSD downward certificate. A high-frontier support that yields no certificate is stored as the generating support alone, with
+no interval. This includes exact-support bookkeeping blocks, floating high-frontier rejections, and terminal high-frontier outcomes;
+none is mislabelled as a certificate. Sets use sorted one-based indices in the matrix delegated to SAT-B3. The certificate vector
+itself is not stored. Every history event also records `floating_checked` and `exact_checked`. Low-frontier work is exact-only. A
+high-frontier support rejected by the floating filter is floating-only; a support that passes the filter and reaches the exact
+factorization records both. Every retained certificate is exact-checked.
+
+Source diagnostics distinguish low- and high-selected visits, including which side selected a support when the frontiers meet, as
+well as floating high rejections, pair-upward, support-upward, Dickinson, downward, and exact-support clauses in the focused model
+tests.
 
 ## Known Difficult Inputs
 

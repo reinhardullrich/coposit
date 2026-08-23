@@ -16,7 +16,10 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -559,6 +562,82 @@ public:
 private:
     enum class pruning_direction { upward, downward, both };
 
+    static void append_indices(std::ostringstream& event, const std::vector<size_t>& indices)
+    {
+        event << '[';
+        for (size_t position = 0; position < indices.size(); ++position) {
+            if (position != 0) event << ',';
+            event << indices[position] + 1;
+        }
+        event << ']';
+    }
+
+    static void append_support(std::ostringstream& event, const support& indices)
+    {
+        event << '[';
+        bool first = true;
+        for (size_t index = 0; index < indices.dimension(); ++index) {
+            if (!indices.contains(index)) continue;
+            if (!first) event << ',';
+            event << index + 1;
+            first = false;
+        }
+        event << ']';
+    }
+
+    void record_interval_certificate(const support& lower, const support& upper)
+    {
+        if (!diagnostics_.active()) return;
+        std::ostringstream event;
+        event << "model=sat_b3 n=" << product_.size() << " frontier=" << certificate_frontier_
+              << " kind=dickinson source=";
+        append_indices(event, indices_);
+        event << " coverage=interval lower=";
+        append_support(event, lower);
+        event << " upper=";
+        append_support(event, upper);
+        event << " exclude_empty=no floating_checked=no exact_checked=yes";
+        diagnostics::record_history_event("certificate", event.str());
+    }
+
+    void record_closure_certificate(std::string_view kind, std::string_view coverage, std::string_view frontier,
+                                    const std::vector<size_t>& source)
+    {
+        if (!diagnostics_.active()) return;
+        std::ostringstream event;
+        event << "model=sat_b3 n=" << product_.size() << " frontier=" << frontier << " kind=" << kind
+              << " source=";
+        append_indices(event, source);
+        event << " coverage=" << coverage;
+        if (coverage == "upward") {
+            event << " lower=";
+            append_indices(event, source);
+            event << " upper=all exclude_empty=no";
+        } else if (coverage == "downward") {
+            event << " lower=[] upper=";
+            append_indices(event, source);
+            event << " exclude_empty=yes";
+        }
+        event << " floating_checked=" << (frontier == "high" ? "yes" : "no") << " exact_checked=yes";
+        diagnostics::record_history_event("certificate", event.str());
+    }
+
+    void record_high_support_without_certificate(bool exact_checked)
+    {
+        if (!diagnostics_.active()) return;
+        std::ostringstream event;
+        event << "model=sat_b3 n=" << product_.size() << " frontier=high source=";
+        append_indices(event, indices_);
+        event << " floating_checked=yes exact_checked=" << (exact_checked ? "yes" : "no");
+        diagnostics::record_history_event("visited_support", event.str());
+    }
+
+    void record_pair_curvature_certificate(size_t first, size_t second)
+    {
+        if (!diagnostics_.active()) return;
+        record_closure_certificate("pair_curvature", "upward", "initial", {first, second});
+    }
+
     bool process_low_support(const matrix_integer& matrix, size_t& low, size_t high)
     {
         while (low <= high) {
@@ -588,6 +667,7 @@ private:
     bool process_selected_support(const matrix_integer& matrix, pruning_direction direction, bool from_low_frontier)
     {
         timeout_checkpoint();
+        certificate_frontier_ = from_low_frontier ? "low" : "high";
         diagnostics_.visit_support();
         diagnostics_.secondary();
         COPOSIT_SAT_B3_DIAGNOSTICS(from_low_frontier ? "process_low" : "process_high", indices_.size());
@@ -610,6 +690,7 @@ private:
 
                 supports_->add_pair_upward_closure(first, second);
                 diagnostics_.certificate();
+                record_pair_curvature_certificate(first, second);
                 COPOSIT_SAT_B3_DIAGNOSTICS("pair_upward", 2);
 #ifdef COPOSIT_SAT_B3_TESTING
                 ++pair_curvature_exclusion_count_;
@@ -625,6 +706,7 @@ private:
             floating_filter_.prepare(matrix);
             if (!floating_filter_.looks_positive_semidefinite(indices_)) {
                 supports_->reject_from_high_frontier(indices_);
+                record_high_support_without_certificate(false);
                 COPOSIT_SAT_B3_DIAGNOSTICS("high_float_reject", indices_.size());
 #ifdef COPOSIT_SAT_B3_TESTING
                 ++high_float_rejection_count_;
@@ -646,7 +728,7 @@ private:
         }
         if (direction == pruning_direction::both && singular && add_singular_psd_downward_closure()) return true;
         if (direction == pruning_direction::both && !singular && factorization_.is_positive_definite()) {
-            add_downward_closure();
+            add_downward_closure("positive_definite");
             return true;
         }
         if (singular) return process_singular_subset(matrix);
@@ -657,7 +739,7 @@ private:
     {
         if (factorization_.is_positive_definite()) {
             if (direction == pruning_direction::upward) add_exact_support();
-            else add_downward_closure();
+            else add_downward_closure("positive_definite");
             return true;
         }
         if (factorization_.negative_inertia() != 1) {
@@ -682,7 +764,10 @@ private:
             else add_exact_support();
             return true;
         }
-        if (all_nonpositive) return false;
+        if (all_nonpositive) {
+            if (certificate_frontier_ == "high") record_high_support_without_certificate(true);
+            return false;
+        }
 
         add_exact_support();
         return true;
@@ -715,7 +800,10 @@ private:
 
         if (all_nonnegative || all_nonpositive) {
             if (classification_ != nullptr) classification_->is_strictly_copositive = false;
-            else if (mode_ == copositivity_mode::strictly_copositive) return false;
+            else if (mode_ == copositivity_mode::strictly_copositive) {
+                if (certificate_frontier_ == "high") record_high_support_without_certificate(true);
+                return false;
+            }
         }
         add_exact_support();
         return true;
@@ -727,7 +815,7 @@ private:
         for (size_t row = 0; row < solution_.rows(); ++row) solution_(row, 0).set_one();
         integer denominator;
         if (!factorization_.solve_consistent_inplace(solution_, denominator, principal_)) return false;
-        add_downward_closure();
+        add_downward_closure("singular_psd_consistent");
         return true;
     }
 
@@ -1303,6 +1391,7 @@ private:
 #endif
         supports_->add_interval(lower, upper);
         if (diagnostics_.active()) diagnostics_.certificate(upper_size - lower_size, upper_size);
+        record_interval_certificate(lower, upper);
         COPOSIT_SAT_B3_DIAGNOSTICS("dickinson", indices_.size());
         return true;
     }
@@ -1329,13 +1418,15 @@ private:
     {
         supports_->add_upward_closure(indices_);
         if (diagnostics_.active()) diagnostics_.certificate(product_.size() - indices_.size(), product_.size());
+        record_closure_certificate("support_curvature", "upward", certificate_frontier_, indices_);
         COPOSIT_SAT_B3_DIAGNOSTICS("support_upward", indices_.size());
     }
 
-    void add_downward_closure()
+    void add_downward_closure(std::string_view kind)
     {
         supports_->add_downward_closure(indices_);
         diagnostics_.certificate();
+        record_closure_certificate(kind, "downward", certificate_frontier_, indices_);
         COPOSIT_SAT_B3_DIAGNOSTICS("downward", indices_.size());
 #ifdef COPOSIT_SAT_B3_TESTING
         ++downward_count_;
@@ -1345,7 +1436,7 @@ private:
     void add_exact_support()
     {
         supports_->add_exact_support(indices_);
-        diagnostics_.certificate();
+        if (certificate_frontier_ == "high") record_high_support_without_certificate(true);
         COPOSIT_SAT_B3_DIAGNOSTICS("exact", indices_.size());
 #ifdef COPOSIT_SAT_B3_TESTING
         ++exact_count_;
@@ -1410,6 +1501,7 @@ private:
     size_t ray_best_losses_ = 0;
     bool ray_best_initialized_ = false;
     bool negative_witness_found_ = false;
+    std::string_view certificate_frontier_ = "direct";
     const copositivity_mode mode_;
     copositivity_classification* classification_ = nullptr;
     diagnostics::tracker diagnostics_;

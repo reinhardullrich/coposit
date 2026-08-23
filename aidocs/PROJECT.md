@@ -1,6 +1,6 @@
 # coposit Project Overview
 
-Last verified: 2026-08-17
+Last verified: 2026-08-23
 
 ## Purpose And Contract
 
@@ -16,7 +16,8 @@ reported as `false`.
 
 The eight literature baselines, `adaptive_sponsel_copomatrix`, `dense_bitset_dickinson`, all CBDD Dickinson
 variants, `ceiling_pruned_dickinson`, `layered_singular_lift_dickinson`, `breadth_first_singular_lift_dickinson`, `sat_dickinson`,
-`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_b1`, `sat_b2`, `sat_b3`, `sat_a1`, `sat_a2`, `sat_a3`, `sat_a4`, `sat_a5`, `sat_halfspace_lp_dickinson`, `sat_halfspace_milp_dickinson`,
+`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_b1`, `sat_b2`, `sat_b3`, `sat_b4`, `sat_b5`, `nbc_b6`, `nbc_b7`, `improved_nbc_b7`, `sat_c1`, `sat_c2`,
+`sat_c3`, `sat_c4`, `f1`, `f2`, `g1`, `sat_a1`, `sat_a2`, `sat_a3`, `sat_a4`, `sat_a5`, `sat_halfspace_lp_dickinson`, `sat_halfspace_milp_dickinson`,
 `sat_halfspace_rays_lookahead_dickinson`,
 `sat_halfspace_rays_wide_dickinson`, `cbdd_halfspace_dickinson`,
 `kernel_cone_dickinson`, `affine_companion_dickinson`,
@@ -26,7 +27,8 @@ Hadeler 1983, Dickinson 2019, Dense-Bitset Dickinson, Danninger 1990, all CBDD D
 Ceiling-Pruned Dickinson, Kernel-Cone Dickinson, Layered Singular-Lift Dickinson, SAT Dickinson, SAT-Halfspace Dickinson,
 SAT-Halfspace-Rays Dickinson, SAT-Halfspace-LP Dickinson, SAT-Halfspace-MILP Dickinson,
 SAT-B1, SAT-A1, SAT-A2, SAT-A3, SAT-A5,
-SAT-B2, SAT-B3,
+SAT-B2, SAT-B3, NBC-B7,
+SAT-C3, SAT-C4, F1, F2, G1,
 SAT-Halfspace-Rays Lookahead Dickinson, SAT-Halfspace-Rays Wide Dickinson,
 Wide-Certificate SAT Dickinson,
 XXX, XXX Two, Affine-Companion Dickinson, Clingo Dickinson, and Clingo-Halfspace Dickinson can additionally classify both predicates in one traversal.
@@ -224,6 +226,17 @@ Their canonical source directories and compact lineage inventory are under
 | `sat_b1` | SAT-Halfspace-Rays preceded by exact strict-convex-face exclusions from pair curvature and each retained principal factorization; [`ALGORITHM.md`](../models/hadeler-based/sat_b1/ALGORITHM.md). |
 | `sat_b2` | Alternating low/high SAT traversal: low supports use curvature then Halfspace-Rays Dickinson; high supports use floating positive-definiteness proposals with exact downward verification; [`ALGORITHM.md`](../models/hadeler-based/sat_b2/ALGORITHM.md). |
 | `sat_b3` | SAT-B2 with a broader high-frontier filter and exact downward pruning for singular PSD supports whose all-ones system is consistent; [`ALGORITHM.md`](../models/hadeler-based/sat_b3/ALGORITHM.md). |
+| `sat_b4` | SAT-B3 with recursive exact Johnson--Reams dimension reduction whenever a positive-definite frontier block has an entrywise nonnegative minimizing map; [`ALGORITHM.md`](../models/hadeler-based/sat_b4/ALGORITHM.md). |
+| `sat_b5` | SAT-B4 without the high-frontier/downward scan: ascending upward curvature and Halfspace-Rays pruning with exact Johnson--Reams dimension reduction; [`ALGORITHM.md`](../models/hadeler-based/sat_b5/ALGORITHM.md). |
+| `nbc_b6` | SAT-B3's ascending upward-curvature and Halfspace-Rays path, using NBC MiniSat All to enumerate one full cardinality before compacting and activating its certificates; [`ALGORITHM.md`](../models/hadeler-based/nbc_b6/ALGORITHM.md). |
+| `nbc_b7` | SAT-B3's alternating low/high traversal and exact downward pruning with a persistent NBC MiniSat All Boolean backend; [`ALGORITHM.md`](../models/hadeler-based/nbc_b7/ALGORITHM.md). |
+| `improved_nbc_b7` | NBC-B7 with a separately maintained, genuinely resumable Improved NBC backend and permanent root-inconsistency detection; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_b7/ALGORITHM.md). |
+| `sat_c1` | SAT-B3 plus a heuristic-gated exact tangent Schur-residual search for curvature-bad supports hidden inside Dickinson intervals; [`ALGORITHM.md`](../models/hadeler-based/sat_c1/ALGORITHM.md). |
+| `sat_c2` | SAT-C1 plus bounded SAT-aware stationary-face walks, buffered exact curvature closures, and one fixed low/high alternating schedule; [`ALGORITHM.md`](../models/hadeler-based/sat_c2/ALGORITHM.md). |
+| `sat_c3` | FracESSA-style ascending generator retaining only exact full-upward curvature and full-ceiling Dickinson roots; [`ALGORITHM.md`](../models/hadeler-based/sat_c3/ALGORITHM.md). |
+| `sat_c4` | SAT-B3 with exact curvature checks at the traditional, Halfspace, and synthesized-ray Dickinson upper endpoints; [`ALGORITHM.md`](../models/hadeler-based/sat_c4/ALGORITHM.md). |
+| `f1` | FracESSA-style ascending generator with exact pair and endpoint curvature plus full-ceiling Halfspace-Rays Dickinson roots; [`ALGORITHM.md`](../models/hadeler-based/f1/ALGORITHM.md). |
+| `g1` | F1's full-upward generator plus expiring bounded Dickinson guidance and exact cardinality-boundary root compaction; [`ALGORITHM.md`](../models/hadeler-based/g1/ALGORITHM.md). |
 | `sat_a1` | SAT-Halfspace-Rays with the inclusion-maximal antichain of upper endpoints encountered by its existing exact sweeps; [`ALGORITHM.md`](../models/hadeler-based/sat_a1/ALGORITHM.md). |
 | `sat_a2` | SAT-Halfspace-Rays plus one bounded maximum-halfspace LP relaxation, exact candidate reconstruction, and one LP-guided monotone extension; [`ALGORITHM.md`](../models/hadeler-based/sat_a2/ALGORITHM.md). |
 | `sat_a3` | SAT-Halfspace-Rays followed by bounded monotone LP-feasibility probes that preserve the complete Rays upper endpoint and force one omitted index; every accepted extension is verified exactly; [`ALGORITHM.md`](../models/hadeler-based/sat_a3/ALGORITHM.md). |
@@ -282,30 +295,39 @@ Standard local reference runs use parent CPU 3 and solver CPUs 4 through 7.
 
 ## Corpus And Evidence
 
-`testdata/copos_testdata.sqlite3` contains 4,289 exact matrices of orders 1 through 5,000 and uses SQLite `auto_vacuum=FULL` so
+`testdata/copos_testdata.sqlite3` contains 5,834 exact matrices of orders 1 through 5,000 and uses SQLite `auto_vacuum=FULL` so
 deleted or replaced result rows do not leave persistent free pages. The `matrices` table stores nullable strict and non-strict truth,
 free-form occurrence provenance and family text, an earliest-known primary `source_id`, an `additional_source_ids` JSON bibliography,
 a `references_solved` JSON array of source-linked literature solution claims, a parallel `references_unsolved` array of explicit
 method-specific failure claims,
-and four overlapping benchmark flags: stored `smoke_set` and `core_and_stress_test`, plus generated `n_le_100` and
-`n_gt_100_solved`. The small `sources` table stores only authors, title,
+and six overlapping benchmark flags: stored `smoke_set`, `core_and_stress_test`, and `bpqy_quick_test`, plus generated `n_le_100`,
+`n_gt_100_solved`, and `bpqy_benchmark`. The full BPQY flag selects preprocessing-unresolved COP constructions whose exact lifts are
+strictly copositive or still unknown; the quick flag is a fixed six-matrix development subset. The small `sources` table stores only authors, title,
 the earliest documented public year, bibliographic reference, and a provenance comment. It contains 96 literature, collection,
 repository, and local-generator source records. Every current corpus matrix points to its
 earliest located source or exact local generator. Another 513 matrices carry 837 chronologically ordered secondary source links
 obtained from explicit catalog matches, stored occurrence provenance, exact positive-scale duplicates, and audited named or
 family-level reuse statements. These links are
 best-effort literature evidence, not a claim that a class-level paper prints every member's coefficients.
+The corpus includes primitive exact negations of all 1,411 current FracESSA game matrices: 16 were already represented up to positive
+scaling and 1,395 were added as unclassified copositivity inputs. Their FracESSA matrix IDs remain explicit in each row's provenance.
 The corpus includes 750 BPQY-style COP and PSD Float64 constructions at orders 20, 30, 35, 40, and 45. They use Julia 1.8.5,
 the manuscript's three support sizes and seeds 1 through 25, and exact primitive-integer lifting of the generated doubles. Their
 intended boundary classification is provenance only. A ten-second exact SAT-Halfspace-Rays combined run classified 404 integer
 materializations—255 strictly copositive and 149 non-copositive, with no boundary result—and left 346 timeouts unknown.
+The original order-25 and order-50 reconstruction retains its 150 COP and 150 PSD materializations. Its 150 SPN materializations were
+removed because every exact lifted matrix failed a root preprocessing check and therefore supplied no model-stage evidence.
+It additionally contains 300 COP-only extensions at orders 10, 15, 55, and 60, with three admissible support sizes and seeds 1 through
+25 at each order. These use the same Julia 1.8.5 recipe and exact primitive-integer lifting. A 30-second exact SAT-B3 combined run
+classified 252 materializations—101 strictly copositive and 151 non-copositive—and left 48 timeouts unknown; no truth was inferred
+from the ideal boundary construction.
 It also retains the original Hildebrand circulant panel and a separate exact independent-angle panel with one boundary matrix at every
 order from 15 through 30. The latter uses independently selected rational unit-circle parameters to reduce primitive entry height
 without rounding, perturbing, or leaving Hildebrand's support-$n-2$ construction.
-The `preprocessing_solved` metadata flag identifies all 2,765 retained matrices completely classified by the current maintained
-depth-2 combined preprocessing workflow in the five-second corpus run, its sixty-second timeout continuation, the focused ten-minute
-Motzkin--Straus follow-up, or a stored combined diagnostic result with zero model delegations. They comprise 744 strictly copositive,
-1,032 copositive-boundary, and 989 non-copositive matrices. Partial facts are excluded, and shorter later diagnostics can add evidence
+The `preprocessing_solved` metadata flag identifies all 4,887 retained matrices completely classified by the current maintained
+depth-2 combined preprocessing workflow in the current ten-second corpus run, earlier longer continuations, or another stored combined
+diagnostic result with zero model delegations. They comprise 968 strictly copositive, 1,210 copositive-boundary, and 2,709 non-copositive
+matrices. Partial facts are excluded, and shorter later diagnostics can add evidence
 but never remove a flag established by a longer run.
 Every named benchmark set excludes these rows; the current sets therefore measure matrices that reach the selected model.
 Separately, 430 matrices have 629 `references_solved` entries from 27 sources whose reported result establishes the matrix's complete
@@ -372,7 +394,8 @@ sqlite3 testdata/copos_testdata.sqlite3 'PRAGMA integrity_check;'
 
 Use `smoke_set` first for integration checks, `core_and_stress_test` for normal comparisons and difficult exact/resource behavior,
 `n_le_100` for comprehensive dimension-bounded comparisons among matrices not solved by preprocessing, and
-`n_gt_100_solved` for higher-order matrices that literature reports as solved.
+`n_gt_100_solved` for higher-order matrices that literature reports as solved. Use `bpqy_benchmark` for the complete focused BPQY
+COP panel and `bpqy_quick_test` for its six-matrix medium-duration development subset.
 Use the complete corpus only for final reference results or an
 explicitly exhaustive question.
 

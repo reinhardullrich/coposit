@@ -46,6 +46,19 @@ sat_halfspace_rays_dickinson
 sat_b1
 sat_b2
 sat_b3
+bdd_b3
+sat_b4
+sat_b5
+nbc_b6
+nbc_b7
+improved_nbc_b7
+sat_c1
+sat_c2
+sat_c3
+sat_c4
+f1
+f2
+g1
 sat_a1
 sat_a2
 sat_a3
@@ -245,8 +258,8 @@ with an explicit error; run it once with `--mode copositive` and once with `--mo
 only when both predicates are known. A completed strict-only call returning `false` is a partial predicate result, not a solved
 matrix, because it does not distinguish a copositive boundary matrix from a non-copositive matrix.
 
-`--matrix-set` accepts one or more of `smoke_set`, `core_and_stress_test`, `n_le_100`, `n_gt_100_solved`, and
-`references_unsolved`, and runs their union. The first four names select
+`--matrix-set` accepts one or more of `smoke_set`, `core_and_stress_test`, `n_le_100`, `n_gt_100_solved`, `bpqy_benchmark`,
+`bpqy_quick_test`, and `references_unsolved`, and runs their union. The first six names select
 Boolean corpus flags; `references_unsolved` selects rows with at least one explicit literature failure claim. It can
 be combined with the dimension and matrix-ID bounds. Every named set selector excludes `preprocessing_solved = 1`, including the
 derived `references_unsolved` selector. Without a set selector, the runner selects all rows inside the explicit bounds.

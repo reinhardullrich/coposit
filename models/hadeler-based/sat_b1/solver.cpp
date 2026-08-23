@@ -16,7 +16,10 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <sstream>
 #include <stdexcept>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -425,6 +428,65 @@ public:
 #endif
 
 private:
+    static void append_indices(std::ostringstream& event, const std::vector<size_t>& indices)
+    {
+        event << '[';
+        for (size_t position = 0; position < indices.size(); ++position) {
+            if (position != 0) event << ',';
+            event << indices[position] + 1;
+        }
+        event << ']';
+    }
+
+    static void append_support(std::ostringstream& event, const support& indices)
+    {
+        event << '[';
+        bool first = true;
+        for (size_t index = 0; index < indices.dimension(); ++index) {
+            if (!indices.contains(index)) continue;
+            if (!first) event << ',';
+            event << index + 1;
+            first = false;
+        }
+        event << ']';
+    }
+
+    void record_interval_certificate(const support& lower, const support& upper)
+    {
+        if (!diagnostics_.active()) return;
+        std::ostringstream event;
+        event << "model=sat_b1 n=" << product_.size() << " frontier=low kind=dickinson source=";
+        append_indices(event, indices_);
+        event << " coverage=interval lower=";
+        append_support(event, lower);
+        event << " upper=";
+        append_support(event, upper);
+        event << " exclude_empty=no floating_checked=no exact_checked=yes";
+        diagnostics::record_history_event("certificate", event.str());
+    }
+
+    void record_upward_certificate(std::string_view kind, std::string_view frontier, const std::vector<size_t>& source)
+    {
+        if (!diagnostics_.active()) return;
+        std::ostringstream event;
+        event << "model=sat_b1 n=" << product_.size() << " frontier=" << frontier << " kind=" << kind << " source=";
+        append_indices(event, source);
+        event << " coverage=upward lower=";
+        append_indices(event, source);
+        event << " upper=all exclude_empty=no floating_checked=no exact_checked=yes";
+        diagnostics::record_history_event("certificate", event.str());
+    }
+
+    void record_support_without_certificate()
+    {
+        if (!diagnostics_.active()) return;
+        std::ostringstream event;
+        event << "model=sat_b1 n=" << product_.size() << " frontier=low source=";
+        append_indices(event, indices_);
+        event << " floating_checked=no exact_checked=yes";
+        diagnostics::record_history_event("visited_support", event.str());
+    }
+
     void install_pair_curvature_exclusions(const matrix_integer& matrix)
     {
         integer curvature;
@@ -440,6 +502,7 @@ private:
                 if (curvature.sign() > 0) continue;
 
                 supports_->add_pair_upward_closure(first, second);
+                record_upward_certificate("pair_curvature", "initial", {first, second});
                 COPOSIT_SAT_B1_DIAGNOSTICS("pair_curvature", 2);
 #ifdef COPOSIT_SAT_B1_TESTING
                 ++pair_curvature_exclusion_count_;
@@ -457,8 +520,9 @@ private:
 
         const bool singular = factorization_.factorize_inplace(principal_) == 0;
         if (singular && diagnostics_.active()) diagnostics_.singular_support(dimension - factorization_.rank());
-        if (singular) return process_singular_subset(matrix);
-        return process_nonsingular_subset(matrix);
+        const bool result = singular ? process_singular_subset(matrix) : process_nonsingular_subset(matrix);
+        if (!result) record_support_without_certificate();
+        return result;
     }
 
     bool process_singular_subset(const matrix_integer& matrix)
@@ -1033,6 +1097,7 @@ private:
 #endif
         supports_->add_interval(lower, upper);
         if (diagnostics_.active()) diagnostics_.certificate(upper_size - lower_size, upper_size);
+        record_interval_certificate(lower, upper);
         return true;
     }
 
@@ -1052,6 +1117,7 @@ private:
 #endif
         supports_->add_upward_closure(indices_);
         if (diagnostics_.active()) diagnostics_.certificate(product_.size() - indices_.size(), product_.size());
+        record_upward_certificate("support_curvature", "low", indices_);
         COPOSIT_SAT_B1_DIAGNOSTICS("curvature", indices_.size());
         return true;
     }

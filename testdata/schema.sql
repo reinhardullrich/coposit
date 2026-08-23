@@ -54,5 +54,19 @@ CREATE TABLE matrices (
                     AND json_extract(fastest_result_ref, '$.binary_sha256') NOT GLOB '*[^0-9a-f]*')
             )
         END),
+    bpqy_quick_test INTEGER NOT NULL DEFAULT 0 CHECK(bpqy_quick_test IN (0, 1)),
+    bpqy_benchmark INTEGER GENERATED ALWAYS AS (
+        CASE
+            WHEN source_id = 51
+             AND family GLOB 'BPQY COP *'
+             AND preprocessing_solved = 0
+             AND (
+                 is_copositive = 1 AND is_strictly_copositive = 1
+                 OR is_copositive IS NULL AND is_strictly_copositive IS NULL
+             )
+            THEN 1
+            ELSE 0
+        END
+    ) VIRTUAL,
     CHECK(is_strictly_copositive IS NULL OR is_strictly_copositive = 0 OR is_copositive IS 1)
 ) STRICT;

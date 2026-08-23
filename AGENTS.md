@@ -124,14 +124,16 @@
 
 ## Matrix Test Sets
 
-Use the four overlapping Boolean flags in the `matrices` table instead of inventing an ad hoc matrix list. See
+Use the six overlapping Boolean flags in the `matrices` table instead of inventing an ad hoc matrix list. See
 `aidocs/BENCHMARK_SETS.md` for their composition and selection evidence.
 
 1. Use `smoke_set` first for fast correctness, build, wrapper, runner, and integration checks after an implementation change.
 2. Use `core_and_stress_test` for normal algorithm comparisons, parameter choices, difficult exact cases, and timeout pressure.
 3. Use `n_le_100` for comprehensive comparisons over every current and future matrix of order at most 100.
 4. Use `n_gt_100_solved` for higher-order matrices with at least one paper-reported completed solve in `references_solved`.
-5. A matrix may belong to several sets. Run the smallest applicable set first; use the complete corpus only for final reference results
+5. Use `bpqy_benchmark` for BPQY COP constructions whose exact lift is strictly copositive or still unclassified.
+6. Use `bpqy_quick_test` for the fixed six-matrix, medium-duration BPQY development panel.
+7. A matrix may belong to several sets. Run the smallest applicable set first; use the complete corpus only for final reference results
    or when the question explicitly requires exhaustive coverage.
 
 ## Style

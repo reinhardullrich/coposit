@@ -2,20 +2,56 @@
 
 ## Purpose
 
-The maintained `matrices` table has four overlapping Boolean flags. A matrix can serve several benchmark roles without duplicating
+The maintained `matrices` table has six overlapping Boolean flags. A matrix can serve several benchmark roles without duplicating
 its matrix row or expected classification.
 
 | Flag | Rows | Orders | Strict | Boundary | Not copositive | Unknown | Intended use |
 |---|---:|---:|---:|---:|---:|---:|---|
 | `smoke_set` | 46 | 4–15 | 20 | 26 | 0 | 0 | Fast correctness and integration checks |
 | `core_and_stress_test` | 469 | 4–3,361 | 215 | 245 | 9 | 0 | Routine comparisons and difficult model-search cases |
-| `n_le_100` | 1,497 | 4–100 | 502 | 309 | 306 | 380 | Every matrix of order at most 100 not solved by preprocessing |
+| `n_le_100` | 920 | 4–100 | 505 | 309 | 0 | 106 | Every matrix of order at most 100 not solved by preprocessing |
 | `n_gt_100_solved` | 0 | — | 0 | 0 | 0 | 0 | Higher-order literature-solved matrices not solved by preprocessing |
+| `bpqy_benchmark` | 404 | 10–60 | 298 | 0 | 0 | 106 | BPQY COP exact lifts that are strict or still unknown |
+| `bpqy_quick_test` | 6 | 30–60 | 6 | 0 | 0 | 0 | Short, medium-duration SAT-B3 development panel |
 
-All four sets exclude `preprocessing_solved = 1`: a benchmark member must reach the selected model rather than end in the shared
-preprocessing pipeline. The two stored curated flags and two generated flags cover 1,524 distinct rows. All 46 Smoke rows belong to
+All six sets exclude `preprocessing_solved = 1` when selected by the benchmark runner: a benchmark member must reach the selected
+model rather than end in the shared preprocessing pipeline. The three stored curated flags and three generated flags still cover 947
+distinct effective rows because the BPQY panel is contained in N ≤ 100. All 46 Smoke rows belong to
 Core and Stress and to N ≤ 100. Of the 469 Core and Stress rows, 442 belong to N ≤ 100 and 27 belong to neither generated set. The
-two generated sets are disjoint by definition.
+two dimension-generated sets are disjoint by definition.
+
+## BPQY Benchmark
+
+`bpqy_benchmark` is generated from source 51's normalized `BPQY COP ...` family rows. It contains every exact COP construction that
+is not already preprocessing-complete and is either strictly copositive or still has both truth fields unknown. Known non-copositive,
+copositive-boundary, and preprocessing-complete lifts are excluded. The generated flag contains the 404 rows shown above: 298 strict
+and 106 unknown. Because the flag is generated, later exact classifications and preprocessing decisions automatically update
+membership without a manual refresh.
+
+Select it with `python/run_results.py MODEL --matrix-set bpqy_benchmark ...`.
+
+## BPQY Quick Test
+
+`bpqy_quick_test` is a stored six-matrix subset of the BPQY benchmark for development runs that need more model work than Smoke but
+must remain much shorter than the complete BPQY campaign. Selection used the exact SAT-B3 combined run of 2026-08-22 with complete
+preprocessing, diagnostics, and binary SHA-256
+`ba65cf630189bdc632bf5c5fea990b37e1c292458ad5b8096964470a22f42439`:
+
+| Matrix ID | Order | SAT-B3 time |
+|---:|---:|---:|
+| 13173 | 30 | 17.672 s |
+| 15436 | 60 | 20.073 s |
+| 13226 | 35 | 32.793 s |
+| 13318 | 40 | 45.079 s |
+| 13377 | 45 | 87.198 s |
+| 13387 | 45 | 96.798 s |
+
+The requested 15–100-second band has qualifying completions at only five distinct stored orders: 30, 35, 40, 45, and 60. Order 50
+jumps from 5.725 seconds to 152.946 seconds, while order 55 has no completion above 8.758 seconds. The quick set therefore repeats
+order 45 rather than admitting a case outside the requested runtime band. These times are selection evidence, not a promise for a
+later SAT-B3 binary or another machine.
+
+Select it with `python/run_results.py MODEL --matrix-set bpqy_quick_test ...`.
 
 ## N ≤ 100
 
@@ -62,6 +98,27 @@ Hoffman-Pereira catalog family.
 The Hildebrand panel migration removed six redundant same-order boundary variants while retaining one order-15–25 representative per
 order. Six already eligible boundary matrices at orders 16, 18, and 20 replaced those Core memberships, so at that stage the 512-row
 size and 256/175/81 outcome composition did not change. The current preprocessing refresh supersedes that historical composition.
+
+## Nine-Matrix Development Benchmark
+
+This fixed panel is the short development comparison for experimental support-lattice models. It is small enough for frequent
+multi-model runs while retaining easy, intermediate, and difficult exact cases:
+
+| Order | Matrix IDs | Selection role |
+|---:|---|---|
+| 25 | 12625, 12628, 12631 | Established BPQY COP representatives with designated support size 19 |
+| 30 | 13145, 13147, 13152 | Established BPQY COP-extension representatives with designated support size 15 |
+| 40 | 13279 | Closest available substitute for a third medium-duration order-50 case |
+| 50 | 12090, 12091 | Preprocessing-unresolved Chen--Burer `globallib/qp1` and `qp2` cases |
+
+At selection time, 12090 and 12091 were the only order-50 matrices that were not solved by preprocessing and had a completed best
+runtime between 5 and 90 seconds: 82.357 and 82.399 seconds. Matrix 13279 satisfies the same conditions at order 40 with an
+85.899-second best runtime. The only other preprocessing-unresolved order-50 matrix with any completed timing took about 2
+milliseconds, while the remaining order-50 candidates had no completed timing, so none served the intended intermediate-duration
+role.
+
+Run the panel with `python/run_results.py --matrix-ids 12625 12628 12631 13145 13147 13152 13279 12090 12091`. Preprocessing may be
+enabled: none of these nine rows is marked `preprocessing_solved`.
 
 ## Retired Sets
 

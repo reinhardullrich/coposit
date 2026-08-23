@@ -1,12 +1,11 @@
-# How SAT-B2 Runs
+# How SAT-B3 Runs
 
-This document explains the **workflow** of SAT-B2. It focuses on where each mathematical test is used, what the result changes, and
-how the algorithm moves to the next support.
+This document explains the **workflow** of SAT-B3, the current incumbent in the curvature-based SAT line. It focuses on where each
+mathematical test is used, what the result changes, and how the algorithm moves to the next support.
 
 It does not repeat the full proofs. The underlying mathematics is developed in:
 
-- [Convexity Pruning for Copositivity on Faces of the Simplex](../aidocs/SIMPLEX_FACE_CONVEXITY_PRUNING_THEORY.md)
-- [The Hadeler/Dickinson All-Ones Criterion, Minimal Bad Supports, and Face Curvature](../aidocs/HADELER_DICKINSON_ALL_ONES_AND_CURVATURE.md)
+- [Copositivity on the Simplex: Curvature, KKT Points, Hadeler, and Dickinson](../aidocs/COPOSITIVITY_CURVATURE_HADELER_DICKINSON.md)
 - [Dickinson's Copositivity Algorithm, Step By Step](DICKINSON_ALGORITHM_STEP_BY_STEP.md)
 
 SAT itself is assumed to be known. Here, SAT is simply the mechanism that answers:
@@ -21,11 +20,11 @@ $$
 A_I.
 $$
 
-SAT-B2 can finish supports in four ways.
+SAT-B3 can finish supports in four ways.
 
 ### Upward pruning
 
-If $I$ receives an upward certificate, SAT-B2 removes
+If $I$ receives an upward certificate, SAT-B3 removes
 
 $$
 \{J:I\subseteq J\subseteq[n]\}.
@@ -35,7 +34,7 @@ Thus $I$ and every support containing $I$ are finished.
 
 ### Downward pruning
 
-If $I$ receives a downward certificate, SAT-B2 removes
+If $I$ receives a downward certificate, SAT-B3 removes
 
 $$
 \{J:\varnothing\neq J\subseteq I\}.
@@ -63,24 +62,24 @@ $$
 
 ### Exact-support removal
 
-Sometimes SAT-B2 has finished analyzing $I$, but has obtained no safe conclusion about its neighbors. It then removes only $I$.
+Sometimes SAT-B3 has finished analyzing $I$, but has obtained no safe conclusion about its neighbors. It then removes only $I$.
 
 ## 2. The cheap pair prepass
 
-Before the main loop, SAT-B2 checks every two-index support $\{i,j\}$. Its one-dimensional tangent curvature is
+Before the main loop, SAT-B3 checks every two-index support $\{i,j\}$. Its one-dimensional tangent curvature is
 
 $$
 c_{ij}=a_{ii}+a_{jj}-2a_{ij}.
 $$
 
 If $c_{ij}\leq0$, the pair cannot be the support of the smallest-support global minimizer needed by the copositivity argument.
-SAT-B2 therefore upward-prunes the pair and every support containing it.
+SAT-B3 therefore upward-prunes the pair and every support containing it.
 
 This prepass is performed first because it needs no matrix factorization.
 
 ## 3. The two frontiers
 
-SAT-B2 starts with
+SAT-B3 starts with
 
 $$
 \text{low}=1,
@@ -91,8 +90,8 @@ $$
 The two frontiers have different purposes.
 
 - The **low frontier** moves from small supports toward large supports. It uses exact arithmetic and eventually completes the proof.
-- The **high frontier** moves from large supports toward small supports. It looks opportunistically for positive-definite principal
-  matrices that can prune many smaller supports at once.
+- The **high frontier** moves from large supports toward small supports. It looks opportunistically for principal matrices that are
+  strictly copositive for a reason that is strong enough to certify every smaller principal support at once.
 
 The algorithm alternates individual supports:
 
@@ -116,7 +115,7 @@ Suppose SAT returns an unresolved support $I$ at the current low cardinality.
 
 ### 4.1 Exact factorization
 
-SAT-B2 extracts $A_I$ and computes an exact fraction-free $LDL^T$ factorization.
+SAT-B3 extracts $A_I$ and computes an exact fraction-free $LDL^T$ factorization.
 
 This one factorization supplies:
 
@@ -128,7 +127,7 @@ This one factorization supplies:
 
 ### 4.2 Immediate negative or zero witnesses
 
-If $A_I$ is nonsingular, SAT-B2 solves
+If $A_I$ is nonsingular, SAT-B3 solves
 
 $$
 A_Ix=\mathbf1.
@@ -137,13 +136,13 @@ $$
 If the resulting vector gives an exact nonnegative negative witness after the appropriate sign change, the full matrix is not
 copositive. The algorithm stops immediately.
 
-If $A_I$ is singular, SAT-B2 obtains an exact kernel vector
+If $A_I$ is singular, SAT-B3 obtains an exact kernel vector
 
 $$
 A_Iz=0.
 $$
 
-If one orientation of $z$ is nonnegative, SAT-B2 has found a copositive zero. Strict copositivity is therefore false, but the
+If one orientation of $z$ is nonnegative, SAT-B3 has found a copositive zero. Strict copositivity is therefore false, but the
 ordinary-copositivity search continues.
 
 ### 4.3 Apply the curvature test
@@ -154,12 +153,12 @@ $$
 H_I=Z^TA_IZ.
 $$
 
-SAT-B2 does not construct $Z$ explicitly. It obtains the sign of this reduced curvature from the exact factorization of $A_I$.
+SAT-B3 does not construct $Z$ explicitly. It obtains the sign of this reduced curvature from the exact factorization of $A_I$.
 
 The result controls the next action:
 
-- If $H_I$ is **not positive definite**, SAT-B2 upward-prunes $I$.
-- If $H_I$ **is positive definite**, curvature alone cannot remove $I$, so SAT-B2 creates a Dickinson certificate instead.
+- If $H_I$ is **not positive definite**, SAT-B3 upward-prunes $I$.
+- If $H_I$ **is positive definite**, curvature alone cannot remove $I$, so SAT-B3 creates a Dickinson certificate instead.
 
 This is the main low-side choice:
 
@@ -177,33 +176,37 @@ The optimization prefers:
 
 It may also test at most two combined rays after the ordinary coordinate sweeps stop improving the certificate.
 
-In the singular case, SAT-B2 uses the kernel direction and chooses the sign producing the larger upper set.
+In the singular case, SAT-B3 uses the kernel direction and chooses the sign producing the larger upper set.
 
 The final exact vector supplies one interval $[L,U]$, and SAT removes that interval.
 
 ### 4.5 Full-support shortcut
 
-If the low frontier eventually selects the full support $[n]$ and the full matrix is exactly positive definite, SAT-B2
-downward-prunes every nonempty support and finishes.
+If the full support $[n]$ remains eligible, it is the first high-frontier candidate. SAT-B3 finishes immediately if the full matrix
+is positive definite, or if it is positive semidefinite and the exact system $Ax=\mathbf1$ has a solution: either downward
+certificate covers every nonempty support. A floating-point rejection does not lose this shortcut, because the exact low frontier
+can still select $[n]$ later.
 
 ## 5. What happens at one high support
 
 Suppose SAT returns a high candidate $I$ at the current high cardinality.
 
-The high side is interested only in the strong condition
+The high side looks for either of two exact downward certificates:
 
-$$
-A_I\succ0.
-$$
+1. $A_I$ is positive definite; or
+2. $A_I$ is positive semidefinite and $A_Ix=\mathbf1$ is consistent, meaning that at least one solution $x$ exists.
+
+The second condition is the improvement from SAT-B2 to SAT-B3. It matters when $A_I$ is singular: positive definiteness is then
+impossible, but the consistency test can still prove strict copositivity on every nonzero nonnegative vector supported in $I$.
 
 It does not run the Halfspace-Rays Dickinson optimization.
 
 ### 5.1 Floating-point screening
 
-SAT-B2 first applies a fast floating-point $LDL^T$ positive-definiteness filter.
+SAT-B3 first applies a fast floating-point $LDL^T$ positive-semidefiniteness filter.
 
-- If $A_I$ does **not** look positive definite, $I$ is retired only from the high search.
-- If $A_I$ **does** look positive definite, SAT-B2 verifies it exactly.
+- If $A_I$ does **not** look positive semidefinite, $I$ is retired only from the high search.
+- If $A_I$ **does** look positive semidefinite, SAT-B3 verifies it exactly.
 
 A floating-point rejection is not a mathematical decision. The support remains globally unresolved and can later be selected by the
 exact low frontier.
@@ -216,10 +219,26 @@ $$
 A_I\succ0,
 $$
 
-then every nonempty principal support contained in $I$ is positive definite. SAT-B2 downward-prunes all of them.
+then every nonempty principal support contained in $I$ is positive definite. SAT-B3 downward-prunes all of them.
 
-If exact arithmetic rejects positive definiteness, SAT-B2 checks whether the exact calculation exposed a negative witness or a
-nonnegative zero.
+If $A_I$ is singular, SAT-B3 instead asks whether
+
+$$
+A_I\succeq0
+\qquad\text{and}\qquad
+A_Ix=\mathbf1\text{ has a solution}.
+$$
+
+When both statements are true, no nonzero nonnegative vector can lie in the kernel of $A_I$. Therefore every such vector has a
+strictly positive quadratic value, and every nonempty principal support inside $I$ is strictly copositive. SAT-B3 downward-prunes
+all of them.
+
+The intuition is simple: a positive-semidefinite matrix can vanish only on its kernel. Consistency of $A_Ix=\mathbf1$ forces every
+kernel vector to have coordinate sum zero, whereas a nonzero nonnegative vector has positive coordinate sum. The nonnegative cone
+and the kernel therefore meet only at zero.
+
+If neither downward certificate is valid, SAT-B3 checks whether the exact calculation exposed a negative witness or a nonnegative
+zero.
 
 - A negative witness stops the complete algorithm with **not copositive**.
 - A zero records **not strictly copositive**, while ordinary classification continues.
@@ -249,9 +268,11 @@ WHILE low <= n:
         IF low <= high:
             J <- one high candidate at high
             SCREEN J in floating point
-            IF J looks positive definite:
+            IF J looks positive semidefinite:
                 FACTORIZE A_J exactly
                 IF A_J is positive definite:
+                    DOWNWARD-PRUNE J and every nonempty support contained in J
+                ELSE IF A_J is positive semidefinite AND A_J x = 1 has a solution:
                     DOWNWARD-PRUNE J and every nonempty support contained in J
                 ELSE IF the exact calculation produces a negative witness:
                     RETURN not copositive
@@ -273,14 +294,14 @@ The low frontier supplies completeness. Every support selected there is handled 
 
 - an upward curvature prune;
 - a Dickinson interval containing the selected support;
-- the full-support positive-definite shortcut; or
+- the full-support downward shortcut; or
 - immediate termination with a negative witness.
 
 The support lattice is finite. Therefore the low frontier eventually finds a negative witness or covers every remaining support.
 
 ## 8. How the final answer is accumulated
 
-SAT-B2 keeps ordinary and strict copositivity separate.
+SAT-B3 keeps ordinary and strict copositivity separate.
 
 - An exact $u\geq0$ with $u^TAu<0$ proves **not copositive** and stops the run.
 - An exact nonzero $u\geq0$ with $u^TAu=0$ proves **not strictly copositive**, but the ordinary search continues.
@@ -289,10 +310,11 @@ SAT-B2 keeps ordinary and strict copositivity separate.
 
 ## 9. The shortest mental model
 
-SAT-B2 repeatedly does this:
+SAT-B3 repeatedly does this:
 
 > Try to prune upward from a small support. Then try to prune downward from a large support. Use a Dickinson interval whenever the
 > low-side curvature test cannot prune upward.
 
-The algorithm is favorable when small supports often permit upward pruning or large supports are often positive definite. It is slow
-when neither happens and the low frontier must cover most of the support lattice with narrow Dickinson intervals.
+The algorithm is favorable when small supports often permit upward pruning, or when large supports satisfy either exact downward
+condition. It is slow when neither happens and the low frontier must cover most of the support lattice with narrow Dickinson
+intervals.

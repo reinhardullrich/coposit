@@ -40,7 +40,8 @@ DETAILED_DIAGNOSTICS_LIMIT = 100
 DIAGNOSTICS_INTERVAL_SECONDS = 1.0
 DATABASE_QUEUE_PER_WORKER = 2
 MATRIX_SETS = (
-    "smoke_set", "core_and_stress_test", "n_le_100", "n_gt_100_solved", "references_unsolved",
+    "smoke_set", "core_and_stress_test", "n_le_100", "n_gt_100_solved", "bpqy_benchmark", "bpqy_quick_test",
+    "references_unsolved",
 )
 
 

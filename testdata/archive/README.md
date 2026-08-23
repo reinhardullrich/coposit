@@ -6,6 +6,8 @@ runtime.
 - `copos_testdata.original.sqlite3.xz` is the immutable byte-exact FracESSA source database.
 - `FRACESSA_TESTDATA_README.md` is its historical documentation.
 - `import_*.py` and `corpus_matrix.py` preserve the exact matrix-generation and verification procedures used for dated corpus imports.
+- `import_negated_fracessa_games_2026_08_20.py` imports primitive exact negations of current FracESSA games while collapsing only
+  positive whole-matrix scalings in the same coordinate order.
 - `externalize_large_matrices.py` and `add_matrix_file_hashes_2026_08_11.py` preserve the completed external-file migration.
 - `restore_fastest_result_cache_from_diagnostics_2026_08_15.sql` restores and verifies the compact fastest-result cache after benchmark
   rows moved into the separate diagnostics database.
@@ -27,6 +29,8 @@ runtime.
   memberships and corpus size.
 - `add_preprocessing_solved_2026_08_16.sql` marks all 2,115 retained matrices completely classified by the new maintained depth-2
   workflow in the five-second corpus run or its sixty-second continuation; partial facts are excluded.
+- `exclude_preprocessing_solved_from_bpqy_benchmark_2026_08_23.sql` moves the existing named-set preprocessing exclusion into the
+  generated BPQY benchmark flag itself, reducing raw membership from 413 to the unchanged 404 effective model inputs.
 - `exclude_preprocessing_solved_from_benchmarks_2026_08_16.py` removes those rows from both curated benchmark sets, deterministically
   refills Smoke to 49 and Core and Stress to 512, and changes both generated set definitions to exclude preprocessing-complete rows.
 - `refresh_benchmark_sets_after_motzkin_straus_2026_08_16.sql` removes the 21 additional Smoke and 226 additional Core members solved
@@ -86,12 +90,24 @@ runtime.
 - `generate_bpqy_julia185_matrices.jl` reproduces the 450 seeded Julia 1.8.5 numerical constructions from Bomze-Peng-Qiu-Yildirim;
   `import_bpqy_julia185_matrices_2026_08_14.py` imports their exact primitive dyadic upper triangles. Their intended boundary
   classification is recorded as provenance but is not assigned to the rounded numerical materializations.
+  `remove_bpqy_spn_2026_08_22.py` removes the 150 SPN materializations and their stored diagnostics from the maintained corpus while
+  preserving the reproducible artifact and all COP and PSD materializations.
 - `generate_bpqy_julia185_extension_2026_08_19.jl` applies the same Julia 1.8.5 Float64 recipes to COP and PSD matrices of orders
   20, 30, 35, 40, and 45, with the paper's three designated support sizes and reported seeds 1 through 25.
   `import_bpqy_julia185_extension_2026_08_19.py` imports the resulting 750 primitive dyadic integer materializations without assigning
   either copositivity truth field; `bpqy_julia185_extension_2026_08_19.tsv` is the reproducible generated artifact.
   `classify_bpqy_extension_from_sat_halfspace_rays_2026_08_19.py` copies only completed ten-second exact combined classifications
   into corpus truth and verifies their fastest-result cache; timeouts remain unknown.
+- `generate_bpqy_julia185_cop_orders_10_15_55_60_2026_08_22.jl` applies the same COP recipe at orders 10, 15, 55, and 60, using
+  three admissible designated-support sizes and seeds 1 through 25. Its TSV artifact contains 300 primitive dyadic integer
+  materializations; `import_bpqy_julia185_cop_orders_10_15_55_60_2026_08_22.py` imports them without inferring truth from the ideal
+  boundary construction. `classify_bpqy_cop_orders_10_15_55_60_from_sat_b3_2026_08_22.py` copies only completed exact SAT-B3
+  classifications, zero-delegation preprocessing evidence, and eligible fastest timings into the corpus; timeouts remain unknown.
+- `add_bpqy_benchmark_2026_08_22.sql` reconciles 57 saved exact BPQY COP classifications left out of corpus truth, then adds the
+  generated `bpqy_benchmark` flag for every strict or still-unknown BPQY COP lift. Named-set selection separately excludes
+  preprocessing-complete rows.
+- `add_bpqy_quick_test_2026_08_23.sql` adds the fixed six-matrix `bpqy_quick_test` selector and preserves the SAT-B3 timing evidence
+  used to choose its order-30–60, 17.7–96.8-second development panel.
 - The dated `.sql` files preserve applied schema, classification, result, and benchmark-set migrations.
 
 The maintained corpus is `../copos_testdata.sqlite3`; its current schema is `../schema.sql`, and externally stored matrices are under

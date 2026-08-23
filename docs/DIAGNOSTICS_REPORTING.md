@@ -17,6 +17,47 @@ support and its support-specific outcome counters are published immediately. Oth
 visited units. The experimental FracESSA Circular model uses batches of 256 bracelets because each representative includes a larger
 exact candidate calculation. CBDD and CZDD publish their decision-diagram counters every 200 recursive diagram operations.
 
+## Chronological Support-History Contract
+
+SAT-B1, SAT-B3, Improved NBC-B7, and every new model created after this contract record each retained mathematical certificate in
+generation order whenever diagnostics capture is enabled. They also record every high-frontier support that produces no retained
+certificate. Existing older models may remain aggregate-only. The reference runner stores these event lines in the `diagnostics`
+column; the one-second live display remains a compact snapshot rather than printing the potentially large history.
+
+Each event has the common form
+
+```text
+event=certificate sequence=N model=MODEL n=DIMENSION frontier=ORIGIN kind=KIND source=[I] \
+coverage=REGION lower=[L] upper=[U] exclude_empty=yes|no floating_checked=yes|no exact_checked=yes|no
+```
+
+When a high-frontier support produces no certificate, its entry deliberately has no interval:
+
+```text
+event=visited_support sequence=N model=MODEL n=DIMENSION frontier=high source=[I] \
+floating_checked=yes|no exact_checked=yes|no
+```
+
+`sequence` starts at one for the complete analyzer call and increases in the exact order these events occur, including across
+preprocessing-created component calls. Sets are sorted, one-based indices in the matrix currently delegated to the model. When
+preprocessing splits the original matrix, these are component-local indices because the present model contract does not carry the
+original-index map. `source` is the support whose exact analysis generated the certificate. The covered family stays compact:
+
+- `coverage=interval` means $L\subseteq J\subseteq U$;
+- `coverage=upward` means $I\subseteq J\subseteq[n]$, written with `lower=[I] upper=all`;
+- `coverage=downward` means every nonempty $J\subseteq I$, written with `lower=[] upper=[I] exclude_empty=yes`.
+
+The history never expands a covered region into its potentially exponential list of supports. It also does not store the exact
+certificate vector unless a later model explicitly needs that additional payload. Exact-support blocks, floating high-frontier
+rejections, and terminal high-frontier outcomes are represented only by their support-only `visited_support` entry: they are not
+mislabelled as certificates. SAT-B3's displayed `certificates` counter therefore excludes bookkeeping clauses. Low-frontier
+traversal-only bookkeeping is not stored.
+
+`floating_checked` and `exact_checked` state which arithmetic actually inspected the source support. SAT-B3 low-frontier events are
+exact-only. Its high-frontier events are floating-only when the floating filter rejects the support, and both floating and exact when
+the support passes that filter. A retained certificate is always exact-checked: floating-point arithmetic never certifies or prunes.
+SAT-B1 has only the exact low frontier, so all its events are exact-only.
+
 The experiment command also reports its current preprocessing phase. Depending on the selected path, this is
 `matrix scan`, `root checks`, `connected components`, `component scan`, `principal submatrices`, `negative-part diagonal dominance`,
 `all-ones`, `Frank-Wolfe`, `heuristic KKT search`, `Motzkin-Straus`, `exact factorization`, `negative-part factorization`, `Z-matrix`,

@@ -348,6 +348,10 @@ The Boolean support space is finite. Coordinate ascent accepts only a strict lex
 $(|U|,d)$. Synthesized-ray work is bounded by two sweeps at each nonsingular support. Therefore the model terminates unless an
 external timeout or resource limit stops it first.
 
+Captured diagnostics retain the generating support and compact interval of every pair-curvature, support-curvature, and Dickinson
+certificate in chronological order. A terminating support without a certificate is retained as a support-only event. Every SAT-B1
+history event has `floating_checked=no exact_checked=yes`: the model has no floating high frontier and performs no downward pruning.
+
 ## Known Difficult Inputs
 
 - A useful combined direction can involve a coordinate candidate outside the adaptive shortlist, a pair ranked below the first two,

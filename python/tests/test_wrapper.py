@@ -136,6 +136,20 @@ class WrapperTests(unittest.TestCase):
             or algorithm == "sat_b1"
             or algorithm == "sat_b2"
             or algorithm == "sat_b3"
+            or algorithm == "clasp_b3"
+            or algorithm == "bdd_b3"
+            or algorithm == "sat_b4"
+            or algorithm == "sat_b5"
+            or algorithm == "nbc_b6"
+            or algorithm == "nbc_b7"
+            or algorithm == "improved_nbc_b7"
+            or algorithm == "sat_c1"
+            or algorithm == "sat_c2"
+            or algorithm == "sat_c3"
+            or algorithm == "sat_c4"
+            or algorithm == "f1"
+            or algorithm == "f2"
+            or algorithm == "g1"
             or algorithm == "sat_a1"
             or algorithm == "sat_a2"
             or algorithm == "sat_a3"
@@ -562,11 +576,12 @@ class ResultsRunnerTests(unittest.TestCase):
                 initialize_runner_database(connection, root)
                 connection.executemany(
                     "INSERT INTO matrices(matrix_id, dimension, matrix, is_strictly_copositive, is_copositive, "
-                    "core_and_stress_test, preprocessing_solved, references_unsolved) VALUES (?, ?, '1', ?, ?, ?, ?, ?)",
-                    ((1, 1, 1, 1, 1, 0, "[]"), (2, 1, 1, 1, 1, 1, "[]"),
-                     (3, 1, None, None, 0, 0, "[]"),
-                     (4, 101, 1, 1, 0, 0, '[{"source_id":1,"comment":"timeout"}]'),
-                     (5, 1, 1, 1, 1, 0, "[]"), (6, 1, 1, 1, 1, 0, "[]")),
+                    "core_and_stress_test, bpqy_quick_test, preprocessing_solved, references_unsolved) "
+                    "VALUES (?, ?, '1', ?, ?, ?, ?, ?, ?)",
+                    ((1, 1, 1, 1, 1, 0, 0, "[]"), (2, 1, 1, 1, 1, 0, 1, "[]"),
+                     (3, 1, None, None, 0, 0, 0, "[]"),
+                     (4, 101, 1, 1, 0, 0, 0, '[{"source_id":1,"comment":"timeout"}]'),
+                     (5, 1, 1, 1, 1, 0, 0, "[]"), (6, 1, 1, 1, 0, 1, 0, "[]")),
                 )
                 connection.execute(
                     """INSERT INTO results (
@@ -586,6 +601,8 @@ class ResultsRunnerTests(unittest.TestCase):
                 "--matrix-set",
                 "core_and_stress_test",
                 "n_le_100",
+                "bpqy_benchmark",
+                "bpqy_quick_test",
                 "references_unsolved",
                 "--matrix-ids",
                 "1",
@@ -593,6 +610,7 @@ class ResultsRunnerTests(unittest.TestCase):
                 "3",
                 "4",
                 "5",
+                "6",
                 "--without-results",
                 "--parent-cpu",
                 str(self.parent_cpu),
@@ -609,14 +627,39 @@ class ResultsRunnerTests(unittest.TestCase):
                 rows = connection.execute(
                     "SELECT matrix_id, preprocessing FROM results WHERE model_id = 'hadeler_1983' ORDER BY matrix_id"
                 ).fetchall()
-            self.assertEqual(rows, [(1, "both"), (3, "both"), (4, "both")])
+            self.assertEqual(rows, [(1, "both"), (3, "both"), (4, "both"), (6, "both")])
             self.assertIn(
-                "matrix_sets=core_and_stress_test,n_le_100,references_unsolved",
+                "matrix_sets=core_and_stress_test,n_le_100,bpqy_benchmark,bpqy_quick_test,references_unsolved",
                 completed.stdout,
             )
             self.assertIn("preprocessing=both", completed.stdout)
             self.assertIn("without_results=yes", completed.stdout)
             self.assertIn("comparison=unverified", completed.stdout)
+
+    def test_bpqy_benchmark_is_generated_from_construction_truth_and_preprocessing(self):
+        root = Path(__file__).resolve().parents[2]
+        with tempfile.TemporaryDirectory() as temporary_directory:
+            database = Path(temporary_directory) / "results.sqlite3"
+            with closing(sqlite3.connect(database)) as connection:
+                initialize_runner_database(connection, root)
+                connection.execute(
+                    "INSERT INTO sources(source_id,authors,title,publication_year,reference) VALUES (51,'A','T',2026,'R')"
+                )
+                connection.executemany(
+                    """INSERT INTO matrices(
+                           matrix_id,dimension,matrix,is_strictly_copositive,is_copositive,source_id,family,preprocessing_solved
+                       ) VALUES (?,1,'1',?,?,51,?,?)""",
+                    (
+                        (1, 1, 1, "BPQY COP intended copositive-boundary generator", 0),
+                        (2, None, None, "BPQY COP intended copositive-boundary extension", 0),
+                        (3, 0, 0, "BPQY COP intended copositive-boundary generator", 0),
+                        (4, 0, 1, "BPQY COP intended copositive-boundary generator", 0),
+                        (5, 1, 1, "BPQY PSD intended copositive-boundary generator", 0),
+                        (6, 1, 1, "BPQY COP intended copositive-boundary generator", 1),
+                    ),
+                )
+                rows = connection.execute("SELECT matrix_id,bpqy_benchmark FROM matrices ORDER BY matrix_id").fetchall()
+            self.assertEqual(rows, [(1, 1), (2, 1), (3, 0), (4, 0), (5, 0), (6, 0)])
 
     def test_runner_stores_file_parse_error_and_reuses_worker(self):
         root = Path(__file__).resolve().parents[2]

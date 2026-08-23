@@ -2,11 +2,249 @@
 
 This append-only file records meaningful decisions, results, and evidence that are not clear from Git. Do not log routine edits here.
 
+## 2026-08-23 — BPQY benchmark owns its preprocessing exclusion
+
+- Moved `preprocessing_solved = 0` into the generated `bpqy_benchmark` definition instead of relying only on the named-set runner.
+  The nine order-10 BPQY matrices already decided by preprocessing are no longer benchmark members; membership is now exactly the
+  existing 404 model inputs, so stored benchmark results and comparisons do not change.
+
+## 2026-08-23 — Improved NBC isolates a sound repeated-call boundary
+
+- Kept the existing `nbc_b7` model and NBC wrapper unchanged for comparison. Added `improved_nbc_b7`, an otherwise identical B7
+  model linked to a separate `improved_nbc_upward_supports` module and copied NBC MiniSat All derivative.
+- Exhaustive dynamic interval checks exposed a remaining repeated-call defect in the original engine: after certificates made the
+  permanent Boolean formula inconsistent, a later prefix call could return an invalid model because the root conflict was not
+  retained and the propagation queue had already advanced.
+- Improved NBC resets assumptions and enumeration scratch state after every stopped or exhausted call, retains permanent and
+  logically valid learned clauses, and latches inconsistency only when it is proved without cardinality or prefix assumptions.
+- Focused checks cover repeated one-model enumeration, the permanent-root-conflict regression, every single interval through order
+  five, intervals inserted between calls through order three, and the copied exact B7 classification checks.
+
+## 2026-08-23 — NBC-B7 restores support-by-support low/high alternation
+
+- Corrected NBC-B7's traversal after the BPQY Quick Test exposed that its layer-draining callback processed an entire low
+  cardinality before the corresponding high cardinality. That batching was not part of SAT-B3 and delayed useful downward
+  certificates; on matrix 15436 it processed 198,141 supports without finishing in 180 seconds, while saved SAT-B3 finished after
+  11,721 supports in 20.073 seconds.
+- NBC-B7 now asks for one low support and one high support alternately. Every exact certificate affects both live NBC solvers
+  immediately and is also retained for boundary compaction.
+- Added independent low and high prefix-cube cursors. They partition each exact-cardinality layer into disjoint unexplored cubes, so
+  NBC can return one support at a time without inserting an exact-support blocker. Rebuilding from compacted certificates preserves
+  those cursors and cannot repeat an emitted support.
+- Focused tests cover alternating cardinalities, immediate cross-frontier pruning, cursor preservation through compaction, and the
+  existing exact small-matrix classifications.
+- On the 469-matrix Core-and-Stress set with combined classification, preprocessing, diagnostics, and a five-second cutoff, the
+  corrected model completed 434 matrices and timed out on 35 in 47.383 seconds wall time. Every completion matched corpus truth.
+  SAT-B3's saved result completed 436, and the former layer-draining NBC-B7 completed 437; over paired completions, corrected NBC-B7's
+  median time was 119.38% of SAT-B3. The three completions lost relative to the former NBC-B7 were matrices 10503, 10504, and 13025.
+- On the six-matrix BPQY Quick Test with a 180-second cutoff, corrected NBC-B7 completed all six in 38.505 seconds wall time. Its
+  per-matrix times were 5.680, 14.343, 20.579, 28.206, 38.215, and 13.861 seconds for matrices 13173, 13226, 13318, 13377, 13387,
+  and 15436. The former NBC-B7 completed only matrix 13173 and timed out on the other five; corrected NBC-B7's median paired time was
+  41.61% of SAT-B3, a 58.39% median reduction.
+
+## 2026-08-23 — NBC-B7 buffers and compacts certificates by cardinality
+
+- Replaced NBC-B7's stop/restart first-model loop and immediate clause insertion. Review found that the persistent NBC state could
+  retain an assumption-derived root assignment across changed cardinality assumptions; one order-five regression then revisited a
+  two-element support millions of times although the complete nonempty lattice has only 31 supports.
+- NBC now streams one support at a time through a single callback enumeration for the current cardinality. The model processes that
+  support immediately but leaves every exact certificate pending. It inserts no exact-support blocker merely to request the next
+  support.
+- At each cardinality boundary, the active and pending certificate families are combined, expired bounded intervals are removed,
+  contained intervals are discarded, and complete full-upward sibling families are recursively replaced by their already-checked
+  parent root. A fresh NBC instance then receives only the compacted survivors for the next layer.
+- The optional high scan still uses floating point only as a screen. A floating rejection stores nothing and remains available to
+  the exact low traversal, which continues through cardinality `n` even after the two frontiers cross.
+- Focused compaction tests, exhaustive order-two and order-three classifications, and the former order-five repetition case pass. The
+  regression now finishes after nine processed supports with the same strict-copositive classification as SAT-B3.
+
+## 2026-08-23 — NBC-B6 defers certificate activation to cardinality boundaries
+
+- Added lowercase `nbc_b6` as SAT-B3's exact low/upward curvature and Halfspace-Rays path without the high frontier, downward
+  pruning, or Johnson--Reams Schur reduction.
+- Added a reusable NBC MiniSat All cardinality enumerator. It enumerates a complete layer without temporary per-model blockers,
+  stores new exact intervals as pending, expires bounded intervals after their final possible layer, and activates a compacted
+  interval family only at the layer boundary. A singular certificate keeps its exact lower endpoint even when `|L| < k`; it does
+  not alter the current layer.
+- The vendored NBC adaptation exposes model and timeout callbacks, fixes its Boolean representation to explicit signed bytes for
+  AArch64, and restores the value returned by its chronological-backtrack helper.
+- The focused NBC-B6 checks, exhaustive exact order-three comparison, three stored smoke examples, complete Release build, and the
+  maintained C++ suite passed. The full suite initially exposed one stale Python expectation for the already-present `clasp_b3`
+  combined model; after correcting that inventory assertion, both affected test groups passed.
+
+## 2026-08-23 — NBC-B7 restores SAT-B3's downward frontier
+
+- Added lowercase `nbc_b7` as an isolated SAT-B3 copy whose only algorithm-engine change is replacing CaDiCaL with a persistent NBC
+  MiniSat All instance. It restores alternating individual low/high supports, the floating high-frontier screen, and exact
+  positive-definite or consistent singular-PSD downward closures omitted by NBC-B6.
+- Every selected support installs its upward, downward, exact-support, or Dickinson clause immediately. NBC keeps its learned state
+  across first-model callback calls; high-only floating rejections remain disabled on the exact low frontier.
+- The implementation review fixed two incremental-solver boundary defects: pending root clauses are now propagated before assumptions,
+  and returning to decision level zero no longer reads before the trail. Small clause and assumption conversions also avoid heap
+  allocation. The NBC-B7 sanitizer run, complete Release build, and all 104 maintained checks passed.
+
+## 2026-08-23 — F2 splits B3 coverage between a support generator and exact intervals
+
+- Added lowercase `f2` as an isolated copy of SAT-B3. Its curvature tests, exact Halfspace-Rays Dickinson construction, alternating
+  individual low/high traversal, downward rules, witnesses, and combined CP/SCP classification remain unchanged.
+- Full upward curvature closures are stored as forbidden roots in a FracESSA-style recursive support generator. Every Dickinson
+  interval, downward closure, and exact-support exclusion is stored separately in an exact interval index and checked after support
+  generation. Floating high-frontier rejections advance only the resumable high cursor and never affect the exact low proof.
+- F2 has no CaDiCaL dependency. The complete Release build and all 101 checks passed. A five-second combined/preprocessing Smoke
+  run completed all 46 selected matrices with matching CP/SCP classifications and no timeout.
+
+## 2026-08-23 — BDD-B3 isolates B3's Boolean backend
+
+- Added lowercase `bdd_b3` as an isolated copy of SAT-B3. Its curvature rules, alternating low/high traversal, exact verification,
+  Halfspace-Rays fallback, witnesses, and stopping conditions are unchanged; only the incremental SAT coverage backend is replaced.
+- One private reduced ordered BDD manager stores the global covered family, cached exact-cardinality families, and separate live low-
+  and high-frontier remainder roots. Floating high-layer rejections affect only the high root and disappear when that layer changes.
+  The BDD has no CaDiCaL dependency.
+- The complete Release build and all 100 checks passed. A five-second combined/preprocessing Smoke run completed all 46 selected
+  matrices with matching CP/SCP classifications and no timeout.
+- On the 469-matrix Core-and-Stress set with combined classification, preprocessing, diagnostics, and a five-second cutoff, BDD-B3
+  completed 436 matrices and timed out on 33 in 28.780 seconds wall time. Its completion and timeout sets exactly matched the saved
+  SAT-B3 reference, with no classification mismatch. BDD-B3's completed-case median was 0.703 ms versus SAT-B3's 1.476 ms; over the
+  436 paired completions, the median per-matrix time was 47.98% of SAT-B3, and BDD-B3 was faster on 435 cases.
+- On the 404-matrix BPQY benchmark with a ten-second cutoff, BDD-B3 completed 232 matrices and timed out on 172 in 304.216 seconds,
+  versus SAT-B3's durable result of 257 completions, 147 timeouts, and 254.068 seconds. BDD-B3 gained 13 completions at orders 30–35
+  but lost 38 at orders 40–60; its faster 47.145 ms successful-case median did not compensate for 25 additional hard-case timeouts.
+
+## 2026-08-23 — SAT-B3 BPQY benchmark at 180 seconds
+
+- Reran SAT-B3 in combined mode on all 404 effective `bpqy_benchmark` inputs with complete preprocessing, diagnostics, a 180-second
+  per-matrix cutoff, CPU 2 for dispatch, and workers on CPUs 3 through 9. The campaign completed in 3,210.422 seconds wall time.
+- SAT-B3 completed 294 matrices and timed out on 110, versus 257 completions and 147 timeouts at ten seconds. The longer cutoff
+  recovered 37 former timeouts and raised the completion rate from 63.61% to 72.77%.
+- Every completion was a known strictly copositive matrix and matched corpus truth. None of the 106 truth-unknown inputs completed;
+  four known-strict inputs still timed out. Full per-order and timing evidence is in `aidocs/REFERENCE_RESULTS_BPQY_BENCHMARK.md`.
+
+## 2026-08-22 — BPQY baseline and SAT-B3 benchmark
+
+- Ran all eight maintained literature baselines, Adaptive Sponsel/Copomatrix, and SAT-B3 on the 404 effective `bpqy_benchmark`
+  matrices with complete preprocessing, diagnostics, a ten-second cutoff, CPU 2 for dispatch, and workers on CPUs 3 through 9.
+  Models with a combined classifier ran in `both` mode; the other six models ran the strict predicate only.
+- SAT-B3 completed 257 full classifications. Dickinson 2019 completed 98, Hadeler 1983 completed 69, and Danninger 1990 completed
+  10. Among strict-only models, Adaptive Sponsel/Copomatrix completed 50, Copomatrix 2011 completed 24, Bundfuss 2008 and Sponsel
+  2012 completed four each, Safi 2021 completed one, and Dutour 2018 completed none.
+- Every one of the 517 completed rows matched known corpus truth. None of the 106 truth-unknown matrices completed, and every
+  non-completion was a timeout. Full settings, hashes, per-order counts, timing summaries, and mode qualifications are recorded in
+  `aidocs/REFERENCE_RESULTS_BPQY_BENCHMARK.md`.
+
+## 2026-08-22 — Generated BPQY COP benchmark
+
+- Reconciled 57 BPQY COP rows whose corpus truth remained unknown despite unanimous saved exact combined results. All 57 are strictly
+  copositive; no solver was rerun. The corpus now has 1,484 strict, 1,526 boundary, 2,718 non-copositive, and 106 unknown matrices.
+- Added the generated `bpqy_benchmark` corpus flag for source-51 `BPQY COP ...` matrices whose exact lift is either strictly
+  copositive or still has both truth fields unknown. Known non-copositive and boundary lifts are excluded, and later truth updates
+  change membership automatically.
+- The raw flag contains 413 of 825 COP constructions: 307 strict and 106 unknown. The standard named-set preprocessing exclusion
+  removes nine strict cases, so `python/run_results.py --matrix-set bpqy_benchmark` selects 404 matrices.
+- Added the selector to the reference runner and a focused generated-membership regression. The guarded migration verifies corpus
+  composition, timing references, SQLite integrity, and foreign keys.
+
+## 2026-08-22 — Remove BPQY SPN materializations
+
+- Removed all 150 BPQY SPN Float64 materializations, matrix IDs 12874 through 13023, from the maintained corpus. All 150 were
+  non-copositive exact lifts decided by root preprocessing, so none exercised a model. The 525 BPQY PSD and 825 BPQY COP matrices
+  remain unchanged.
+- Removed the corresponding 1,050 model-result rows and 600 preprocessing-result rows from the diagnostics database. The guarded,
+  idempotent removal script preserves the original 450-row TSV artifact; both SQLite integrity checks pass.
+
+## 2026-08-22 — BPQY COP extensions at orders 10, 15, 55, and 60
+
+- Applied the unmodified BPQY Julia 1.8.5 Float64 COP construction at orders 10, 15, 55, and 60. Each order has three designated
+  support sizes and seeds 1 through 25: respectively $(2,4,5)$, $(4,8,10)$, $(14,28,41)$, and $(15,30,45)$.
+- Imported 300 unique primitive dyadic integer materializations as matrix IDs 15206 through 15505. Their intended construction is
+  copositive boundary, but both exact truth fields remain `NULL` because Float64 materialization can perturb the boundary.
+- The reproducible TSV artifact has SHA-256 `8594d83c46f6c6b803ffa846858d14e0d5e4a2abb75b25d365e9082c7d85dac9`. The guarded
+  importer found no identical existing matrix under direct positive scaling, its idempotent replay retained exactly 300 rows, and
+  SQLite integrity passed.
+- Ran exact SAT-B3 in combined mode with complete preprocessing, diagnostics, and a 30-second per-matrix cutoff. The 300 attempts
+  finished in 413.409 seconds wall time: 252 completed, comprising 101 strictly copositive and 151 non-copositive exact integer
+  materializations, while 48 timed out and remain unknown. Preprocessing alone decided 160 completed cases with zero model
+  delegations.
+- Copied only those 252 completed classifications into corpus truth, marked the 160 preprocessing decisions additively, and refreshed
+  each completed row's fastest eligible nanosecond result. The 48 timeouts received neither truth nor timing. Replaying the guarded
+  merge made zero changes; database integrity and foreign-key checks passed.
+
+## 2026-08-22 — G1 separates bounded guidance from full-upward coverage
+
+- Added lowercase `g1` as an isolated F1-derived experiment. Exact curvature roots and Dickinson intervals reaching the full ceiling
+  remain in the FracESSA-style upward generator. Proper Dickinson intervals live in a separate expiring index: covered supports skip
+  repeated exact Dickinson work but may still nominate a full-upward curvature root through a floating screen followed by exact
+  verification.
+- At each completed cardinality, G1 may greedily shrink the active full-upward roots through an exact counterexample search. All
+  completed layers are don't-cares; every accepted replacement preserves the covered/uncovered partition on every unprocessed layer.
+  The deterministic work budget may forgo compaction but cannot create pruning without proof.
+- The focused test exhaustively checks every nonempty root family on three indices at both possible layer boundaries. The complete
+  Release build and all 99 checks passed; a five-second combined/preprocessing Smoke run completed all 46 matrices with matching
+  CP/SCP classifications and no timeout.
+- On the maintained 469-matrix Core-and-Stress set with combined classification, preprocessing, diagnostics, and a five-second
+  cutoff, G1 completed 436 matrices and timed out on 33, with no mismatch. Its completed-case median was 0.569 ms. The current stored
+  SAT-B3 binary completed the same 436 matrices with a 1.476 ms median; on those paired cases G1's median relative time was 60.86%
+  lower. Current F1 completed 428 matrices with a 0.751 ms median; G1 was 26.69% lower on their 428 paired completions and completed
+  eight additional matrices.
+- The fixed nine-matrix BPQY/Chen--Burer development panel exposed the opposite behavior under a 180-second cutoff. G1 completed only
+  the three order-25 cases in 14.895, 50.159, and 46.627 seconds, versus SAT-B3's 0.050, 0.094, and 0.008 seconds. G1 timed out on
+  all four order-30/40 BPQY cases that B3 solved in 1.006--2.498 seconds; both models timed out on the two order-50 Chen--Burer cases.
+- To remove needless covered-support screening exposed by that panel, every proper Dickinson interval now stores an exact
+  reduced-curvature decision for its final optimized upper endpoint. Covered supports receive the floating screen and conditional
+  exact check only when at least one covering interval has a curvature-bad upper endpoint; otherwise they are skipped immediately.
+- The full-upward root compactor now works breadth-first, allowing at most one accepted deletion per root and round. Its deterministic
+  search and normalization budgets scale as $\max(4096,16n|\mathcal F|)$ and charge both recursion states and root comparisons;
+  large activation batches no longer perform quadratic pairwise redundancy checks. On synthetic compressible antichains it reduced
+  6,435 roots to 3,318 in 0.021 seconds, 24,310 to 13,891 in 0.047 seconds, and 92,378 to 56,473 in 0.173 seconds while exhaustive
+  small-family tests preserved every unfinished-layer coverage decision.
+- The resulting G1 binary retained the Core-and-Stress result of 436 completions and 33 timeouts over 469 matrices, with no mismatch
+  and a 0.579 ms completed-case median. On the fixed nine-matrix panel it again completed only the three order-25 cases, now in
+  17.037, 56.208, and 52.543 seconds; these were 12--14% slower than the preceding G1 binary. The four order-30/40 BPQY cases and two
+  order-50 Chen--Burer cases all timed out at 180 seconds, whereas the stored SAT-B3 binary completes the four BPQY cases in
+  1.006--2.498 seconds.
+
+## 2026-08-21 — SAT-B5 ascending-only block-reduction experiment
+
+- Added `sat_b5` as an isolated SAT-B4 experiment without the high-frontier scan or downward SAT clauses. It retains ascending
+  upward-curvature pruning, Halfspace-Rays Dickinson intervals, and exact Johnson--Reams Schur-complement restarts.
+- On the fixed nine-matrix Bomze/Chen--Burer panel with preprocessing, combined classification, diagnostics, and a 180-second
+  timeout, SAT-B5 completed all nine. Its total time was 228.634 seconds versus 296.993 seconds for stored compatible
+  Halfspace-Rays results. SAT-B3 and SAT-B4 were much faster on the seven smaller completing cases but timed out on both order-50
+  Chen--Burer matrices; SAT-B5 completed those in 81.527 and 81.569 seconds.
+
+## 2026-08-21 — SAT-B4 exact iterative block reduction
+
+- Added `sat_b4` as an isolated copy of SAT-B3. Whenever either frontier has already factorized a positive-definite principal block
+  $B$, B4 exactly tests the Johnson--Reams condition $-B^{-1}C\geq0$. On success it constructs a positive integer multiple of the
+  Schur complement, removes its common content, destroys the old SAT state, and iteratively restarts on that strictly smaller
+  equivalent CP/SCP problem. Before solving every column of $-B^{-1}C$, an exact all-ones solve rejects any outside column $c$ with
+  $c^TB^{-1}\mathbf1>0$; the low-frontier fallback reuses that solve. A miss otherwise falls back unchanged to SAT-B3's
+  Halfspace-Rays or downward-closure action.
+- An exact density probe on the maintained seven BPQY and two Chen--Burer development matrices exhaustively checked cardinalities one
+  through three and sampled up to 500 supports at every higher cardinality. Of 203,410 inspected blocks, 116,610 were positive
+  definite but only five satisfied the sign condition. All five were BPQY supports of cardinality at most three; none of 44,234
+  sampled positive-definite blocks at cardinality at least four and none of 67,899 Chen--Burer positive-definite blocks qualified.
+- Chained low reductions nevertheless compounded on BPQY matrix 13279: the final active problem had order 33 rather than 40. Matrix
+  13145 reduced from order 30 to 29. The seven previously completing panel cases retained matching classifications and essentially
+  unchanged one-run wall times. Both Chen--Burer cases still timed out after 30 seconds; at second 29 B4 had processed 1.61% and
+  0.35% fewer supports than the matching stored B3 diagnostics, measuring the miss-path overhead as small but nonzero.
+- The initial complete Release build and all 95 checks passed. Focused tests now also cover a nontrivial two-index eliminated block,
+  all three CP/SCP outcomes, exact prefilter rejection, iterative reduction chains, and preservation of exhaustive small-matrix
+  classifications.
+
 ## 2026-08-20 — Current preprocessing and unresolved BPQY corpus refresh
 
+- Imported the exact primitive-integer negation of every current FracESSA game matrix not already present up to positive scaling.
+  Sixteen of 1,411 source matrices were already covered; IDs 13811 through 15205 add the other 1,395, with both truth fields left
+  unknown. A full replay found no positive-scale duplicate in either source or the resulting 5,684-row corpus, all 1,411 source
+  matrices are covered, the two external payload hashes match, and both SQLite integrity checks pass.
 - Ran the current combined preprocessing pipeline over all 4,289 matrices with a 10-second cutoff. It completed 3,426 matrices,
   produced partial classifications for 270, and left 514 unresolved. The maintained corpus now marks 3,482 matrices as solved by
   preprocessing and records complete CP/SCP truth for 4,127 matrices from this run and earlier evidence.
+- Repeated that full-corpus run with the same binary and cutoff as a conservative audit. It completed 3,427 matrices, produced 270
+  partial classifications and 514 unresolved outcomes, and ended with 71 native and 7 parent hard timeouts. All 55 flags supported
+  only by older or longer successful evidence remained set, so the additive total stayed 3,482. The merge lowered 770 cached fastest
+  preprocessing times, changed four equal-time references to their canonical row, and increased or removed none. Every flag has a
+  matching complete zero-delegation diagnostic result, no such result lacks its flag, and both SQLite integrity checks passed.
 - The new heuristic KKT step decided order-50 BPQY matrix 12693 as non-copositive in 5.284 milliseconds; its previous fastest
   complete XXX2 decision took 42.439 milliseconds.
 - Ran SAT-Halfspace-Rays for 180 seconds on the 162 remaining BPQY matrices without a completed timing, smallest orders first. It
@@ -2912,3 +3150,11 @@ This append-only file records meaningful decisions, results, and evidence that a
   common diagonal. This preserves exact nonzero diagonal payoffs instead of requiring callers to normalize a game first.
 - Kept full upper-triangular input unchanged and made former short strings fail the value-count check rather than acquire an
   ambiguous new meaning.
+
+## 2026-08-21 — SAT-C2 scheduled curvature walks
+
+- Added `sat_c2` as an isolated copy of SAT-C1 with bounded active-set walks before and during the ordinary low/high traversal.
+- Walks visit only globally open supports, never revisit their current path, do not backtrack, and visit at most `n` supports.
+  Candidate upward, downward, and KKT closures remain buffered until the walk ends and are verified exactly before SAT insertion.
+- Scheduled the walks globally and alternately: after the initial singleton and top walks, wait for `n-1` ordinary supports, walk
+  from the next low-frontier support, wait another `n-1`, then walk from the next high-frontier support, repeating low/high.

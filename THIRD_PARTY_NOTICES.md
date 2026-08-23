@@ -11,11 +11,21 @@ coposit is licensed under GPL-3.0-or-later.
 | MPFR | FLINT dependency | LGPL-3.0-or-later | <https://www.mpfr.org/> |
 | GoogleTest 1.14.0 | Test-only dependency fetched by CMake | BSD-3-Clause | <https://github.com/google/googletest/tree/v1.14.0> |
 | CaDiCaL 2.2.1 | Incremental SAT engine for the `sat_dickinson` experiment | MIT | <https://github.com/arminbiere/cadical/tree/rel-2.2.1> |
-| clingo 5.8.2 with clasp 3.4.1 | Backtracking support enumeration for `clingo_dickinson` and `clingo_halfspace_dickinson` | MIT | <https://github.com/potassco/clingo/tree/v5.8.2> |
+| NBC MiniSat All 1.0.2 | Boolean support enumeration for `nbc_b6` and `nbc_b7` | MIT | <https://www.sd.is.uec.ac.jp/toda/code/nbc_minisat_all.html> |
+| Improved NBC MiniSat All derivative | Resumable Boolean support enumeration for `improved_nbc_b7` | MIT | Derived locally from NBC MiniSat All 1.0.2 |
+| clingo 5.8.2 with clasp 3.4.1 | Backtracking support enumeration for `clasp_b3`, `clingo_dickinson`, and `clingo_halfspace_dickinson` | MIT | <https://github.com/potassco/clingo/tree/v5.8.2> |
 | Open MCS | MCS maximum-clique search adapted for the Motzkin--Straus pre-check | GPL-3.0-or-later | <https://github.com/darrenstrash/open-mcs/tree/735788af066fc8589f577036af521f22f45c2731> |
 
 The immediate-integer Bareiss update in `cpp/include/coposit/fraction_free_ldlt.hpp` is adapted from Fredrik Johansson's
 `fmpz_mat_fflu` implementation in FLINT and retains its LGPL-3.0-or-later notice in the header.
+
+`cpp/third_party/nbc_minisat_all/` adapts Takahisa Toda's NBC MiniSat All 1.0.2, based on MiniSat-C 1.14.1. The local changes remove
+the command-line interface and expose model and termination callbacks for exact-cardinality enumeration. The original notices are
+preserved as `LICENSE.nbc_minisat_all` and `LICENSE.MiniSat` in that directory.
+
+`cpp/third_party/improved_nbc_minisat_all/` is a separate copy of that adaptation. It adds a defined repeated-call reset boundary,
+retains logically valid learned clauses, and latches only permanent root-level inconsistency. The same MIT notices are preserved in
+that directory.
 
 `cpp/include/coposit/open_mcs.hpp` adapts Darren Strash's Open MCS implementation at commit
 `735788af066fc8589f577036af521f22f45c2731`. It retains the MCR initial ordering, greedy coloring bound, static-order traversal, and

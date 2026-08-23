@@ -1,0 +1,546 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Boolean lattice pruning</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --red: #d00000;
+      --yellow: #ffd000;
+      --gray: #666;
+      --black: #111;
+      --ink: #222;
+      --muted: #6b6b6b;
+      --line: #d3d3d0;
+      --paper: #f7f7f4;
+      --panel: rgba(255, 255, 255, .9);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--paper);
+      color: var(--ink);
+      font: 14px/1.4 ui-sans-serif, system-ui, sans-serif;
+    }
+    main { width: min(1500px, 100%); margin: 0 auto; padding: 18px; }
+    h1 { margin: 0; font-size: 20px; font-weight: 680; }
+    .topbar {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 12px;
+    }
+    .subtitle { margin-top: 3px; color: var(--muted); }
+    .controls { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; }
+    label { display: grid; gap: 3px; color: var(--muted); font-size: 12px; }
+    input, button {
+      height: 34px;
+      border: 1px solid #aaa;
+      border-radius: 0;
+      background: white;
+      color: var(--ink);
+      font: inherit;
+    }
+    input { width: 72px; padding: 0 8px; }
+    button { padding: 0 12px; cursor: pointer; }
+    button:hover { border-color: var(--black); }
+    button:focus-visible, input:focus-visible { outline: 2px solid var(--red); outline-offset: 2px; }
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid #aaa; }
+    .tab {
+      border: 0;
+      border-bottom: 3px solid transparent;
+      background: transparent;
+      color: var(--muted);
+    }
+    .tab[aria-selected="true"] { border-bottom-color: var(--red); color: var(--ink); font-weight: 650; }
+    .stage {
+      position: relative;
+      height: calc(100vh - 205px);
+      min-height: 560px;
+      overflow: hidden;
+      border: 1px solid #aaa;
+      background: #fbfbf8;
+    }
+    canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+    canvas.dragging { cursor: grabbing; }
+    .legend, .readout, .instructions {
+      position: absolute;
+      z-index: 2;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      pointer-events: none;
+    }
+    .legend { top: 12px; left: 12px; display: grid; grid-template-columns: auto auto; gap: 6px 9px; padding: 9px 11px; }
+    .dot { width: 10px; height: 10px; margin-top: 4px; border-radius: 50%; }
+    .dot.small { width: 6px; height: 6px; margin: 6px 2px 0; }
+    .dot-pair { display: flex; align-items: center; gap: 3px; }
+    .dot-pair .dot { margin-top: 0; }
+    .dot.red { background: var(--red); }
+    .dot.yellow { background: var(--yellow); }
+    .dot.gray { background: var(--gray); }
+    .dot.black { background: var(--black); }
+    .readout { right: 12px; top: 12px; max-width: min(440px, calc(100% - 24px)); padding: 8px 10px; text-align: right; }
+    .readout strong { display: block; }
+    .selected-list { color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .instructions { right: 12px; bottom: 12px; padding: 7px 9px; color: var(--muted); }
+    .tooltip {
+      position: absolute;
+      z-index: 3;
+      display: none;
+      padding: 6px 8px;
+      border: 1px solid var(--black);
+      background: white;
+      color: var(--ink);
+      pointer-events: none;
+      white-space: nowrap;
+    }
+    .swatches { position: absolute; width: 0; height: 0; overflow: hidden; }
+    .swatch-red { color: var(--red); }
+    .swatch-yellow { color: var(--yellow); }
+    .swatch-black { color: var(--black); }
+    .swatch-gray { color: var(--gray); }
+    @media (max-width: 760px) {
+      main { padding: 10px; }
+      .topbar { align-items: stretch; flex-direction: column; gap: 10px; }
+      .stage { height: 68vh; min-height: 500px; }
+      .readout { top: auto; bottom: 48px; left: 12px; right: 12px; text-align: left; }
+      .instructions { left: 12px; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="topbar">
+      <div>
+        <h1>Boolean lattice pruning</h1>
+        <div class="subtitle">Click sets to combine their upward and downward closures.</div>
+      </div>
+      <div class="controls">
+        <label>Dimension n (2–11)
+          <input id="dimension" type="number" min="2" max="11" step="1" value="11" inputmode="numeric">
+        </label>
+        <button id="apply" type="button">Apply</button>
+        <button id="clear" type="button">Clear selections</button>
+      </div>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Lattice layout">
+      <button class="tab" type="button" role="tab" data-layout="triangular" aria-selected="true">Triangular planes</button>
+      <button class="tab" type="button" role="tab" data-layout="circular" aria-selected="false">Circular layers (spinning top)</button>
+    </div>
+    <div class="stage">
+      <div class="legend" aria-hidden="true">
+        <span class="dot red"></span><span>pruned upward or downward</span>
+        <span class="dot yellow"></span><span>selected set</span>
+        <span class="dot-pair"><span class="dot gray small"></span><span class="dot black small"></span></span><span>not pruned</span>
+      </div>
+      <div class="readout" aria-live="polite">
+        <strong id="status"></strong>
+        <div id="selected-list" class="selected-list">Selected: none</div>
+      </div>
+      <div class="instructions">Drag to rotate · wheel to zoom · click a node to toggle it</div>
+      <div id="tooltip" class="tooltip" role="tooltip"></div>
+      <span class="swatches swatch-red"></span>
+      <span class="swatches swatch-yellow"></span>
+      <span class="swatches swatch-black"></span>
+      <span class="swatches swatch-gray"></span>
+    </div>
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.149.0/build/three.min.js"></script>
+  <script>
+    (() => {
+      const stage = document.querySelector('.stage');
+      const dimensionInput = document.getElementById('dimension');
+      const applyButton = document.getElementById('apply');
+      const clearButton = document.getElementById('clear');
+      const status = document.getElementById('status');
+      const selectedList = document.getElementById('selected-list');
+      const tooltip = document.getElementById('tooltip');
+      const tabs = [...document.querySelectorAll('.tab')];
+      const cssColor = selector => getComputedStyle(document.querySelector(selector)).color;
+      const colors = {
+        red: cssColor('.swatch-red'), yellow: cssColor('.swatch-yellow'),
+        black: cssColor('.swatch-black'), gray: cssColor('.swatch-gray')
+      };
+
+      let dimension = 11;
+      let layout = 'triangular';
+      const selected = new Set();
+      let group;
+      let nodeMesh;
+      let positions = [];
+      let edgePairs = new Uint32Array();
+      let nodeColors;
+      let nodeScales = new Float32Array();
+      let nodeGeometry;
+      let nodeMaterial;
+      let prunedEdges;
+      let hovered;
+      let pointerDirty = true;
+      const nodeTransform = new THREE.Object3D();
+
+      const popcount = value => {
+        let count = 0;
+        while (value) { value &= value - 1; count++; }
+        return count;
+      };
+      const setLabel = mask => {
+        const members = [];
+        for (let bit = 0; bit < dimension; bit++) if (mask & (1 << bit)) members.push(bit + 1);
+        return members.length ? `{${members.join(', ')}}` : '∅';
+      };
+      const prunedFor = (selections, n) => {
+        const result = new Set();
+        const total = 1 << n;
+        const chosenSets = [...selections].map(mask => ({ mask, rank: popcount(mask) }));
+        for (let mask = 0; mask < total; mask++) {
+          const rank = popcount(mask);
+          for (const chosen of chosenSets) {
+            if (mask === chosen.mask
+              || (rank < chosen.rank && (mask & chosen.mask) === mask)
+              || (rank > chosen.rank && (mask & chosen.mask) === chosen.mask)) {
+              result.add(mask);
+              break;
+            }
+          }
+        }
+        return result;
+      };
+      console.assert(prunedFor(new Set([1]), 3).size === 5, 'A singleton in B3 must prune five sets in both directions');
+      console.assert(prunedFor(new Set([1, 2]), 3).size === 7, 'Multiple selections must combine their pruning regions');
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(40, 1, .1, 200);
+      const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+      renderer.setClearColor(0x000000, 0);
+      renderer.domElement.setAttribute('aria-label', 'Interactive three-dimensional Boolean lattice. Click nodes to select sets.');
+      renderer.domElement.tabIndex = 0;
+      stage.insertBefore(renderer.domElement, stage.firstChild);
+      scene.add(new THREE.AmbientLight(0xffffff, .7));
+      const keyLight = new THREE.DirectionalLight(0xffffff, .75);
+      keyLight.position.set(6, 11, 8);
+      scene.add(keyLight);
+
+      const disposeObject = object => {
+        const geometries = new Set();
+        const materials = new Set();
+        object.traverse(child => {
+          if (child.geometry) geometries.add(child.geometry);
+          if (child.material) (Array.isArray(child.material) ? child.material : [child.material]).forEach(material => materials.add(material));
+        });
+        geometries.forEach(geometry => geometry.dispose());
+        materials.forEach(material => material.dispose());
+      };
+
+      const layersFor = n => {
+        const layers = Array.from({ length: n + 1 }, () => []);
+        for (let mask = 0; mask < (1 << n); mask++) layers[popcount(mask)].push(mask);
+        layers.forEach(layerMasks => layerMasks.sort((a, b) => (a ^ (a >> 1)) - (b ^ (b >> 1))));
+        return layers;
+      };
+
+      const compactTriangularGrid = count => {
+        let radius = 0;
+        while (1 + 3 * radius * (radius + 1) < count) radius++;
+        const coordinates = [];
+        for (let q = -radius; q <= radius; q++) {
+          for (let r = -radius; r <= radius; r++) {
+            const distance = Math.max(Math.abs(q), Math.abs(r), Math.abs(-q - r));
+            if (distance <= radius) coordinates.push({ q, r, distance });
+          }
+        }
+        coordinates.sort((a, b) => a.distance - b.distance
+          || Math.atan2(a.r, a.q) - Math.atan2(b.r, b.q)
+          || a.q - b.q || a.r - b.r);
+        return coordinates.slice(0, count);
+      };
+
+      const triangularPositions = layers => {
+        const result = Array(1 << dimension);
+        const coordinatesByRank = [];
+        const gridSpacing = .58;
+        const planeSpacing = 1.08;
+        layers.forEach((layerMasks, rank) => {
+          const coordinates = compactTriangularGrid(layerMasks.length);
+          coordinatesByRank.push(coordinates);
+          const raw = coordinates.map(({ q, r }) => ({ x: gridSpacing * (q + r / 2), z: gridSpacing * Math.sqrt(3) * r / 2 }));
+          const centerX = raw.reduce((sum, point) => sum + point.x, 0) / raw.length;
+          const centerZ = raw.reduce((sum, point) => sum + point.z, 0) / raw.length;
+          layerMasks.forEach((mask, index) => {
+            result[mask] = new THREE.Vector3(raw[index].x - centerX, (rank - dimension / 2) * planeSpacing, raw[index].z - centerZ);
+          });
+        });
+        return { positions: result, coordinatesByRank };
+      };
+
+      const circularPositions = layers => {
+        const result = Array(1 << dimension);
+        const radii = [];
+        const planeSpacing = 1.08;
+        layers.forEach((layerMasks, rank) => {
+          const radius = layerMasks.length === 1 ? 0 : 1.05 + .34 * Math.sqrt(layerMasks.length);
+          radii.push(radius);
+          layerMasks.forEach((mask, index) => {
+            const angle = 2 * Math.PI * index / layerMasks.length + rank * .17;
+            result[mask] = new THREE.Vector3(radius * Math.cos(angle), (rank - dimension / 2) * planeSpacing, radius * Math.sin(angle));
+          });
+        });
+        return { positions: result, radii };
+      };
+
+      const addGuides = (layers, layoutData) => {
+        const material = new THREE.LineBasicMaterial({ color: colors.gray, transparent: true, opacity: .12, depthWrite: false });
+        if (layout === 'circular') {
+          layoutData.radii.forEach((radius, rank) => {
+            if (!radius) return;
+            const points = Array.from({ length: 128 }, (_, index) => {
+              const angle = 2 * Math.PI * index / 128;
+              return new THREE.Vector3(radius * Math.cos(angle), (rank - dimension / 2) * 1.08, radius * Math.sin(angle));
+            });
+            group.add(new THREE.LineLoop(new THREE.BufferGeometry().setFromPoints(points), material));
+          });
+          return;
+        }
+        layers.forEach((layerMasks, rank) => {
+          const coordinates = layoutData.coordinatesByRank[rank];
+          const lookup = new Map(coordinates.map((point, index) => [`${point.q},${point.r}`, index]));
+          const segments = [];
+          coordinates.forEach((point, index) => {
+            for (const [dq, dr] of [[1, 0], [0, 1], [-1, 1]]) {
+              const neighbor = lookup.get(`${point.q + dq},${point.r + dr}`);
+              if (neighbor !== undefined) segments.push(...positions[layerMasks[index]].toArray(), ...positions[layerMasks[neighbor]].toArray());
+            }
+          });
+          if (!segments.length) return;
+          const geometry = new THREE.BufferGeometry();
+          geometry.setAttribute('position', new THREE.Float32BufferAttribute(segments, 3));
+          group.add(new THREE.LineSegments(geometry, material));
+        });
+      };
+
+      const fitCamera = () => {
+        const bounds = new THREE.Box3().setFromPoints(positions);
+        const size = bounds.getSize(new THREE.Vector3());
+        const span = Math.max(size.x, size.y, size.z);
+        const distance = Math.max(12, span * 1.65);
+        camera.position.set(distance * .72, distance * .46, distance);
+        camera.lookAt(0, 0, 0);
+        group.rotation.set(-.12, -.38, 0);
+      };
+
+      const setNodeTransform = mask => {
+        nodeTransform.position.copy(positions[mask]);
+        nodeTransform.scale.setScalar(nodeScales[mask] * (mask === hovered ? 1.55 : 1));
+        nodeTransform.updateMatrix();
+        nodeMesh.setMatrixAt(mask, nodeTransform.matrix);
+      };
+
+      const updatePruning = () => {
+        const pruned = prunedFor(selected, dimension);
+        for (let mask = 0; mask < (1 << dimension); mask++) {
+          const parity = popcount(mask) & 1;
+          const emphasized = selected.has(mask) || pruned.has(mask);
+          nodeScales[mask] = emphasized ? 1 : .58;
+          nodeMesh.setColorAt(mask, selected.has(mask) ? nodeColors.selected : emphasized ? nodeColors.pruned : nodeColors.rest[parity]);
+          setNodeTransform(mask);
+        }
+        nodeMesh.instanceColor.needsUpdate = true;
+        nodeMesh.instanceMatrix.needsUpdate = true;
+        const segments = [];
+        for (let index = 0; index < edgePairs.length; index += 2) {
+          const lower = edgePairs[index];
+          const upper = edgePairs[index + 1];
+          if (pruned.has(lower) && pruned.has(upper)) {
+            const from = positions[lower];
+            const to = positions[upper];
+            segments.push(from.x, from.y, from.z, to.x, to.y, to.z);
+          }
+        }
+        prunedEdges.geometry.dispose();
+        const geometry = new THREE.BufferGeometry();
+        geometry.setAttribute('position', new THREE.Float32BufferAttribute(segments, 3));
+        prunedEdges.geometry = geometry;
+        status.textContent = `${(100 * pruned.size / (1 << dimension)).toFixed(2)}%`;
+        const labels = [...selected].sort((a, b) => a - b).map(setLabel);
+        selectedList.textContent = labels.length ? `Selected: ${labels.join('  ')}` : 'Selected: none';
+        pointerDirty = true;
+      };
+
+      const build = () => {
+        if (group) {
+          scene.remove(group);
+          disposeObject(group);
+        }
+        hovered = undefined;
+        group = new THREE.Group();
+        scene.add(group);
+        const layers = layersFor(dimension);
+        const layoutData = layout === 'triangular' ? triangularPositions(layers) : circularPositions(layers);
+        positions = layoutData.positions;
+        addGuides(layers, layoutData);
+
+        const edgeCount = dimension * (1 << (dimension - 1));
+        edgePairs = new Uint32Array(2 * edgeCount);
+        const ordinaryEdgeSegments = new Float32Array(6 * edgeCount);
+        let edgeIndex = 0;
+        let coordinateIndex = 0;
+        for (let lower = 0; lower < (1 << dimension); lower++) {
+          for (let bit = 0; bit < dimension; bit++) if (!(lower & (1 << bit))) {
+            const upper = lower | (1 << bit);
+            edgePairs[edgeIndex++] = lower;
+            edgePairs[edgeIndex++] = upper;
+            const from = positions[lower];
+            const to = positions[upper];
+            ordinaryEdgeSegments[coordinateIndex++] = from.x;
+            ordinaryEdgeSegments[coordinateIndex++] = from.y;
+            ordinaryEdgeSegments[coordinateIndex++] = from.z;
+            ordinaryEdgeSegments[coordinateIndex++] = to.x;
+            ordinaryEdgeSegments[coordinateIndex++] = to.y;
+            ordinaryEdgeSegments[coordinateIndex++] = to.z;
+          }
+        }
+        const ordinaryGeometry = new THREE.BufferGeometry();
+        ordinaryGeometry.setAttribute('position', new THREE.Float32BufferAttribute(ordinaryEdgeSegments, 3));
+        group.add(new THREE.LineSegments(
+          ordinaryGeometry,
+          new THREE.LineBasicMaterial({ color: colors.gray, transparent: true, opacity: .1, depthWrite: false })
+        ));
+        prunedEdges = new THREE.LineSegments(
+          new THREE.BufferGeometry(),
+          new THREE.LineBasicMaterial({ color: colors.red, transparent: true, opacity: .72, depthWrite: false })
+        );
+        group.add(prunedEdges);
+
+        nodeGeometry = new THREE.SphereGeometry(.15, 10, 7);
+        nodeMaterial = new THREE.MeshPhongMaterial({ color: 0xffffff, specular: 0x181818, shininess: 14 });
+        nodeColors = {
+          rest: [new THREE.Color(colors.gray), new THREE.Color(colors.black)],
+          pruned: new THREE.Color(colors.red),
+          selected: new THREE.Color(colors.yellow)
+        };
+        nodeScales = new Float32Array(1 << dimension);
+        nodeMesh = new THREE.InstancedMesh(nodeGeometry, nodeMaterial, 1 << dimension);
+        nodeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+        group.add(nodeMesh);
+        fitCamera();
+        updatePruning();
+      };
+
+      const raycaster = new THREE.Raycaster();
+      const pointer = new THREE.Vector2(3, 3);
+      const setPointer = event => {
+        const rect = renderer.domElement.getBoundingClientRect();
+        pointer.x = 2 * (event.clientX - rect.left) / rect.width - 1;
+        pointer.y = 1 - 2 * (event.clientY - rect.top) / rect.height;
+      };
+      const nodeAtPointer = () => {
+        scene.updateMatrixWorld(true);
+        raycaster.setFromCamera(pointer, camera);
+        return raycaster.intersectObject(nodeMesh, false)[0]?.instanceId;
+      };
+
+      let pointerDown;
+      renderer.domElement.addEventListener('pointerdown', event => {
+        pointerDown = { x: event.clientX, y: event.clientY };
+        renderer.domElement.classList.add('dragging');
+        renderer.domElement.setPointerCapture(event.pointerId);
+      });
+      renderer.domElement.addEventListener('pointermove', event => {
+        setPointer(event);
+        pointerDirty = true;
+        tooltip.style.left = `${event.clientX - stage.getBoundingClientRect().left + 12}px`;
+        tooltip.style.top = `${event.clientY - stage.getBoundingClientRect().top + 12}px`;
+        if (pointerDown) {
+          group.rotation.y += (event.clientX - pointerDown.x) * .008;
+          group.rotation.x += (event.clientY - pointerDown.y) * .006;
+          group.rotation.x = Math.max(-1.15, Math.min(1.15, group.rotation.x));
+          pointerDown = { x: event.clientX, y: event.clientY, moved: true };
+        }
+      });
+      renderer.domElement.addEventListener('pointerup', event => {
+        const wasClick = pointerDown && !pointerDown.moved;
+        pointerDown = undefined;
+        renderer.domElement.classList.remove('dragging');
+        if (renderer.domElement.hasPointerCapture(event.pointerId)) renderer.domElement.releasePointerCapture(event.pointerId);
+        if (!wasClick) return;
+        setPointer(event);
+        const mask = nodeAtPointer();
+        if (mask === undefined) return;
+        selected.has(mask) ? selected.delete(mask) : selected.add(mask);
+        updatePruning();
+      });
+      renderer.domElement.addEventListener('pointerleave', () => {
+        pointer.set(3, 3);
+        pointerDirty = true;
+        tooltip.style.display = 'none';
+      });
+      renderer.domElement.addEventListener('wheel', event => {
+        event.preventDefault();
+        camera.position.multiplyScalar(event.deltaY > 0 ? 1.08 : .92);
+        const distance = camera.position.length();
+        if (distance < 7) camera.position.multiplyScalar(7 / distance);
+        if (distance > 80) camera.position.multiplyScalar(80 / distance);
+        pointerDirty = true;
+      }, { passive: false });
+
+      const applyDimension = () => {
+        const requested = Number(dimensionInput.value);
+        if (!Number.isInteger(requested) || requested < 2 || requested > 11) {
+          dimensionInput.setCustomValidity('Choose an integer from 2 through 11.');
+          dimensionInput.reportValidity();
+          return;
+        }
+        dimensionInput.setCustomValidity('');
+        dimension = requested;
+        selected.clear();
+        build();
+      };
+      applyButton.addEventListener('click', applyDimension);
+      dimensionInput.addEventListener('input', () => dimensionInput.setCustomValidity(''));
+      dimensionInput.addEventListener('keydown', event => { if (event.key === 'Enter') applyDimension(); });
+      clearButton.addEventListener('click', () => { selected.clear(); updatePruning(); });
+      tabs.forEach(tab => tab.addEventListener('click', () => {
+        layout = tab.dataset.layout;
+        tabs.forEach(candidate => candidate.setAttribute('aria-selected', String(candidate === tab)));
+        build();
+      }));
+
+      const resize = () => {
+        renderer.setSize(stage.clientWidth, stage.clientHeight, false);
+        camera.aspect = stage.clientWidth / stage.clientHeight;
+        camera.updateProjectionMatrix();
+      };
+      new ResizeObserver(resize).observe(stage);
+      resize();
+      build();
+
+      const animate = () => {
+        if (pointerDirty) {
+          pointerDirty = false;
+          const hit = nodeAtPointer();
+          if (hit !== hovered) {
+            const previous = hovered;
+            hovered = hit;
+            if (previous !== undefined) setNodeTransform(previous);
+            if (hovered !== undefined) {
+              setNodeTransform(hovered);
+              const pruned = prunedFor(selected, dimension).has(hovered);
+              tooltip.textContent = `${setLabel(hovered)} · rank ${popcount(hovered)} · ${selected.has(hovered) ? 'selected' : pruned ? 'pruned' : 'unpruned'}`;
+              tooltip.style.display = 'block';
+            } else {
+              tooltip.style.display = 'none';
+            }
+            nodeMesh.instanceMatrix.needsUpdate = true;
+          }
+        }
+        renderer.render(scene, camera);
+        requestAnimationFrame(animate);
+      };
+      animate();
+    })();
+  </script>
+</body>
+</html>

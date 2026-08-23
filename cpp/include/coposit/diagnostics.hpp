@@ -179,6 +179,7 @@ struct shared_state {
     std::map<std::tuple<size_t, size_t, size_t, size_t>, uint64_t> certificate_root_lifted_upper_lower_counts;
     std::map<std::pair<size_t, size_t>, uint64_t> singular_cardinality_nullity_counts;
     std::mutex diagnostics_mutex;
+    uint64_t history_event_sequence = 0;
     std::string diagnostics;
 };
 
@@ -248,6 +249,7 @@ inline void reset() noexcept
     state.preprocessing_reduction_decisions.store(0, std::memory_order_relaxed);
     state.preprocessing_model_delegations.store(0, std::memory_order_relaxed);
     std::lock_guard<std::mutex> diagnostics_lock(state.diagnostics_mutex);
+    state.history_event_sequence = 0;
     state.diagnostics.clear();
 }
 
@@ -651,6 +653,19 @@ inline void record_event(std::string_view event)
     if (!enabled()) return;
     std::lock_guard<std::mutex> lock(detail::state.diagnostics_mutex);
     detail::state.diagnostics.append(event).push_back('\n');
+}
+
+inline void record_history_event(std::string_view kind, std::string_view details)
+{
+    if (!enabled()) return;
+    std::lock_guard<std::mutex> lock(detail::state.diagnostics_mutex);
+    detail::increment(detail::state.history_event_sequence);
+    detail::state.diagnostics.append("event=")
+        .append(kind)
+        .append(" sequence=")
+        .append(std::to_string(detail::state.history_event_sequence))
+        .push_back(' ');
+    detail::state.diagnostics.append(details).push_back('\n');
 }
 
 inline void preprocessing_stage(preprocessing_phase phase, size_t dimension, size_t current = 0, size_t maximum = 0) noexcept

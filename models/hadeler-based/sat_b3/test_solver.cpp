@@ -1,3 +1,4 @@
+#include <coposit/diagnostics.hpp>
 #include <coposit/model.hpp>
 #include <coposit/small_copositivity.hpp>
 #include <coposit/support.hpp>
@@ -11,6 +12,8 @@
 #include <cstdint>
 #include <initializer_list>
 #include <iterator>
+#include <sstream>
+#include <string>
 #include <utility>
 #include <vector>
 
@@ -67,10 +70,83 @@ TEST(SatB3Test, AlternatesIndividualLowAndHighSupportsWithDirectionalPruning)
               sat_b3_diagnostics::events.end());
 }
 
+TEST(SatB3Test, RecordsMathematicalCertificatesInGenerationOrder)
+{
+    std::ostringstream ignored_output;
+    {
+        diagnostics::reporter reporter(false, ignored_output, true, true);
+        const auto classification = model::classify(symmetric_matrix(3, {2, 0, 0, 2, 0, 2}));
+        EXPECT_TRUE(classification.is_copositive);
+        EXPECT_TRUE(classification.is_strictly_copositive);
+    }
+
+    const std::string history = diagnostics::detail::load_diagnostics();
+    const size_t dickinson_at =
+        history.find("event=certificate sequence=1 model=sat_b3 n=3 frontier=low kind=dickinson source=[");
+    const size_t downward_at =
+        history.find("event=certificate sequence=2 model=sat_b3 n=3 frontier=high kind=positive_definite source=[");
+    ASSERT_NE(dickinson_at, std::string::npos) << history;
+    ASSERT_NE(downward_at, std::string::npos) << history;
+    EXPECT_LT(dickinson_at, downward_at);
+    EXPECT_NE(history.find("coverage=interval lower=[", dickinson_at), std::string::npos);
+    EXPECT_NE(history.find("upper=[1,2,3] exclude_empty=no", dickinson_at), std::string::npos);
+    EXPECT_NE(history.find("floating_checked=no exact_checked=yes", dickinson_at), std::string::npos);
+    EXPECT_NE(history.find("coverage=downward lower=[] upper=[", downward_at), std::string::npos);
+    EXPECT_NE(history.find("exclude_empty=yes", downward_at), std::string::npos);
+    EXPECT_NE(history.find("floating_checked=yes exact_checked=yes", downward_at), std::string::npos);
+    EXPECT_EQ(history.find("kind=exact_support_block"), std::string::npos);
+}
+
+TEST(SatB3Test, RecordsPairCurvatureAsAnUpwardCoveredRegion)
+{
+    std::ostringstream ignored_output;
+    {
+        diagnostics::reporter reporter(false, ignored_output, true, true);
+        const auto classification = model::classify(symmetric_matrix(2, {1, 2, 1}));
+        EXPECT_TRUE(classification.is_copositive);
+        EXPECT_TRUE(classification.is_strictly_copositive);
+    }
+
+    const std::string history = diagnostics::detail::load_diagnostics();
+    EXPECT_NE(history.find("event=certificate sequence=1 model=sat_b3 n=2 frontier=initial kind=pair_curvature "
+                           "source=[1,2] coverage=upward lower=[1,2] upper=all exclude_empty=no"),
+              std::string::npos);
+    EXPECT_NE(history.find("floating_checked=no exact_checked=yes"), std::string::npos);
+}
+
+TEST(SatB3Test, RecordsUnprunedHighSupportsWithoutAnInterval)
+{
+    sat_b3_diagnostics::clear();
+    std::ostringstream ignored_output;
+    {
+        diagnostics::reporter reporter(false, ignored_output, true, true);
+        const auto classification = model::classify(symmetric_matrix(2, {1, -1, 1}));
+        EXPECT_TRUE(classification.is_copositive);
+        EXPECT_FALSE(classification.is_strictly_copositive);
+    }
+
+    EXPECT_GT(model::sat_b3_exact_count_for_testing(), 0U);
+    const std::string history = diagnostics::detail::load_diagnostics();
+    const size_t visit = history.find("event=visited_support sequence=");
+    ASSERT_NE(visit, std::string::npos) << history;
+    const size_t line_end = history.find('\n', visit);
+    const std::string line = history.substr(visit, line_end - visit);
+    EXPECT_NE(line.find("model=sat_b3 n=2 frontier=high source=[1,2]"), std::string::npos) << line;
+    EXPECT_NE(line.find("floating_checked=yes exact_checked=yes"), std::string::npos) << line;
+    EXPECT_EQ(line.find("coverage="), std::string::npos) << line;
+    EXPECT_EQ(line.find("lower="), std::string::npos) << line;
+    EXPECT_EQ(line.find("upper="), std::string::npos) << line;
+    EXPECT_EQ(history.find("kind=exact_support_block"), std::string::npos);
+}
+
 TEST(SatB3Test, UsesTheFloatingFilterBeforeExactHighFrontierWork)
 {
     sat_b3_diagnostics::clear();
-    (void)model::classify(symmetric_matrix(3, {1, -4, -2, 1, 0, 1}));
+    std::ostringstream ignored_output;
+    {
+        diagnostics::reporter reporter(false, ignored_output, true, true);
+        (void)model::classify(symmetric_matrix(3, {1, -4, -2, 1, 0, 1}));
+    }
 
     const auto high = std::find(sat_b3_diagnostics::events.begin(), sat_b3_diagnostics::events.end(),
                                 sat_b3_diagnostics::event{"process_high", 3});
@@ -78,6 +154,9 @@ TEST(SatB3Test, UsesTheFloatingFilterBeforeExactHighFrontierWork)
     ASSERT_NE(std::next(high), sat_b3_diagnostics::events.end());
     EXPECT_EQ(*std::next(high), (sat_b3_diagnostics::event{"high_float_reject", 3}));
     EXPECT_GT(model::sat_b3_high_float_rejection_count_for_testing(), 0U);
+    EXPECT_NE(diagnostics::detail::load_diagnostics().find(
+                  "frontier=high source=[1,2,3] floating_checked=yes exact_checked=no"),
+              std::string::npos);
 }
 
 TEST(SatB3Test, FloatingFilterOnlyProposesExactPositiveSemidefinitenessChecks)

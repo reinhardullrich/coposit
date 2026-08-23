@@ -10,6 +10,8 @@
 #include <cstdint>
 #include <initializer_list>
 #include <map>
+#include <sstream>
+#include <string>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -150,6 +152,25 @@ TEST(SatB1Test, PairCurvatureExclusionBlocksEverySuperset)
     EXPECT_EQ(model::sat_b1_pair_exclusion_uncovered_count(3, 1, 0, 1), 3U);
     EXPECT_EQ(model::sat_b1_pair_exclusion_uncovered_count(3, 2, 0, 1), 2U);
     EXPECT_EQ(model::sat_b1_pair_exclusion_uncovered_count(3, 3, 0, 1), 0U);
+}
+
+TEST(SatB1Test, RecordsExactUpwardOnlySupportHistory)
+{
+    std::ostringstream ignored_output;
+    {
+        diagnostics::reporter reporter(false, ignored_output, true, true);
+        const auto classification = model::classify(symmetric_matrix(2, {1, 2, 1}));
+        EXPECT_TRUE(classification.is_copositive);
+        EXPECT_TRUE(classification.is_strictly_copositive);
+    }
+
+    const std::string history = diagnostics::detail::load_diagnostics();
+    EXPECT_NE(history.find("event=certificate sequence=1 model=sat_b1 n=2 frontier=initial kind=pair_curvature "
+                           "source=[1,2] coverage=upward lower=[1,2] upper=all exclude_empty=no "
+                           "floating_checked=no exact_checked=yes"),
+              std::string::npos)
+        << history;
+    EXPECT_EQ(history.find("coverage=downward"), std::string::npos) << history;
 }
 
 TEST(SatB1Test, PerSupportCurvatureExclusionSkipsTheRaySearch)

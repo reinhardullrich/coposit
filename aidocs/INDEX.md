@@ -4,8 +4,8 @@ This file routes to every other Markdown document under `aidocs/` without duplic
 
 ## Current
 
-- `BENCHMARK_SETS.md` — **current** — composition, guarded selection rules, overlap, and SQL access for the four corpus benchmark
-  flags: Smoke, Core and Stress Test, N ≤ 100, and higher-order literature-solved.
+- `BENCHMARK_SETS.md` — **current** — composition, guarded selection rules, overlap, and SQL access for the six corpus benchmark
+  flags, including the complete and quick BPQY panels.
 - `PROJECT.md` — **current** — concise maintained structure, experiment contract, processing pipeline, model inventory, interfaces,
   dependencies, corpus, and ownership boundary.
 - `REFERENCE_RESULTS_N_1_TO_100.md` — **current** — five-second non-strict and strict results for all eight literature baselines on
@@ -22,13 +22,16 @@ This file routes to every other Markdown document under `aidocs/` without duplic
   models in the current campaign.
 - `REFERENCE_RESULTS_BASELINES_AND_EXPERIMENTS.md` — **current** — five-second ordinary-copositivity Smoke and Core/Stress results
   for the literature cone baselines and completed coposit-created cone experiments.
+- `REFERENCE_RESULTS_BPQY_BENCHMARK.md` — **current** — ten-second BPQY benchmark results for the eight literature baselines,
+  Adaptive Sponsel/Copomatrix, and SAT-B3, plus the 180-second SAT-B3 follow-up.
 
 ## Research
 
-- `HADELER_DICKINSON_ALL_ONES_AND_CURVATURE.md` — **theory note** — the precise all-ones inverse criterion under principal-support
-  induction, its KKT interpretation, its relationship to the reduced Hessian, and Dickinson's interval reuse.
-- `SIMPLEX_FACE_CONVEXITY_PRUNING_THEORY.md` — **theory note** — how minimal-support global minimizers, tangent-space strict
-  convexity, exact inertia tests, and upward/downward support pruning preserve or certify copositivity and strict copositivity.
+- `POLYA_LOWER_BOUND_DOWNWARD_PRUNING.md` — **research finding** — the exact level-one Pólya lower bound, its pair/triple
+  obstruction hypergraph, top-down maximal-safe-support search, downward-pruning implications, cost, limits, and proposed diagnostic.
+- `COPOSITIVITY_CURVATURE_HADELER_DICKINSON.md` — **theory paper** — an intuition-first unified treatment of simplex faces,
+  upward and downward curvature pruning, exact inertia tests, face versus full-simplex KKT conditions, Hadeler's all-ones criterion,
+  and Dickinson's interval reuse.
 - `XXX_IMPLEMENTATION_PLAN.md` — **current implementation record** — retained SAT-Halfspace-Rays certificates, alternating complete
   cardinality layers, exact KKT paths, singular nullspace-to-boundary navigation, additional upward/downward intervals, and the
   proof-complete one-SAT invariant.

@@ -5,13 +5,13 @@
 It contains corpus and reference data plus a two-column cache of the fastest eligible local diagnostic result. Mutable benchmark
 measurements remain in the ignored local `experiments/diagnostics.sqlite3` database.
 
-- Matrices: 3,523
+- Matrices: 5,834
 - Dimensions: 1 through 5,000
-- Strictly copositive: 1,002
-- Copositive but not strictly copositive: 1,332
-- Not copositive: 1,086
+- Strictly copositive: 1,484
+- Copositive but not strictly copositive: 1,526
+- Not copositive: 2,718
 - Copositive with strict status not yet established: 0
-- Strict and non-strict copositivity not yet established: 103
+- Strict and non-strict copositivity not yet established: 106
 - Schema: the `sources` and `matrices` tables, with no views, triggers, or manually created indexes
 
 The maintained directory contains this database, its `schema.sql`, the reproducible `diagnostics_schema.sql`, this README, and the
@@ -20,12 +20,16 @@ One-time construction and migration material is retained under `archive/`.
 
 `matrices` stores the stable ID, dimension, exact matrix data, nullable strict and non-strict copositivity results,
 optional free-form source text, normalized primary `source_id`, the `additional_source_ids` bibliography, the `references_solved`
-and `references_unsolved` literature-claim arrays, optional family, and four
+and `references_unsolved` literature-claim arrays, optional family, and six
 independent Boolean benchmark flags:
-`smoke_set`, `core_and_stress_test`, `n_le_100`, and `n_gt_100_solved`. The first two are curated stored memberships and default
-off. `n_le_100` is generated directly from `dimension <= 100`; `n_gt_100_solved` is generated from order above 100 plus a nonempty
-`references_solved` array. Both generated definitions also require `preprocessing_solved = 0`. Neither generated membership can
-drift, and both automatically include future qualifying rows. A known
+`smoke_set`, `core_and_stress_test`, `n_le_100`, `n_gt_100_solved`, `bpqy_benchmark`, and `bpqy_quick_test`. The first two and the
+quick test are curated stored memberships and default off. `n_le_100` is generated directly from `dimension <= 100`;
+`n_gt_100_solved` is generated from order above 100 plus
+a nonempty `references_solved` array. Both definitions also require `preprocessing_solved = 0`. `bpqy_benchmark` is generated from
+the normalized BPQY COP family and includes preprocessing-unresolved exact lifts that are strictly copositive or have both truth
+fields unknown. Generated
+memberships cannot drift and automatically follow qualifying truth changes. `bpqy_quick_test` is a fixed six-matrix development
+panel selected from stored SAT-B3 combined timings between 15 and 100 seconds. A known
 strict-positive result requires a known non-strict-positive result. `NULL` in either truth column means that result has not been
 established; it must not be read as false.
 `preprocessing_solved` is true for every retained matrix completely classified by the new maintained depth-2 combined preprocessing
@@ -40,18 +44,22 @@ files use whichever standard Matrix Market
 `array integer symmetric` or
 `coordinate integer symmetric` representation is smaller in bytes. Symmetric array order and sorted symmetric coordinates both encode
 the lower triangle; coordinate files omit zeros. The archived `externalize_large_matrices.py` records the completed conversion that
-selected the smaller exact representation for every external file and compacted the database. The archived
+selected the smaller exact representation for every external file and compacted the database.
+`import_negated_fracessa_games_2026_08_20.py` records the exact positive-scale-deduplicated import of all current negated FracESSA
+game matrices; their copositivity truth remains unclassified.
 `assign_benchmark_sets_2026_08_10.sql` preserves the guarded original Core and Stress assignments;
 `fuse_core_and_stress_test_2026_08_16.sql` records their current union without the precheck-trivial generated panel.
 `retire_scale_and_timeout_sets_2026_08_16.sql` removes the two retired stored flags. `aidocs/BENCHMARK_SETS.md` explains the
 current assignments and composition.
+`add_bpqy_benchmark_2026_08_22.sql` reconciles completed BPQY COP truth and adds the generated BPQY benchmark selector.
+`add_bpqy_quick_test_2026_08_23.sql` adds the fixed six-matrix BPQY Quick Test selector and its timing evidence.
 `add_preprocessing_solved_2026_08_16.sql` records the original guarded 2,115-row preprocessing result flag. The current maintained
-preprocessing record flags 2,765 matrices; its bulk exact run evidence is retained in `experiments/preprocessing_depth_2026-08-15/`
+preprocessing record flags 4,887 matrices; its bulk exact run evidence is retained in `experiments/preprocessing_depth_2026-08-15/`
 and `experiments/diagnostics.sqlite3`.
 `exclude_preprocessing_solved_from_benchmarks_2026_08_16.py` records the initial guarded curated replacements and current generated-set
 definitions. `refresh_benchmark_sets_after_motzkin_straus_2026_08_16.sql` removes the additional preprocessing-complete members and
 restores stored Smoke and Core-and-Stress membership to 49 and 512 rows. The additive preprocessing flags are not removed from those
-stored lists; the effective selectors currently contain 46 and 469 rows, and comprehensive N ≤ 100 contains 731 matrices. The older
+stored lists; the effective selectors currently contain 46 and 469 rows, and comprehensive N ≤ 100 contains 920 matrices. The older
 `add_n_le_100_set_2026_08_14.sql` and `add_n_gt_100_solved_set_2026_08_14.sql` files preserve their original pre-preprocessing
 definitions.
 `replace_hildebrand_circulants_2026_08_16.py` replaces the 17 order-15–25 Hildebrand parameter points by one diversified low-digit
