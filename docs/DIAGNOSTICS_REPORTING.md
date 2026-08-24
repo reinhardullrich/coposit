@@ -19,10 +19,11 @@ exact candidate calculation. CBDD and CZDD publish their decision-diagram counte
 
 ## Chronological Support-History Contract
 
-SAT-B1, SAT-B3, Improved NBC-B7, and every new model created after this contract record each retained mathematical certificate in
-generation order whenever diagnostics capture is enabled. They also record every high-frontier support that produces no retained
-certificate. Existing older models may remain aggregate-only. The reference runner stores these event lines in the `diagnostics`
-column; the one-second live display remains a compact snapshot rather than printing the potentially large history.
+SAT-B1, SAT-B3, Improved NBC-B7, Improved NBC-B8, Improved NBC-B9, and every new model created after this contract record each retained
+mathematical certificate in generation order whenever diagnostics capture is enabled. They also record every high-frontier support
+that produces no retained certificate. Existing older models may remain aggregate-only. The reference runner stores these event
+lines in the `diagnostics` column; the one-second live display remains a compact snapshot rather than printing the potentially large
+history.
 
 Each event has the common form
 
@@ -37,6 +38,43 @@ When a high-frontier support produces no certificate, its entry deliberately has
 event=visited_support sequence=N model=MODEL n=DIMENSION frontier=high source=[I] \
 floating_checked=yes|no exact_checked=yes|no
 ```
+
+Improved NBC-B9 also records every support visited by each bounded heuristic walk:
+
+```text
+event=heuristic_walk_step sequence=N model=improved_nbc_b9 n=DIMENSION walk=W step=S frontier=ORIGIN \
+seed=[I] support=[J] arithmetic=floating|exact|floating_exact \
+floating_factorization=singleton|solved|inconclusive curvature_filter=positive_definite|positive_semidefinite|other|not_run \
+exact_factorization=singleton|nonsingular|singular|not_run exact_rank=R exact_nullity=Q \
+exact_positive_inertia=P exact_negative_inertia=M \
+exact_consistent=yes|no|not_run exact_feasible=yes|no|not_run exact_kkt=yes|no|not_run \
+exact_reduced_pd=yes|no|not_run exact_reduced_negative=yes|no|not_run exact_payoff_sign=negative|zero|positive|na \
+move=MOVE candidates=C jitter_draws=[RANKS] rejected_empty=E rejected_path=P rejected_covered=Q next=[K]|none \
+buffered_closures=B outcome=OUTCOME
+```
+
+There is exactly one such event for every visited walk support. `walk` identifies one scheduled heuristic, and `step` starts at one.
+The seed and every support are sufficient to reconstruct the path. Candidate ranks are zero-based ranks in the currently ordered
+candidate list; every retry is retained in `jitter_draws`. The rejection counters distinguish the empty support, path/cycle
+rejection, and rejection by an already certified interval. `move` records whether the transition removed a negative or zero used
+coordinate, added an outside violation, or followed a singular nullspace direction. `outcome` records continuation, exact
+continuation after a false floating KKT claim, a new or repeated KKT point, an inconclusive floating solve, exhaustion of successors,
+the $n$-step limit, or an exact negative/zero witness.
+
+The floating factorization is the reduced face-stationarity solve. `curvature_filter` is the separate floating reduced-Hessian
+screen. Whenever exact arithmetic was required, the same step records rank, nullity, positive and negative inertia counts,
+consistency, feasibility, KKT status, reduced curvature, and the sign of the exact stationary value. After the walk stops, its last
+support receives one additional record for the principal-matrix check:
+
+```text
+event=heuristic_walk_terminal_factorization sequence=N model=improved_nbc_b9 n=DIMENSION walk=W step=S \
+frontier=ORIGIN seed=[I] support=[J] matrix=principal floating_candidate=yes|no exact_checked=yes|no \
+exact_factorization=nonsingular|singular|not_run exact_rank=R|na exact_nullity=Q|na \
+exact_positive_inertia=P|na exact_negative_inertia=M|na exact_positive_definite=yes|no|not_run buffered_closures=B
+```
+
+Together with the following chronological certificate events, these records replay the complete heuristic path and show which exact
+factorizations produced retained pruning.
 
 `sequence` starts at one for the complete analyzer call and increases in the exact order these events occur, including across
 preprocessing-created component calls. Sets are sorted, one-based indices in the matrix currently delegated to the model. When

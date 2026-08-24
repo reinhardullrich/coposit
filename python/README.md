@@ -52,6 +52,9 @@ sat_b5
 nbc_b6
 nbc_b7
 improved_nbc_b7
+improved_nbc_b8
+improved_nbc_b9
+improved_nbc_g2
 sat_c1
 sat_c2
 sat_c3

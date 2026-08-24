@@ -25,6 +25,7 @@ TOKEN = re.compile(r"([a-z_]+)=(\[[^]]*\]|\S+)")
 
 COLORS = {
     "upward": "#D00000",
+    "kkt_walk": "#5B1A78",
     "dickinson": "#0066FF",
     "downward": "#FFD000",
     "uncovered": "#4FB878",
@@ -34,6 +35,7 @@ INK = "#1B1B1B"
 FLOATING_ONLY = "#8A8A8A"
 MUTED = "#696969"
 GRID = "#B8B8B2"
+CHART_TOP = 225
 
 
 @dataclass(frozen=True)
@@ -65,6 +67,8 @@ class Event:
 
     @property
     def category(self) -> str:
+        if self.frontier == "walk":
+            return "kkt_walk"
         if self.coverage == "upward":
             return "upward"
         if self.coverage == "downward":
@@ -340,8 +344,10 @@ def layer_samples(n: int, k: int, bins: int, exact: bool, samples_per_bin: int):
 
 
 def draw_legend(draw: ImageDraw.ImageDraw, x: int, y: int) -> None:
+    start_x = x
     labels = [
         ("upward", "upward pruning"),
+        ("kkt_walk", "heuristic KKT pruning"),
         ("dickinson", "Dickinson pruning"),
         ("downward", "downward pruning"),
         ("uncovered", "not covered"),
@@ -351,6 +357,7 @@ def draw_legend(draw: ImageDraw.ImageDraw, x: int, y: int) -> None:
         draw.rectangle((x, y + 4, x + 28, y + 28), fill=COLORS[category])
         draw.text((x + 40, y), label, fill=INK, font=label_font)
         x += 64 + round(draw.textlength(label, font=label_font))
+    x, y = start_x, y + 36
     for color, label in ((INK, "exact check"), (FLOATING_ONLY, "floating-only check")):
         draw.ellipse((x + 7, y + 9, x + 21, y + 23), fill=color, outline=BACKGROUND, width=2)
         draw.text((x + 40, y), label, fill=INK, font=label_font)
@@ -359,10 +366,16 @@ def draw_legend(draw: ImageDraw.ImageDraw, x: int, y: int) -> None:
 
 def draw_coverage_summary(draw: ImageDraw.ImageDraw, width: int, percentages: dict[str, float]) -> None:
     summary_x, summary_y = width - 620, 24
-    draw.rectangle((summary_x - 12, summary_y - 8, width - 68, summary_y + 124), fill=BACKGROUND)
+    draw.rectangle((summary_x - 12, summary_y - 8, width - 68, summary_y + 147), fill=BACKGROUND)
     draw.text((summary_x, summary_y), "estimated lattice coverage", fill=INK, font=font(20, True))
     for row, (category, label_text) in enumerate(
-        (("upward", "upward"), ("dickinson", "Dickinson"), ("downward", "downward"), ("uncovered", "not covered"))
+        (
+            ("upward", "upward"),
+            ("kkt_walk", "heuristic KKT"),
+            ("dickinson", "Dickinson"),
+            ("downward", "downward"),
+            ("uncovered", "not covered"),
+        )
     ):
         y = summary_y + 28 + row * 23
         draw.rectangle((summary_x, y + 2, summary_x + 18, y + 20), fill=COLORS[category])
@@ -376,7 +389,7 @@ def estimate_existing_coverage(image: Image.Image, n: int) -> dict[str, float]:
     chart_left, chart_right = 160, image.width - 280
     chart_width = chart_right - chart_left
     chart_height = max(700, min(1800, n * 27))
-    bottom = 190 + chart_height
+    bottom = CHART_TOP + chart_height
     if image.height < bottom:
         raise ValueError("image is too short for the requested support-history dimension")
     max_log = math.log2(math.comb(n, n // 2)) if n > 1 else 1
@@ -431,7 +444,7 @@ def render(events: list[Event], label: str, output: Path, exact_limit: int, samp
     chart_left, chart_right = 160, width - 280
     chart_width = chart_right - chart_left
     chart_height = max(700, min(1800, n * 27))
-    top = 190
+    top = CHART_TOP
     bottom = top + chart_height
     image = Image.new("RGB", (width, bottom + 120), BACKGROUND)
     draw = ImageDraw.Draw(image)
@@ -473,7 +486,7 @@ def render(events: list[Event], label: str, output: Path, exact_limit: int, samp
             x0 = left + pixel * pixel_width
             x1 = left + (pixel + 1) * pixel_width + 0.5
             y0 = y - band_height / 2
-            for category in ("upward", "dickinson", "downward", "uncovered"):
+            for category in ("upward", "kkt_walk", "dickinson", "downward", "uncovered"):
                 share = 0 if totals[pixel] == 0 else values[category] / totals[pixel]
                 y1 = y0 + band_height * share
                 if y1 > y0:
@@ -526,17 +539,21 @@ def self_test() -> None:
     sample = (
         "event=certificate sequence=1 model=test_model n=4 frontier=low kind=dickinson source=[1] "
         "coverage=interval lower=[1] upper=[1,2,3] exclude_empty=no floating_checked=no exact_checked=yes\n"
-        "event=certificate sequence=2 model=test_model n=4 frontier=high kind=positive_definite source=[1,2,3,4] "
-        "coverage=downward lower=[] upper=[1,2,3,4] exclude_empty=yes floating_checked=yes exact_checked=yes\n"
-        "event=visited_support sequence=3 model=test_model n=4 frontier=high source=[2,3,4] "
+        "event=certificate sequence=2 model=test_model n=4 frontier=high kind=positive_definite source=[1,2,3] "
+        "coverage=downward lower=[] upper=[1,2,3] exclude_empty=yes floating_checked=yes exact_checked=yes\n"
+        "event=certificate sequence=3 model=test_model n=4 frontier=walk kind=walk_negative_curvature source=[4] "
+        "coverage=upward lower=[4] upper=all exclude_empty=no floating_checked=yes exact_checked=yes\n"
+        "event=visited_support sequence=4 model=test_model n=4 frontier=high source=[2,3,4] "
         "floating_checked=yes exact_checked=no\n"
     )
     events = parse_events(sample)
-    assert len(events) == 3 and events[0].model == "test_model" and events[0].covers(1) and not events[0].covers(8)
+    assert len(events) == 4 and events[0].model == "test_model" and events[0].covers(1) and not events[0].covers(8)
     assert classify(0, events) == "uncovered"
     assert events[0].exact_checked and not events[0].floating_checked
     assert events[1].exact_checked and events[1].floating_checked
-    assert events[2].floating_checked and not events[2].exact_checked
+    assert events[2].floating_checked and events[2].exact_checked
+    assert events[3].floating_checked and not events[3].exact_checked
+    assert events[2].category == "kkt_walk" and classify(8, events) == "kkt_walk"
     assert total_count(1_000_000) == "1,000,000" and total_count(5_200_300) == "5.2×10^6"
     for n in range(1, 8):
         for k in range(n + 1):
@@ -556,6 +573,7 @@ def self_test() -> None:
         assert load_stored_diagnostics(7, "test_model", None, "both", "on", database) == sample
         output = Path(directory) / "test.jpg"
         result = render(events, "self-test", output, exact_limit=1_000, samples_per_bin=3)
+        assert result["coverage_percentages"]["kkt_walk"] > 0
         with Image.open(output) as image:
             assert image.format == "JPEG" and image.width == 2400
         percentages = result["coverage_percentages"]

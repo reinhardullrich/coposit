@@ -2,6 +2,72 @@
 
 This append-only file records meaningful decisions, results, and evidence that are not clear from Git. Do not log routine edits here.
 
+## 2026-08-24 — Combined results refresh corpus truth and fastest timings
+
+- Promoted 13 previously unknown matrices to strictly copositive from unanimous successful exact `both` results: 12695, 13249,
+  13250, 13267, 13269, 13299, 13310, 13375, 13380, 13382, 13384, 13389, and 15392. Evidence came from completed Improved NBC-B7
+  and Improved NBC-G2 rows; no model was rerun. The corpus now has 1,497 strict, 1,526 boundary, 2,718 non-copositive, and 93 unknown
+  matrices.
+- Recomputed the fastest native nanosecond and exact result-reference fields from all successful `both` rows agreeing with current
+  truth. The cache covers 5,700 matrices and changed 43 rows. Every reference resolves to its diagnostic result; foreign keys pass
+  and SQLite integrity is `ok`. The guarded migration is
+  `testdata/archive/refresh_truth_and_fastest_from_combined_results_2026_08_24.sql`.
+
+## 2026-08-24 — Improved NBC-G2 adds a cheap closed-cone extension
+
+- Added `improved_nbc_g2` as an independent copy of Improved NBC-B7. After its exact Halfspace-Rays search, it tests every omitted
+  index for a nonnegative right-hand side that preserves the current upper endpoint and adds that index. Floating point only
+  proposes a point; integer reconstruction and every certificate or witness check remain exact.
+- Removed the preliminary two-millisecond internal deadline. Each target feasibility problem now runs to completion; termination is
+  deterministic because a failed full target sweep stops and every successful sweep strictly enlarges the finite upper endpoint.
+- A focused boundary case proves that the new stage finds an endpoint unavailable to strictly positive right-hand sides. The full
+  108-test Release suite passes.
+- On the six-matrix BPQY Quick Test with combined classification, complete preprocessing, diagnostics, and a 120-second cutoff, both
+  models solved all six correctly. G2 won five matrices and lost one: its median per-matrix relative time change was -5.90%, and its
+  summed native time fell from 104.290 to 97.589 seconds (-6.43%). Processed supports fell from 137,426 to 130,940 (-4.72%). The
+  experiment deliberately uses a bounded numerical proposer, not an exact global optimization over right-hand sides.
+- A fresh five-second Core-and-Stress comparison found no general gain. B7 and G2 each completed the same 436 of 469 matrices and
+  timed out on the same 33, with no mismatch or execution error. Their four-worker campaign wall times were 71.839 and 71.783
+  seconds. Across the 436 paired completions, G2's median relative time change was +0.20%, while summed completed native time changed
+  from 110.426 to 110.029 seconds (-0.36%). It changed the traversal on only 23 inputs and reduced aggregate processed supports from
+  72,676 to 72,611 (-0.09%). The strong six-matrix BPQY effect therefore does not generalize to this mixed corpus.
+- On the complete 404-matrix BPQY Benchmark with a 180-second cutoff, combined classification, preprocessing, and diagnostics, G2
+  completed 308 matrices and timed out on 96 in 2,511.582 seconds wall time using eight workers. It completed all 298 matrices with
+  existing truth and matched every one. It also exactly classified ten previously unclassified matrices as strictly copositive:
+  13249, 13269, 13299, 13310, 13375, 13380, 13382, 13389, 12695, and 15392. There were no errors or mismatches.
+- Compared with the stored complete 180-second Improved NBC-B7 campaign, G2 gained matrices 13382 and 13389 but lost 13250, 13267,
+  and 13384: 308 versus 309 completions, with 306 common completions and 93 common timeouts. Compared with the stored SAT-B3
+  campaign, G2 gained 14 completions and lost none: 308 versus 294 completions, with 294 common completions and 96 common timeouts.
+
+## 2026-08-24 — Improved NBC-B9 backoff now measures KKT endpoints
+
+- A walk now resets its scheduling gap to $n$ only when it ends at an exactly verified KKT point. Exact curvature certificates from
+  a non-KKT walk remain active, but the next gap still doubles. The seed that triggered a walk is no longer counted toward the next
+  gap. This corrects the 180-second BPQY traces in which thousands of dead-end walks continually reset the nominal exponential
+  backoff merely because they contributed another overlapping interval.
+
+## 2026-08-24 — Improved NBC-B9 adds exact no-hiding active-set walks
+
+- Added `improved_nbc_b9` as an independent Improved NBC-B7 copy with bounded, reproducibly jittered KKT walks and exponential
+  backoff. Floating point chooses candidate moves only; a false floating KKT endpoint switches the remainder of that walk to exact
+  arithmetic.
+- Walk certificates are buffered until the walk stops. They are admitted only by the exact no-hiding table: a negative eigenvalue
+  of the reduced Hessian gives a full upward closure; a positive-definite reduced Hessian plus a feasible nonnegative face minimum,
+  or a positive-definite principal block at the endpoint, gives a full downward closure. Flat reduced curvature adds no walk closure.
+- The selected B7 seed is processed once before its walk. Its ordinary certificate is deferred until the walk ends, so it cannot
+  block its own path and the solver no longer returns to process the same seed a second time.
+- Diagnostics now retain every heuristic support and transition, including factorization outcomes, exact rank, nullity and inertia,
+  jitter draws, path and coverage rejections, the chosen successor, stopping reason, and the final principal-matrix check.
+- The focused B9 checks and the complete 107-test Release suite passed. Fresh five-second combined runs with preprocessing solved all
+  46 smoke matrices and 436 of 469 core-and-stress matrices; the remaining 33 timed out, with no wrong classification or execution error.
+
+## 2026-08-23 — Improved NBC-B8 isolates the upward-only B7 path
+
+- Added `improved_nbc_b8` as an independent Improved NBC-B7 copy with the high-cardinality traversal, floating high-frontier filter,
+  and all downward pruning removed. It retains ascending exact curvature pruning, Halfspace-Rays Dickinson intervals, resumable
+  one-support NBC enumeration, cardinality-boundary compaction, and combined CP/SCP classification.
+- The focused regression test requires an entirely ascending event history with no high-frontier visit and no downward certificate.
+
 ## 2026-08-23 — BPQY benchmark owns its preprocessing exclusion
 
 - Moved `preprocessing_solved = 0` into the generated `bpqy_benchmark` definition instead of relying only on the named-set runner.

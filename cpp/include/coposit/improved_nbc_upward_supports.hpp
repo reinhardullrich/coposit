@@ -30,6 +30,8 @@ public:
     void commit_frontiers(size_t first_remaining_cardinality, size_t last_remaining_cardinality);
 
     size_t interval_count() const noexcept;
+    bool covers(const support& candidate) const;
+    bool covers_interval(const support& lower, const support& upper) const;
     bool all_future_covered() const noexcept;
 
 private:

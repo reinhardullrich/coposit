@@ -12,7 +12,7 @@ coposit is licensed under GPL-3.0-or-later.
 | GoogleTest 1.14.0 | Test-only dependency fetched by CMake | BSD-3-Clause | <https://github.com/google/googletest/tree/v1.14.0> |
 | CaDiCaL 2.2.1 | Incremental SAT engine for the `sat_dickinson` experiment | MIT | <https://github.com/arminbiere/cadical/tree/rel-2.2.1> |
 | NBC MiniSat All 1.0.2 | Boolean support enumeration for `nbc_b6` and `nbc_b7` | MIT | <https://www.sd.is.uec.ac.jp/toda/code/nbc_minisat_all.html> |
-| Improved NBC MiniSat All derivative | Resumable Boolean support enumeration for `improved_nbc_b7` | MIT | Derived locally from NBC MiniSat All 1.0.2 |
+| Improved NBC MiniSat All derivative | Resumable Boolean support enumeration for `improved_nbc_b7`, `improved_nbc_b8`, and `improved_nbc_b9` | MIT | Derived locally from NBC MiniSat All 1.0.2 |
 | clingo 5.8.2 with clasp 3.4.1 | Backtracking support enumeration for `clasp_b3`, `clingo_dickinson`, and `clingo_halfspace_dickinson` | MIT | <https://github.com/potassco/clingo/tree/v5.8.2> |
 | Open MCS | MCS maximum-clique search adapted for the Motzkin--Straus pre-check | GPL-3.0-or-later | <https://github.com/darrenstrash/open-mcs/tree/735788af066fc8589f577036af521f22f45c2731> |
 

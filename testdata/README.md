@@ -7,11 +7,11 @@ measurements remain in the ignored local `experiments/diagnostics.sqlite3` datab
 
 - Matrices: 5,834
 - Dimensions: 1 through 5,000
-- Strictly copositive: 1,484
+- Strictly copositive: 1,497
 - Copositive but not strictly copositive: 1,526
 - Not copositive: 2,718
 - Copositive with strict status not yet established: 0
-- Strict and non-strict copositivity not yet established: 106
+- Strict and non-strict copositivity not yet established: 93
 - Schema: the `sources` and `matrices` tables, with no views, triggers, or manually created indexes
 
 The maintained directory contains this database, its `schema.sql`, the reproducible `diagnostics_schema.sql`, this README, and the

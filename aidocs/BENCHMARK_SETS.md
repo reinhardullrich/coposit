@@ -9,9 +9,9 @@ its matrix row or expected classification.
 |---|---:|---:|---:|---:|---:|---:|---|
 | `smoke_set` | 46 | 4–15 | 20 | 26 | 0 | 0 | Fast correctness and integration checks |
 | `core_and_stress_test` | 469 | 4–3,361 | 215 | 245 | 9 | 0 | Routine comparisons and difficult model-search cases |
-| `n_le_100` | 920 | 4–100 | 505 | 309 | 0 | 106 | Every matrix of order at most 100 not solved by preprocessing |
+| `n_le_100` | 920 | 4–100 | 518 | 309 | 0 | 93 | Every matrix of order at most 100 not solved by preprocessing |
 | `n_gt_100_solved` | 0 | — | 0 | 0 | 0 | 0 | Higher-order literature-solved matrices not solved by preprocessing |
-| `bpqy_benchmark` | 404 | 10–60 | 298 | 0 | 0 | 106 | BPQY COP exact lifts that are strict or still unknown |
+| `bpqy_benchmark` | 404 | 10–60 | 311 | 0 | 0 | 93 | BPQY COP exact lifts that are strict or still unknown |
 | `bpqy_quick_test` | 6 | 30–60 | 6 | 0 | 0 | 0 | Short, medium-duration SAT-B3 development panel |
 
 All six sets exclude `preprocessing_solved = 1` when selected by the benchmark runner: a benchmark member must reach the selected
@@ -24,8 +24,8 @@ two dimension-generated sets are disjoint by definition.
 
 `bpqy_benchmark` is generated from source 51's normalized `BPQY COP ...` family rows. It contains every exact COP construction that
 is not already preprocessing-complete and is either strictly copositive or still has both truth fields unknown. Known non-copositive,
-copositive-boundary, and preprocessing-complete lifts are excluded. The generated flag contains the 404 rows shown above: 298 strict
-and 106 unknown. Because the flag is generated, later exact classifications and preprocessing decisions automatically update
+copositive-boundary, and preprocessing-complete lifts are excluded. The generated flag contains the 404 rows shown above: 311 strict
+and 93 unknown. Because the flag is generated, later exact classifications and preprocessing decisions automatically update
 membership without a manual refresh.
 
 Select it with `python/run_results.py MODEL --matrix-set bpqy_benchmark ...`.

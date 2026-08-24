@@ -19,7 +19,7 @@ of the support lattice:
 4. **Dickinson reuses one first-order vector across many supports.** Its interval is limited by the responses of the unused
    coordinates.
 5. **Full-simplex Karush--Kuhn--Tucker (KKT) information joins the two views.** Face stationarity concerns only used coordinates;
-   the outside KKT inequalities are exactly what can push a Dickinson certificate all the way to the full ceiling.
+   the outside KKT inequalities are one sufficient route for pushing a Dickinson certificate all the way to the full ceiling.
 
 The emphasis throughout is intuition first, proof second. The proofs matter because every pruning step must preserve the final
 copositivity decision, but the recurring mental picture is simpler: supports are faces, curvature describes their shape, the
@@ -56,6 +56,88 @@ caused negative curvature. Adding indices does the opposite: it preserves every 
 those new directions may be flat or negative. Thus bad curvature, once present, persists upward, whereas positive-semidefinite
 curvature, once established, persists downward. Bad curvature need not persist downward, and positive definiteness need not persist
 upward.
+
+### **The two strict-curvature pruning directions cannot hide each other**
+
+> **POSITIVE-DEFINITE DOWNWARD PRUNING CANNOT HIDE A CURVATURE-UPWARD CERTIFICATE.**
+>
+> **CURVATURE-UPWARD PRUNING CANNOT HIDE A POSITIVE-DEFINITE DOWNWARD CERTIFICATE.**
+
+The first statement follows because $A_I\succ0$ implies $A_J\succ0$ for every nonempty $J\subseteq I$. Every direction on the
+smaller face is also a direction inside the larger principal space, so none of the downward-pruned supports can contain a flat or
+negative tangent direction. Consequently none could have supplied the curvature failure required for full upward pruning.
+
+For the reverse statement, suppose curvature-upward pruning starts at $I$. Then some nonzero simplex-tangent direction $v$ satisfies
+
+$$
+v^T A_Iv\leq0.
+$$
+
+For every $J\supseteq I$, extend $v$ by zeros on $J\setminus I$. The same direction still has nonpositive curvature, so
+$A_J\not\succ0$. Therefore none of the upward-pruned supports could have supplied a positive-definite downward certificate.
+
+The intuition is that the two strict-curvature rules move in opposite hereditary directions. Positive definiteness flows downward
+through principal submatrices, while one flat or negative direction flows upward by zero extension. Their two pruning cones cannot
+conceal a certificate of the opposite strict-curvature kind.
+
+This non-hiding statement is deliberately narrow. A positive-definite face can still satisfy the full outside KKT inequalities and
+therefore supply a full-ceiling Dickinson certificate. Positive-definite downward pruning can hide that **KKT/Dickinson** opportunity,
+because outside first-order inequalities are not curvature information. Likewise, a downward rule based only on singular positive
+semidefiniteness is not a positive-definite rule and may coexist with failed strict convexity. The guarantee above concerns exactly
+positive-definite downward pruning versus curvature-upward pruning.
+
+### **The stricter no-hiding rule used by an opportunistic walk**
+
+The general curvature theorem permits upward pruning as soon as the reduced Hessian is not positive definite. That includes a flat
+zero eigenvalue. The general downward theorem also permits some singular positive-semidefinite cases. Both are valid pruning rules,
+but they are not benign search-order rules: a flat upward closure can hide a larger singular-PSD downward certificate, and a singular
+downward closure can hide a smaller flat upward root.
+
+If a heuristic walk is allowed to prune only when it cannot hide either kind of curvature opportunity, the tests must be strict in
+opposite directions. Let $Z$ have columns spanning
+
+$$
+\mathcal T_I=\{d:\mathbf1^Td=0\},
+$$
+
+and let $H_I=Z^TA_IZ$ be the reduced Hessian. “A negative eigenvalue” below always means an eigenvalue of $H_I$, not merely an
+eigenvalue of $A_I$.
+
+> **ONE NEGATIVE EIGENVALUE OF $H_I$ IS ENOUGH FOR BENIGN UPWARD PRUNING.**
+>
+> **POSITIVE DEFINITENESS OF $H_I$, TOGETHER WITH A VERIFIED NONNEGATIVE FACE MINIMUM, IS ENOUGH FOR BENIGN DOWNWARD PRUNING.**
+>
+> **POSITIVE DEFINITENESS OF $A_I$ IS ENOUGH FOR BENIGN DOWNWARD PRUNING EVEN WITHOUT STATIONARITY.**
+
+The first rule includes an indefinite reduced Hessian: only one strictly negative direction is needed. Extending that direction by
+zeros preserves strict negativity in every superset, so no larger support can be positive semidefinite and no downward curvature
+certificate can be hidden. By contrast, a negative eigenvalue of the principal matrix $A_I$ alone is insufficient; its negative
+direction may fail the tangent constraint $\mathbf1^Td=0$ while $H_I$ remains positive definite.
+
+For the second rule, solve the face-stationarity equations exactly. If the resulting point $x$ is feasible on the face,
+$H_I\succ0$, and $\lambda=x^TA_Ix\geq0$, strict convexity makes $x$ the unique face minimum. Every subface is then safe. Because
+positive definiteness of the reduced Hessian is inherited by subfaces, the downward closure cannot hide a flat or negative
+curvature root below it. The third rule is even simpler: $A_I\succ0$ is inherited by every principal submatrix and proves positive
+quadratic value directly.
+
+The final benign decision table is therefore:
+
+| Exact situation at support $I$ | Action of the no-hiding heuristic | Why nothing of the opposite curvature type is hidden |
+|---|---|---|
+| A feasible exact point has $x^TA_Ix<0$ | Stop: $A$ is not copositive | This is a witness, not pruning. |
+| A feasible exact point has $x^TA_Ix=0$ | Record “not strictly copositive”; continue ordinary CP work if needed | This is an exact zero witness. |
+| $H_I$ has at least one negative eigenvalue | Prune every superset: $[I,[n]]$ | The same strictly negative tangent direction survives in every superset, so none can supply a PSD or PD downward certificate. |
+| $H_I\succ0$, the exact face-stationary point is feasible, and its value is nonnegative | Prune every subset: $[\varnothing,I]$ | Every subface retains positive-definite tangent curvature, so none can supply a flat or negative upward root. |
+| $A_I\succ0$, even when the walk stopped without a stationary or KKT point | Prune every subset: $[\varnothing,I]$ | Every principal submatrix of a positive-definite matrix is positive definite. |
+| $H_I\succeq0$ is singular, or the exact conditions above otherwise fail | Add no heuristic closure | The pruning may still be mathematically valid with extra assumptions, but it can hide an opposite useful curvature certificate. |
+
+Whether the endpoint satisfies the outside KKT inequalities does not enlarge this table. A full KKT point may yield a valid upward
+Dickinson certificate, but that certificate can hide later curvature opportunities. A walk whose contract is “nothing gets hidden”
+therefore uses KKT information to recognize its endpoint and exact value, not as an additional pruning permission.
+
+Intuitively, this policy keeps only irreversible curvature information. Strict negativity can never be repaired by adding
+coordinates; strict positivity can never be destroyed by removing coordinates. Flatness sits exactly on the boundary between those
+two one-way facts, so the heuristic leaves it to the ordinary complete algorithm.
 
 This gives the two pruning combinations to remember. Let $x$ lie in the relative interior of the face indexed by $I$, and let
 $\lambda=x^TAx$.
@@ -1033,6 +1115,82 @@ Intuitively, every unused coordinate is a closed door. The outside inequality ch
 mass into coordinate $j$ can improve the objective to first order. Thus a full-simplex KKT point does not look outside the
 simplex, but it does inspect every direction from the current face into a larger face.
 
+### Three different response sets: equality, KKT compatibility, and Dickinson
+
+The game-theoretic extended support, the set of coordinates compatible with the KKT inequality, and Dickinson's upper endpoint are
+three different objects. They coincide only in special cases.
+
+Let $x\in\operatorname{relint}(\Delta_I)$ be face-stationary for the minimization problem, with
+
+$$
+A_Ix_I=\lambda\mathbf1,
+\qquad
+\lambda=x^TAx>0.
+$$
+
+The **equality set** is
+
+$$
+E_\lambda(x)=\{j:(Ax)_j=\lambda\}.
+$$
+
+It contains the used support $I$. When $x$ satisfies the full-simplex KKT conditions, this equality set is the genuine extended
+support: its unused members are precisely the outside coordinates tied with the used coordinates at the same first-order value.
+
+For minimization, the larger **KKT-compatible set** is
+
+$$
+K_\lambda(x)=\{j:(Ax)_j\geq\lambda\}.
+$$
+
+An outside coordinate in this set cannot improve the objective to first order. Equality means a tie; strict inequality means that
+moving mass into that coordinate is locally worse. Full-simplex KKT requires every coordinate to belong to $K_\lambda(x)$.
+
+Dickinson instead uses the absolute zero threshold
+
+$$
+N_A(x)=\{j:(Ax)_j\geq0\}.
+$$
+
+Because $\lambda>0$, these sets satisfy
+
+$$
+\boxed{
+E_\lambda(x)
+\subseteq
+K_\lambda(x)
+\subseteq
+N_A(x).
+}
+$$
+
+For the all-ones normalization, put $u=x/\lambda$. Then $A_Iu_I=\mathbf1$, and the same comparison becomes
+
+$$
+\underbrace{\{j:(Au)_j=1\}}_{\text{genuine extended support when full KKT holds}}
+\subseteq
+\underbrace{\{j:(Au)_j\geq1\}}_{\text{KKT-compatible for minimization}}
+\subseteq
+\underbrace{\{j:(Au)_j\geq0\}}_{\text{Dickinson upper endpoint}}.
+$$
+
+The intuition is that the three thresholds ask progressively weaker questions. Equality asks which coordinates are exact ties. The
+KKT inequality asks which coordinates are no better than the current point. Dickinson asks only on which coordinates the product
+remains nonnegative. In particular, the band
+
+$$
+0\leq(Au)_j<1
+$$
+
+is accepted by Dickinson even though it violates the minimization KKT inequality. Therefore Dickinson's upper endpoint should not
+be called an extended support without qualification. It is a **nonnegative-response set**, and it can reach $[n]$ even when the
+candidate is not a full-simplex KKT point. For maximization the outside KKT inequality reverses, but genuine extended support still
+means equality with the common active value.
+
+*Literature.* Equality-based extended support is standard in evolutionary game theory; see I. M. Bomze, “Detecting all
+evolutionarily stable strategies,” Proposition 2.1 and the surrounding definitions. Dickinson's nonnegative-product set and its
+Boolean-interval role come from Theorem 4.6 of his 2019 paper.
+
 ### Why full KKT reaches the Dickinson ceiling
 
 For an embedded vector $u\in\mathbb R^n$, define its nonnegative-product set
@@ -1890,6 +2048,8 @@ it.
   [DOI 10.1016/0024-3795(83)90095-2](https://doi.org/10.1016/0024-3795(83)90095-2)
 - Peter J. C. Dickinson, “A new certificate for copositivity,” *Linear Algebra and its Applications* 569 (2019), 15–37.
   [DOI 10.1016/j.laa.2018.12.025](https://doi.org/10.1016/j.laa.2018.12.025)
+- Immanuel M. Bomze, “Detecting all evolutionarily stable strategies,” *Journal of Optimization Theory and Applications* 75
+  (1992), 313–329. [DOI 10.1007/BF00941470](https://doi.org/10.1007/BF00941470)
 - Andrea Scozzari and Fabio Tardella, “A clique algorithm for standard quadratic programming,” *Discrete Applied Mathematics* 156
   (2008), 2439–2448. [DOI 10.1016/j.dam.2007.09.020](https://doi.org/10.1016/j.dam.2007.09.020)
 - S.-P. Han and O. Fujiwara, “An inertia theorem for symmetric matrices and its application to nonlinear programming,” *Linear

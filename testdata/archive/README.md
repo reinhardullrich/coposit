@@ -17,6 +17,8 @@ runtime.
   results without clearing earlier long-timeout flags, and verifies the fastest-result cache against every eligible combined run.
 - `refresh_truth_and_fastest_after_xxx_2026_08_18.sql` adds the two later unanimous XXX classifications, verifies the additive
   preprocessing flags, and refreshes only the two fastest-result fields from exact combined diagnostics.
+- `refresh_truth_and_fastest_from_combined_results_2026_08_24.sql` adds 13 unanimous combined classifications from completed B7/G2
+  evidence and refreshes the fastest-result fields from every eligible exact combined diagnostic row.
 - `record_preprocessing_times_2026_08_18.sql` imports the 36 retained complete depth-2 preprocessing outcomes that predate central
   capture, then makes every preprocessing-complete matrix's timing fields point to its shortest exact preprocessing decision.
 - `reshape_generated_stress_2026_08_15.py` removes the 120 sparse/dense generated stress matrices above order 1,000, their dependent

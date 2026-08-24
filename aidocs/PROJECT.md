@@ -1,6 +1,6 @@
 # coposit Project Overview
 
-Last verified: 2026-08-23
+Last verified: 2026-08-24
 
 ## Purpose And Contract
 
@@ -16,7 +16,7 @@ reported as `false`.
 
 The eight literature baselines, `adaptive_sponsel_copomatrix`, `dense_bitset_dickinson`, all CBDD Dickinson
 variants, `ceiling_pruned_dickinson`, `layered_singular_lift_dickinson`, `breadth_first_singular_lift_dickinson`, `sat_dickinson`,
-`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_b1`, `sat_b2`, `sat_b3`, `sat_b4`, `sat_b5`, `nbc_b6`, `nbc_b7`, `improved_nbc_b7`, `sat_c1`, `sat_c2`,
+`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_b1`, `sat_b2`, `sat_b3`, `sat_b4`, `sat_b5`, `nbc_b6`, `nbc_b7`, `improved_nbc_b7`, `improved_nbc_b8`, `improved_nbc_b9`, `improved_nbc_g2`, `sat_c1`, `sat_c2`,
 `sat_c3`, `sat_c4`, `f1`, `f2`, `g1`, `sat_a1`, `sat_a2`, `sat_a3`, `sat_a4`, `sat_a5`, `sat_halfspace_lp_dickinson`, `sat_halfspace_milp_dickinson`,
 `sat_halfspace_rays_lookahead_dickinson`,
 `sat_halfspace_rays_wide_dickinson`, `cbdd_halfspace_dickinson`,
@@ -27,7 +27,7 @@ Hadeler 1983, Dickinson 2019, Dense-Bitset Dickinson, Danninger 1990, all CBDD D
 Ceiling-Pruned Dickinson, Kernel-Cone Dickinson, Layered Singular-Lift Dickinson, SAT Dickinson, SAT-Halfspace Dickinson,
 SAT-Halfspace-Rays Dickinson, SAT-Halfspace-LP Dickinson, SAT-Halfspace-MILP Dickinson,
 SAT-B1, SAT-A1, SAT-A2, SAT-A3, SAT-A5,
-SAT-B2, SAT-B3, NBC-B7,
+SAT-B2, SAT-B3, NBC-B7, Improved NBC-B7, Improved NBC-B8, Improved NBC-B9, Improved NBC-G2,
 SAT-C3, SAT-C4, F1, F2, G1,
 SAT-Halfspace-Rays Lookahead Dickinson, SAT-Halfspace-Rays Wide Dickinson,
 Wide-Certificate SAT Dickinson,
@@ -231,6 +231,9 @@ Their canonical source directories and compact lineage inventory are under
 | `nbc_b6` | SAT-B3's ascending upward-curvature and Halfspace-Rays path, using NBC MiniSat All to enumerate one full cardinality before compacting and activating its certificates; [`ALGORITHM.md`](../models/hadeler-based/nbc_b6/ALGORITHM.md). |
 | `nbc_b7` | SAT-B3's alternating low/high traversal and exact downward pruning with a persistent NBC MiniSat All Boolean backend; [`ALGORITHM.md`](../models/hadeler-based/nbc_b7/ALGORITHM.md). |
 | `improved_nbc_b7` | NBC-B7 with a separately maintained, genuinely resumable Improved NBC backend and permanent root-inconsistency detection; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_b7/ALGORITHM.md). |
+| `improved_nbc_b8` | Improved NBC-B7 without its high frontier or downward pruning: ascending exact upward-curvature and Halfspace-Rays Dickinson pruning only; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_b8/ALGORITHM.md). |
+| `improved_nbc_b9` | Improved NBC-B7 plus bounded, reproducibly jittered KKT walks that add only exactly verified no-hiding curvature closures; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_b9/ALGORITHM.md). |
+| `improved_nbc_g2` | Improved NBC-B7 plus a bounded closed-cone right-hand-side extension after Halfspace-Rays, with exact reconstruction and verification; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_g2/ALGORITHM.md). |
 | `sat_c1` | SAT-B3 plus a heuristic-gated exact tangent Schur-residual search for curvature-bad supports hidden inside Dickinson intervals; [`ALGORITHM.md`](../models/hadeler-based/sat_c1/ALGORITHM.md). |
 | `sat_c2` | SAT-C1 plus bounded SAT-aware stationary-face walks, buffered exact curvature closures, and one fixed low/high alternating schedule; [`ALGORITHM.md`](../models/hadeler-based/sat_c2/ALGORITHM.md). |
 | `sat_c3` | FracESSA-style ascending generator retaining only exact full-upward curvature and full-ceiling Dickinson roots; [`ALGORITHM.md`](../models/hadeler-based/sat_c3/ALGORITHM.md). |

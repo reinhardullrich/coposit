@@ -233,6 +233,27 @@ public:
     }
 
     size_t interval_count() const noexcept { return active_.size() + pending_.size(); }
+
+    bool covers(const support& candidate) const
+    {
+        if (candidate.dimension() != dimension_) throw std::invalid_argument("Improved NBC support dimension mismatch");
+        const auto covered = [&](const interval& certificate) {
+            return certificate.lower.is_subset_of(candidate) && candidate.is_subset_of(certificate.upper);
+        };
+        return all_future_covered_ || std::any_of(active_.begin(), active_.end(), covered)
+            || std::any_of(pending_.begin(), pending_.end(), covered);
+    }
+
+    bool covers_interval(const support& lower, const support& upper) const
+    {
+        if (lower.dimension() != dimension_ || upper.dimension() != dimension_ || !lower.is_subset_of(upper))
+            throw std::invalid_argument("invalid Improved NBC support interval");
+        const interval candidate{lower, upper, lower.cardinality(), upper.cardinality()};
+        const auto covered = [&](const interval& certificate) { return contains(certificate, candidate); };
+        return all_future_covered_ || std::any_of(active_.begin(), active_.end(), covered)
+            || std::any_of(pending_.begin(), pending_.end(), covered);
+    }
+
     bool all_future_covered() const noexcept { return all_future_covered_; }
 
 private:
@@ -553,6 +574,11 @@ void improved_nbc_upward_supports::commit_frontiers(size_t first_remaining_cardi
     impl_->commit_frontiers(first_remaining_cardinality, last_remaining_cardinality);
 }
 size_t improved_nbc_upward_supports::interval_count() const noexcept { return impl_->interval_count(); }
+bool improved_nbc_upward_supports::covers(const support& candidate) const { return impl_->covers(candidate); }
+bool improved_nbc_upward_supports::covers_interval(const support& lower, const support& upper) const
+{
+    return impl_->covers_interval(lower, upper);
+}
 bool improved_nbc_upward_supports::all_future_covered() const noexcept { return impl_->all_future_covered(); }
 
 } // namespace coposit
