@@ -67,11 +67,7 @@ exact combination or its ceiling-only retention policy.
 
 ## Notation
 
-Let $A\in\mathbb Z^{n\times n}$ be the nonempty symmetric input and let
-
-$$
-[n]=\{1,\ldots,n\}.
-$$
+Let $A\in\mathbb Z^{n\times n}$ be the nonempty symmetric input.
 
 For a vector $u\in\mathbb R^n$, define
 

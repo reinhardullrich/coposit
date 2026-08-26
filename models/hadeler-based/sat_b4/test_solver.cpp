@@ -178,16 +178,17 @@ TEST(SatB4Test, FloatingRejectionsRemainVisibleToTheExactLowFrontier)
 TEST(SatB4Test, BuildsAnExactDickinsonIntervalOnTheLowPath)
 {
     const matrix_integer matrix = symmetric_matrix(3, {1, 1, 0, 1, 0, 1});
-    support lower(3);
-    support upper(3);
+    support_context context(3);
+    support lower = context.make();
+    support upper = context.make();
 
     EXPECT_TRUE(model::sat_b4_certificate_for_testing(matrix, {0}, lower, upper));
-    EXPECT_TRUE(lower.contains(0));
-    EXPECT_FALSE(lower.contains(1));
-    EXPECT_FALSE(lower.contains(2));
-    EXPECT_TRUE(upper.contains(0));
-    EXPECT_TRUE(upper.contains(1));
-    EXPECT_TRUE(upper.contains(2));
+    EXPECT_TRUE(context.contains(lower, 0));
+    EXPECT_FALSE(context.contains(lower, 1));
+    EXPECT_FALSE(context.contains(lower, 2));
+    EXPECT_TRUE(context.contains(upper, 0));
+    EXPECT_TRUE(context.contains(upper, 1));
+    EXPECT_TRUE(context.contains(upper, 2));
 }
 
 TEST(SatB4Test, RetainsTheExactHalfspaceRayOptimization)

@@ -22,11 +22,7 @@ $$
 A\in\mathbb Z^{n\times n}
 $$
 
-be symmetric, and write
-
-$$
-[n]=\{1,\ldots,n\}.
-$$
+be symmetric.
 
 For an index set $I\subseteq[n]$, let $A_I$ denote the principal submatrix with rows and columns indexed by $I$.
 

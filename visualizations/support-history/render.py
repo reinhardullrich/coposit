@@ -25,7 +25,6 @@ TOKEN = re.compile(r"([a-z_]+)=(\[[^]]*\]|\S+)")
 
 COLORS = {
     "upward": "#D00000",
-    "kkt_walk": "#5B1A78",
     "dickinson": "#0066FF",
     "downward": "#FFD000",
     "uncovered": "#4FB878",
@@ -35,7 +34,12 @@ INK = "#1B1B1B"
 FLOATING_ONLY = "#8A8A8A"
 MUTED = "#696969"
 GRID = "#B8B8B2"
-CHART_TOP = 225
+CANVAS_WIDTH = 1920
+CANVAS_HEIGHT = 1080
+CHART_LEFT = 130
+CHART_RIGHT_MARGIN = 230
+CHART_TOP = 205
+CHART_BOTTOM_MARGIN = 100
 
 
 @dataclass(frozen=True)
@@ -67,8 +71,6 @@ class Event:
 
     @property
     def category(self) -> str:
-        if self.frontier == "walk":
-            return "kkt_walk"
         if self.coverage == "upward":
             return "upward"
         if self.coverage == "downward":
@@ -347,48 +349,46 @@ def draw_legend(draw: ImageDraw.ImageDraw, x: int, y: int) -> None:
     start_x = x
     labels = [
         ("upward", "upward pruning"),
-        ("kkt_walk", "heuristic KKT pruning"),
         ("dickinson", "Dickinson pruning"),
         ("downward", "downward pruning"),
         ("uncovered", "not covered"),
     ]
-    label_font = font(24)
+    label_font = font(20)
     for category, label in labels:
-        draw.rectangle((x, y + 4, x + 28, y + 28), fill=COLORS[category])
-        draw.text((x + 40, y), label, fill=INK, font=label_font)
-        x += 64 + round(draw.textlength(label, font=label_font))
-    x, y = start_x, y + 36
+        draw.rectangle((x, y + 3, x + 24, y + 24), fill=COLORS[category])
+        draw.text((x + 34, y), label, fill=INK, font=label_font)
+        x += 54 + round(draw.textlength(label, font=label_font))
+    x, y = start_x, y + 30
     for color, label in ((INK, "exact check"), (FLOATING_ONLY, "floating-only check")):
-        draw.ellipse((x + 7, y + 9, x + 21, y + 23), fill=color, outline=BACKGROUND, width=2)
-        draw.text((x + 40, y), label, fill=INK, font=label_font)
-        x += 64 + round(draw.textlength(label, font=label_font))
+        draw.ellipse((x + 5, y + 7, x + 19, y + 21), fill=color, outline=BACKGROUND, width=2)
+        draw.text((x + 34, y), label, fill=INK, font=label_font)
+        x += 54 + round(draw.textlength(label, font=label_font))
 
 
 def draw_coverage_summary(draw: ImageDraw.ImageDraw, width: int, percentages: dict[str, float]) -> None:
-    summary_x, summary_y = width - 620, 24
-    draw.rectangle((summary_x - 12, summary_y - 8, width - 68, summary_y + 147), fill=BACKGROUND)
-    draw.text((summary_x, summary_y), "estimated lattice coverage", fill=INK, font=font(20, True))
+    summary_x, summary_y = width - 480, 20
+    draw.rectangle((summary_x - 10, summary_y - 6, width - 48, summary_y + 132), fill=BACKGROUND)
+    draw.text((summary_x, summary_y), "estimated lattice coverage", fill=INK, font=font(18, True))
     for row, (category, label_text) in enumerate(
         (
             ("upward", "upward"),
-            ("kkt_walk", "heuristic KKT"),
             ("dickinson", "Dickinson"),
             ("downward", "downward"),
             ("uncovered", "not covered"),
         )
     ):
-        y = summary_y + 28 + row * 23
-        draw.rectangle((summary_x, y + 2, summary_x + 18, y + 20), fill=COLORS[category])
-        draw.text((summary_x + 28, y), label_text, fill=INK, font=font(18))
-        draw.text((width - 80, y), f"{percentages[category]:.2f}%", fill=INK, font=font(18), anchor="ra")
+        y = summary_y + 26 + row * 21
+        draw.rectangle((summary_x, y + 2, summary_x + 16, y + 18), fill=COLORS[category])
+        draw.text((summary_x + 25, y), label_text, fill=INK, font=font(16))
+        draw.text((width - 58, y), f"{percentages[category]:.2f}%", fill=INK, font=font(16), anchor="ra")
 
 
 def estimate_existing_coverage(image: Image.Image, n: int) -> dict[str, float]:
-    if image.width != 2400 or n < 1:
-        raise ValueError("existing-image estimation requires a 2400-pixel support-history image and positive dimension")
-    chart_left, chart_right = 160, image.width - 280
+    if image.size != (CANVAS_WIDTH, CANVAS_HEIGHT) or n < 1:
+        raise ValueError(f"existing-image estimation requires a {CANVAS_WIDTH}x{CANVAS_HEIGHT} support-history image and positive dimension")
+    chart_left, chart_right = CHART_LEFT, image.width - CHART_RIGHT_MARGIN
     chart_width = chart_right - chart_left
-    chart_height = max(700, min(1800, n * 27))
+    chart_height = CANVAS_HEIGHT - CHART_TOP - CHART_BOTTOM_MARGIN
     bottom = CHART_TOP + chart_height
     if image.height < bottom:
         raise ValueError("image is too short for the requested support-history dimension")
@@ -440,22 +440,22 @@ def render(events: list[Event], label: str, output: Path, exact_limit: int, samp
     low_max = max((event.source_size for event in events if event.frontier in {"initial", "low"}), default=0)
     high_min = min((event.source_size for event in events if event.frontier == "high"), default=n + 1)
 
-    width = 2400
-    chart_left, chart_right = 160, width - 280
+    width = CANVAS_WIDTH
+    chart_left, chart_right = CHART_LEFT, width - CHART_RIGHT_MARGIN
     chart_width = chart_right - chart_left
-    chart_height = max(700, min(1800, n * 27))
+    chart_height = CANVAS_HEIGHT - CHART_TOP - CHART_BOTTOM_MARGIN
     top = CHART_TOP
     bottom = top + chart_height
-    image = Image.new("RGB", (width, bottom + 120), BACKGROUND)
+    image = Image.new("RGB", (width, CANVAS_HEIGHT), BACKGROUND)
     draw = ImageDraw.Draw(image)
-    draw.text((80, 38), f"{model} support history — {label}", fill=INK, font=font(42, True))
+    draw.text((64, 30), f"{label} — {model}", fill=INK, font=font(34, True))
     draw.text(
-        (80, 94),
+        (64, 75),
         f"n={n}   events={len(events):,}   reached low frontier k≤{low_max}   reached high frontier k≥{high_min if high_min <= n else '—'}",
         fill=MUTED,
-        font=font(25),
+        font=font(21),
     )
-    draw_legend(draw, 80, 142)
+    draw_legend(draw, 64, 118)
 
     max_log = math.log2(math.comb(n, n // 2)) if n > 1 else 1
     row_gap = chart_height / max(1, n)
@@ -486,15 +486,16 @@ def render(events: list[Event], label: str, output: Path, exact_limit: int, samp
             x0 = left + pixel * pixel_width
             x1 = left + (pixel + 1) * pixel_width + 0.5
             y0 = y - band_height / 2
-            for category in ("upward", "kkt_walk", "dickinson", "downward", "uncovered"):
+            for category in ("upward", "dickinson", "downward", "uncovered"):
                 share = 0 if totals[pixel] == 0 else values[category] / totals[pixel]
                 y1 = y0 + band_height * share
                 if y1 > y0:
                     draw.rectangle((x0, y0, x1, y1), fill=COLORS[category])
                 y0 = y1
         draw.line((left, y + band_height / 2 + 1, left + layer_width, y + band_height / 2 + 1), fill=GRID, width=1)
-        draw.text((40, y - 12), f"k={k}", fill=INK, font=font(20))
-        count_font = font(18)
+        layer_font_size = max(11, min(18, round(row_gap * 0.8)))
+        draw.text((32, y - layer_font_size / 2), f"k={k}", fill=INK, font=font(layer_font_size))
+        count_font = font(max(10, layer_font_size - 1))
         visited = f"{visited_counts[k]:,}"
         draw.text((left - 12 - draw.textlength(visited, font=count_font), y - 11), visited, fill=MUTED, font=count_font)
         draw.text((left + layer_width + 12, y - 11), total_count(total), fill=MUTED, font=count_font)
@@ -505,8 +506,8 @@ def render(events: list[Event], label: str, output: Path, exact_limit: int, samp
     draw_coverage_summary(draw, width, coverage_percentages)
 
     caption_font = font(22)
-    draw.text((width / 4, bottom + 65), "number of checked supports", fill=MUTED, font=caption_font, anchor="mm")
-    draw.text((3 * width / 4, bottom + 65), f"C({n}, k)", fill=MUTED, font=caption_font, anchor="mm")
+    draw.text((width / 4, bottom + 55), "number of checked supports", fill=MUTED, font=caption_font, anchor="mm")
+    draw.text((3 * width / 4, bottom + 55), f"C({n}, k)", fill=MUTED, font=caption_font, anchor="mm")
 
     for source, exact_checked in sorted(source_checks.items(), key=lambda item: item[1]):
         k = source.bit_count()
@@ -553,7 +554,7 @@ def self_test() -> None:
     assert events[1].exact_checked and events[1].floating_checked
     assert events[2].floating_checked and events[2].exact_checked
     assert events[3].floating_checked and not events[3].exact_checked
-    assert events[2].category == "kkt_walk" and classify(8, events) == "kkt_walk"
+    assert events[2].category == "upward" and classify(8, events) == "upward"
     assert total_count(1_000_000) == "1,000,000" and total_count(5_200_300) == "5.2×10^6"
     for n in range(1, 8):
         for k in range(n + 1):
@@ -573,9 +574,9 @@ def self_test() -> None:
         assert load_stored_diagnostics(7, "test_model", None, "both", "on", database) == sample
         output = Path(directory) / "test.jpg"
         result = render(events, "self-test", output, exact_limit=1_000, samples_per_bin=3)
-        assert result["coverage_percentages"]["kkt_walk"] > 0
+        assert result["coverage_percentages"]["upward"] > 0
         with Image.open(output) as image:
-            assert image.format == "JPEG" and image.width == 2400
+            assert image.format == "JPEG" and image.size == (CANVAS_WIDTH, CANVAS_HEIGHT)
         percentages = result["coverage_percentages"]
         assert math.isclose(sum(percentages.values()), 100) and math.isclose(percentages["dickinson"], 400 / 15)
         with Image.open(output) as image:
@@ -588,6 +589,7 @@ def main() -> None:
     parser.add_argument("source", nargs="?", help="corpus matrix ID, or a diagnostics text file")
     parser.add_argument("output", nargs="?", type=Path)
     parser.add_argument("--model", help="model identifier; required with a matrix ID")
+    parser.add_argument("--label", help="human-readable matrix label used in the image title")
     parser.add_argument("--model-parameter")
     parser.add_argument("--mode", choices=("strict", "non-strict", "both"), default="both")
     parser.add_argument("--preprocessing", choices=("on", "off"), default="on")
@@ -649,14 +651,14 @@ def main() -> None:
                 arguments.results_database,
             )
             timed_out = False
-        label = f"matrix {matrix_id}" + (" — timed out" if timed_out else "")
+        label = arguments.label or f"matrix {matrix_id}" + (" — timed out" if timed_out else "")
         output = arguments.output or Path(__file__).with_name(f"{arguments.model}-matrix-{matrix_id}.jpg")
     else:
         if arguments.run:
             parser.error("--run requires a corpus matrix ID")
         path = Path(arguments.source)
         text = path.read_text()
-        label = path.stem
+        label = arguments.label or path.stem
         output = arguments.output or path.with_suffix(".jpg")
     events = parse_events(text)
     if arguments.model is not None and events[0].model != arguments.model:

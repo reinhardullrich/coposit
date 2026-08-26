@@ -66,8 +66,10 @@ The shared parser accepts:
 Matrix Market complex entries require zero imaginary parts. Other Matrix Market structures are rejected. The parser guarantees a
 nonempty square symmetric matrix before a model is called; model entry points deliberately do not repeat those boundary checks.
 
-The packed support representation uses `ceil(n / 64)` machine words. Shared infrastructure and maintained models must not introduce
-the former dimension-63 limit.
+Packed supports use one eight-byte move-only handle. Dimensions through 64 store their bits directly in that handle. Larger supports
+refer to an exact-sized `ceil(n / 64)` word block owned by a `support_context`; releasing a temporary returns its block to the
+context's dimension-specific free list. A support must not outlive the context that made it. This keeps the common case allocation-free,
+reuses storage in wide hot paths, and does not reintroduce the former dimension-63 limit.
 
 The parser result also records whether FracESSA's short compact circular form supplied the input. Matrix Market and complete
 upper-triangular inputs set this flag to false. The metadata is retained for clients such as FracESSA and ignored by coposit's

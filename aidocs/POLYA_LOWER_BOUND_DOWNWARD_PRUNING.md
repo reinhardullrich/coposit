@@ -32,11 +32,7 @@ $$
 A=(a_{ij})\in\mathbb R^{n\times n}
 $$
 
-be symmetric, and let
-
-$$
-[n]=\{1,\ldots,n\}.
-$$
+be symmetric.
 
 For a nonempty support $I\subseteq[n]$, write $A_I$ for the corresponding principal matrix and
 

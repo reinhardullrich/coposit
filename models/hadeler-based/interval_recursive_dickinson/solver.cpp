@@ -17,8 +17,8 @@ namespace coposit::model {
 namespace {
 
 struct certificate_interval {
-    certificate_interval(const support& lower_value, const support& upper_value)
-        : lower(lower_value), upper(upper_value)
+    certificate_interval(support_context& context, const support& lower_value, const support& upper_value)
+        : lower(context.clone(lower_value)), upper(context.clone(upper_value))
     {}
 
     support lower;
@@ -28,27 +28,28 @@ struct certificate_interval {
 class interval_generator {
 public:
     explicit interval_generator(size_t dimension)
-        : dimension_(dimension)
+        : support_context_(dimension)
+        , dimension_(dimension)
         , by_trigger_(dimension)
         , by_lowest_lower_(dimension)
-        , partial_(dimension)
+        , partial_(support_context_.make())
     {}
 
     void add_interval(const support& lower, const support& upper)
     {
         const size_t interval_index = intervals_.size();
-        intervals_.emplace_back(lower, upper);
+        intervals_.emplace_back(support_context_, lower, upper);
 
         size_t trigger = dimension_;
         for (size_t bit = 0; bit < dimension_; ++bit) {
-            if (lower.contains(bit) || !upper.contains(bit)) {
+            if (support_context_.contains(lower, bit) || !support_context_.contains(upper, bit)) {
                 trigger = bit;
                 break;
             }
         }
         assert(trigger < dimension_);
         by_trigger_[trigger].push_back(interval_index);
-        by_lowest_lower_[lower.lowest_index()].push_back(interval_index);
+        by_lowest_lower_[support_context_.first(lower)].push_back(interval_index);
     }
 
     template<class Callback>
@@ -61,10 +62,11 @@ private:
     bool covered_complete_support() const noexcept
     {
         for (size_t bit = 0; bit < dimension_; ++bit) {
-            if (!partial_.contains(bit)) continue;
+            if (!support_context_.contains(partial_, bit)) continue;
             for (const size_t interval_index : by_lowest_lower_[bit]) {
                 const certificate_interval& interval = intervals_[interval_index];
-                if (interval.lower.is_subset_of(partial_) && partial_.is_subset_of(interval.upper)) return true;
+                if (support_context_.is_subset_of(interval.lower, partial_)
+                    && support_context_.is_subset_of(partial_, interval.upper)) return true;
             }
         }
         return false;
@@ -74,23 +76,24 @@ private:
     {
         for (const size_t interval_index : by_trigger_[trigger]) {
             const certificate_interval& interval = intervals_[interval_index];
-            if (interval.lower.is_subset_of(partial_) && partial_.is_subset_of(interval.upper)) return true;
+            if (support_context_.is_subset_of(interval.lower, partial_)
+                && support_context_.is_subset_of(partial_, interval.upper)) return true;
         }
         return false;
     }
 
     bool interval_covers_branch(const certificate_interval& interval, size_t bits_remaining, size_t needed) const noexcept
     {
-        if (!partial_.is_subset_of(interval.upper)) return false;
+        if (!support_context_.is_subset_of(partial_, interval.upper)) return false;
 
         bool free_required = false;
         bool free_forbidden = false;
         for (size_t bit = 0; bit < bits_remaining; ++bit) {
-            free_required |= interval.lower.contains(bit);
-            free_forbidden |= !interval.upper.contains(bit);
+            free_required |= support_context_.contains(interval.lower, bit);
+            free_forbidden |= !support_context_.contains(interval.upper, bit);
         }
         for (size_t bit = bits_remaining; bit < dimension_; ++bit) {
-            if (interval.lower.contains(bit) && !partial_.contains(bit)) return false;
+            if (support_context_.contains(interval.lower, bit) && !support_context_.contains(partial_, bit)) return false;
         }
 
         if (free_required && needed != bits_remaining) return false;
@@ -120,14 +123,15 @@ private:
         const size_t interval_count_before_exclusion = intervals_.size();
         if (needed < bits_remaining && !completes_interval(bit) && !generate_from(bit, needed, callback)) return false;
 
-        partial_.set(bit);
+        support_context_.set(partial_, bit);
         const bool covered = completes_interval(bit)
             || new_interval_covers_branch(interval_count_before_exclusion, bit, needed - 1);
         const bool keep_going = covered || generate_from(bit, needed - 1, callback);
-        partial_.reset(bit);
+        support_context_.reset(partial_, bit);
         return keep_going;
     }
 
+    support_context support_context_;
     size_t dimension_;
     std::vector<certificate_interval> intervals_;
     std::vector<std::vector<size_t>> by_trigger_;
@@ -138,7 +142,8 @@ private:
 class dickinson_checker {
 public:
     dickinson_checker(size_t dimension, copositivity_mode mode)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , product_(dimension)
         , generator_(dimension)
         , mode_(mode)
@@ -148,7 +153,8 @@ public:
     }
 
     dickinson_checker(size_t dimension, copositivity_classification& classification)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , product_(dimension)
         , generator_(dimension)
         , mode_(copositivity_mode::copositive)
@@ -166,7 +172,7 @@ public:
                 diagnostics_.visit_support();
                 diagnostics_.secondary();
                 COPOSIT_INTERVAL_RECURSIVE_DIAGNOSTICS("process", subset_dimension);
-                current_support.copy_indices_to(indices_);
+                support_context_.extract_set_indices(current_support, indices_);
                 if (!process_subset(matrix)) {
                     diagnostics_.finish();
                     return false;
@@ -222,20 +228,22 @@ private:
 
     void add_certificate(const matrix_integer& matrix)
     {
-        support lower(matrix.rows());
-        support upper(matrix.rows());
+        support lower = support_context_.make();
+        support upper = support_context_.make();
         for (size_t local = 0; local < indices_.size(); ++local)
-            if (!solution_(local, 0).is_zero()) lower.set(indices_[local]);
+            if (!solution_(local, 0).is_zero()) support_context_.set(lower, indices_[local]);
 
         for (integer& value : product_) value.set_zero();
         for (size_t row = 0; row < matrix.rows(); ++row) {
             timeout_checkpoint();
             for (size_t local = 0; local < indices_.size(); ++local)
                 product_[row].addmul(matrix(row, indices_[local]), solution_(local, 0));
-            if (product_[row].sign() >= 0) upper.set(row);
+            if (product_[row].sign() >= 0) support_context_.set(upper, row);
         }
 
         generator_.add_interval(lower, upper);
+        support_context_.release(std::move(lower));
+        support_context_.release(std::move(upper));
     }
 
     static void copy_principal(const matrix_integer& matrix, const std::vector<size_t>& indices, matrix_integer& principal)
@@ -247,6 +255,7 @@ private:
         }
     }
 
+    support_context support_context_;
     fraction_free_ldlt_factorization factorization_;
     matrix_integer principal_;
     matrix_integer solution_;
@@ -279,14 +288,17 @@ size_t interval_recursive_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals)
 {
     interval_generator generator(dimension);
+    support_context support_context(dimension);
     for (const auto& [lower_mask, upper_mask] : intervals) {
-        support lower(dimension);
-        support upper(dimension);
+        support lower = support_context.make();
+        support upper = support_context.make();
         for (size_t bit = 0; bit < dimension; ++bit) {
-            if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
-            if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
+            if ((lower_mask & (uint64_t{1} << bit)) != 0) support_context.set(lower, bit);
+            if ((upper_mask & (uint64_t{1} << bit)) != 0) support_context.set(upper, bit);
         }
         generator.add_interval(lower, upper);
+        support_context.release(std::move(lower));
+        support_context.release(std::move(upper));
     }
 
     size_t count = 0;

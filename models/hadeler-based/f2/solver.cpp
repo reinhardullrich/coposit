@@ -175,8 +175,8 @@ public:
             unsigned char stage = 0;
         };
 
-        explicit cursor(size_t dimension)
-            : partial(dimension)
+        explicit cursor(support_context& context)
+            : partial(context.make())
         {
         }
 
@@ -185,9 +185,10 @@ public:
         std::vector<frame> stack;
     };
 
-    explicit upward_support_generator(size_t dimension)
-        : dimension_(dimension)
-        , forbidden_by_lowest_(dimension)
+    explicit upward_support_generator(support_context& context)
+        : context_(context)
+        , dimension_(context.dimension())
+        , forbidden_by_lowest_(dimension_)
     {
     }
 
@@ -195,7 +196,7 @@ public:
     {
         if (current.cardinality != cardinality) {
             current.cardinality = cardinality;
-            current.partial.clear();
+            context_.clear(current.partial);
             current.stack.clear();
             current.stack.push_back({dimension_, cardinality, 0});
         }
@@ -207,7 +208,7 @@ public:
                 if (frame.stage == 0) {
                     frame.stage = 1;
                     if (!is_covered(current.partial)) {
-                        result = current.partial;
+                        context_.copy(result, current.partial);
                         return true;
                     }
                 }
@@ -228,16 +229,16 @@ public:
             }
             if (frame.stage == 1) {
                 frame.stage = 2;
-                current.partial.set(bit);
+                context_.set(current.partial, bit);
                 if (completes_forbidden(bit, current.partial)) {
-                    current.partial.reset(bit);
+                    context_.reset(current.partial, bit);
                     continue;
                 }
                 current.stack.push_back({bit, frame.needed - 1, 0});
                 continue;
             }
 
-            current.partial.reset(bit);
+            context_.reset(current.partial, bit);
             current.stack.pop_back();
         }
         return false;
@@ -245,8 +246,8 @@ public:
 
     void add_forbidden(support lower)
     {
-        assert(!lower.empty());
-        forbidden_by_lowest_[lower.lowest_index()].push_back(std::move(lower));
+        assert(!context_.empty(lower));
+        forbidden_by_lowest_[context_.first(lower)].push_back(std::move(lower));
 #ifdef COPOSIT_F2_TESTING
         ++forbidden_count_;
 #endif
@@ -260,20 +261,21 @@ private:
     bool completes_forbidden(size_t new_lowest_bit, const support& partial) const noexcept
     {
         for (const support& forbidden : forbidden_by_lowest_[new_lowest_bit])
-            if (forbidden.is_subset_of(partial)) return true;
+            if (context_.is_subset_of(forbidden, partial)) return true;
         return false;
     }
 
     bool is_covered(const support& candidate) const noexcept
     {
         for (size_t bit = 0; bit < dimension_; ++bit) {
-            if (!candidate.contains(bit)) continue;
+            if (!context_.contains(candidate, bit)) continue;
             for (const support& forbidden : forbidden_by_lowest_[bit])
-                if (forbidden.is_subset_of(candidate)) return true;
+                if (context_.is_subset_of(forbidden, candidate)) return true;
         }
         return false;
     }
 
+    support_context& context_;
     size_t dimension_;
     std::vector<std::vector<support>> forbidden_by_lowest_;
 #ifdef COPOSIT_F2_TESTING
@@ -290,30 +292,32 @@ struct coverage_interval {
 
 class extra_interval_index {
 public:
-    explicit extra_interval_index(size_t dimension)
-        : dimension_(dimension)
-        , by_required_bit_(dimension)
+    explicit extra_interval_index(support_context& context)
+        : context_(context)
+        , dimension_(context.dimension())
+        , by_required_bit_(dimension_)
     {
     }
 
     void add(support lower, support upper)
     {
-        assert(lower.is_subset_of(upper));
-        const size_t lower_size = lower.cardinality();
-        const size_t upper_size = upper.cardinality();
+        assert(context_.is_subset_of(lower, upper));
+        const size_t lower_size = context_.count(lower);
+        const size_t upper_size = context_.count(upper);
         minimum_upper_size_ = std::min(minimum_upper_size_, upper_size);
 #ifdef COPOSIT_F2_TESTING
         ++interval_count_;
 #endif
-        if (lower.empty()) {
+        if (context_.empty(lower)) {
             globally_empty_ |= upper_size == dimension_;
+            context_.release(std::move(lower));
             downward_.push_back({std::move(upper), upper_size});
             return;
         }
 
-        size_t trigger = lower.lowest_index();
+        size_t trigger = context_.first(lower);
         for (size_t bit = trigger + 1; bit < dimension_; ++bit)
-            if (lower.contains(bit) && by_required_bit_[bit].size() < by_required_bit_[trigger].size()) trigger = bit;
+            if (context_.contains(lower, bit) && by_required_bit_[bit].size() < by_required_bit_[trigger].size()) trigger = bit;
         by_required_bit_[trigger].push_back({std::move(lower), std::move(upper), lower_size, upper_size});
     }
 
@@ -323,24 +327,35 @@ public:
 
         size_t next_minimum_upper_size = std::numeric_limits<size_t>::max();
         size_t probes_until_timeout = timeout_probe_period;
-        const auto expired = [&](const auto& interval) {
+        const auto checkpoint_and_retain = [&](size_t upper_size) {
             if (--probes_until_timeout == 0) {
                 timeout_checkpoint();
                 probes_until_timeout = timeout_probe_period;
             }
-            if (interval.upper_size < cardinality) return true;
-            next_minimum_upper_size = std::min(next_minimum_upper_size, interval.upper_size);
-            return false;
+            if (upper_size < cardinality) return false;
+            next_minimum_upper_size = std::min(next_minimum_upper_size, upper_size);
+            return true;
+        };
+        const auto coverage_expired = [&](coverage_interval& interval) {
+            if (checkpoint_and_retain(interval.upper_size)) return false;
+            context_.release(std::move(interval.lower));
+            context_.release(std::move(interval.upper));
+            return true;
+        };
+        const auto upper_expired = [&](upper_bound& interval) {
+            if (checkpoint_and_retain(interval.upper_size)) return false;
+            context_.release(std::move(interval.value));
+            return true;
         };
         for (auto& bucket : by_required_bit_) {
             const size_t previous_size = bucket.size();
-            bucket.erase(std::remove_if(bucket.begin(), bucket.end(), expired), bucket.end());
+            bucket.erase(std::remove_if(bucket.begin(), bucket.end(), coverage_expired), bucket.end());
 #ifdef COPOSIT_F2_TESTING
             interval_count_ -= previous_size - bucket.size();
 #endif
         }
         const size_t previous_downward_size = downward_.size();
-        downward_.erase(std::remove_if(downward_.begin(), downward_.end(), expired), downward_.end());
+        downward_.erase(std::remove_if(downward_.begin(), downward_.end(), upper_expired), downward_.end());
 #ifdef COPOSIT_F2_TESTING
         interval_count_ -= previous_downward_size - downward_.size();
 #endif
@@ -355,18 +370,18 @@ public:
                 timeout_checkpoint();
                 probes_until_timeout = timeout_probe_period;
             }
-            if (cardinality <= interval.upper_size && candidate.is_subset_of(interval.value)) return true;
+            if (cardinality <= interval.upper_size && context_.is_subset_of(candidate, interval.value)) return true;
         }
 
         for (size_t bit = 0; bit < dimension_; ++bit) {
-            if (!candidate.contains(bit)) continue;
+            if (!context_.contains(candidate, bit)) continue;
             for (const coverage_interval& interval : by_required_bit_[bit]) {
                 if (--probes_until_timeout == 0) {
                     timeout_checkpoint();
                     probes_until_timeout = timeout_probe_period;
                 }
                 if (cardinality < interval.lower_size || cardinality > interval.upper_size) continue;
-                if (interval.lower.is_subset_of(candidate) && candidate.is_subset_of(interval.upper)) return true;
+                if (context_.is_subset_of(interval.lower, candidate) && context_.is_subset_of(candidate, interval.upper)) return true;
             }
         }
         return false;
@@ -385,6 +400,7 @@ private:
     };
 
     static constexpr size_t timeout_probe_period = 4096;
+    support_context& context_;
     size_t dimension_;
     std::vector<std::vector<coverage_interval>> by_required_bit_;
     std::vector<upper_bound> downward_;
@@ -397,13 +413,14 @@ private:
 
 class split_supports {
 public:
-    explicit split_supports(size_t dimension)
-        : dimension_(dimension)
-        , generator_(dimension)
-        , low_cursor_(dimension)
-        , high_cursor_(dimension)
-        , candidate_(dimension)
-        , extras_(dimension)
+    explicit split_supports(support_context& context)
+        : context_(context)
+        , dimension_(context.dimension())
+        , generator_(context)
+        , low_cursor_(context)
+        , high_cursor_(context)
+        , candidate_(context.make())
+        , extras_(context)
     {
     }
 
@@ -422,7 +439,7 @@ public:
         upward_support_generator::cursor& cursor = high_frontier ? high_cursor_ : low_cursor_;
         while (generator_.take_first(cursor, cardinality_, candidate_)) {
             if (extras_.contains(candidate_, cardinality_)) continue;
-            candidate_.copy_indices_to(indices);
+            context_.extract_set_indices(candidate_, indices);
             return true;
         }
         return false;
@@ -435,32 +452,32 @@ public:
 
     void add_pair_upward_closure(size_t first, size_t second)
     {
-        support lower(dimension_);
-        lower.set(first);
-        lower.set(second);
+        support lower = context_.make();
+        context_.set(lower, first);
+        context_.set(lower, second);
         generator_.add_forbidden(std::move(lower));
     }
 
     void add_upward_closure(const std::vector<size_t>& indices)
     {
-        support lower(dimension_);
-        for (const size_t index : indices) lower.set(index);
+        support lower = context_.make();
+        for (const size_t index : indices) context_.set(lower, index);
         generator_.add_forbidden(std::move(lower));
     }
 
     void add_downward_closure(const std::vector<size_t>& indices)
     {
-        support lower(dimension_);
-        support upper(dimension_);
-        for (const size_t index : indices) upper.set(index);
+        support lower = context_.make();
+        support upper = context_.make();
+        for (const size_t index : indices) context_.set(upper, index);
         extras_.add(std::move(lower), std::move(upper));
     }
 
     void add_exact_support(const std::vector<size_t>& indices)
     {
-        support exact(dimension_);
-        for (const size_t index : indices) exact.set(index);
-        support lower = exact;
+        support exact = context_.make();
+        for (const size_t index : indices) context_.set(exact, index);
+        support lower = context_.clone(exact);
         extras_.add(std::move(lower), std::move(exact));
     }
 
@@ -478,6 +495,7 @@ public:
 #endif
 
 private:
+    support_context& context_;
     size_t dimension_;
     size_t cardinality_ = 0;
     size_t low_cardinality_ = 0;
@@ -563,34 +581,36 @@ bool better_pair(const ray_pair& candidate, const ray_pair& current) noexcept
 class dickinson_checker {
 public:
     dickinson_checker(size_t dimension, copositivity_mode mode)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , floating_filter_(dimension)
         , product_(dimension)
         , shortlist_limit_(ray_shortlist_limit(dimension, dimension))
         , mode_(mode)
         , diagnostics_(diagnostics::metric::support, dimension)
-        , supports_(dimension)
+        , supports_(support_context_)
     {
         indices_.reserve(dimension);
         ray_shortlist_.reserve(shortlist_limit_);
         shortlist_uppers_.reserve(shortlist_limit_);
-        for (size_t index = 0; index < shortlist_limit_; ++index) shortlist_uppers_.emplace_back(dimension);
+        for (size_t index = 0; index < shortlist_limit_; ++index) shortlist_uppers_.push_back(support_context_.make());
     }
 
     dickinson_checker(size_t dimension, copositivity_classification& classification)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , floating_filter_(dimension)
         , product_(dimension)
         , shortlist_limit_(ray_shortlist_limit(dimension, dimension))
         , mode_(copositivity_mode::copositive)
         , classification_(&classification)
         , diagnostics_(diagnostics::metric::support, dimension)
-        , supports_(dimension)
+        , supports_(support_context_)
     {
         indices_.reserve(dimension);
         ray_shortlist_.reserve(shortlist_limit_);
         shortlist_uppers_.reserve(shortlist_limit_);
-        for (size_t index = 0; index < shortlist_limit_; ++index) shortlist_uppers_.emplace_back(dimension);
+        for (size_t index = 0; index < shortlist_limit_; ++index) shortlist_uppers_.push_back(support_context_.make());
     }
 
     bool check(const matrix_integer& matrix)
@@ -621,11 +641,14 @@ public:
 #ifdef COPOSIT_F2_TESTING
     bool check_support_for_testing(const matrix_integer& matrix, const std::vector<size_t>& indices)
     {
-        support lower(matrix.rows());
-        support upper(matrix.rows());
+        support lower = support_context_.make();
+        support upper = support_context_.make();
         const bool result = optimize_support_for_testing(matrix, indices, lower, upper);
         last_fixed_support_upper_size = 0;
-        for (size_t index = 0; index < matrix.rows(); ++index) last_fixed_support_upper_size += upper.contains(index);
+        for (size_t index = 0; index < matrix.rows(); ++index)
+            last_fixed_support_upper_size += support_context_.contains(upper, index);
+        support_context_.release(std::move(lower));
+        support_context_.release(std::move(upper));
         return result;
     }
 
@@ -1144,7 +1167,7 @@ private:
     {
         const ray_candidate& candidate = ray_shortlist_[candidate_index];
         support& upper = shortlist_uppers_[candidate_index];
-        upper.clear();
+        support_context_.clear(upper);
         size_t gains = 0;
         size_t losses = 0;
         for (size_t row = 0; row < product_.size(); ++row) {
@@ -1153,7 +1176,7 @@ private:
                                    candidate.step.numerator, candidate.step.denominator);
             const bool current_upper = product_[row].sign() >= 0;
             const bool candidate_upper = scratch_.sign() >= 0;
-            if (candidate_upper) upper.set(row);
+            if (candidate_upper) support_context_.set(upper, row);
             gains += !current_upper && candidate_upper;
             losses += current_upper && !candidate_upper;
         }
@@ -1167,8 +1190,8 @@ private:
         pair_score result;
         for (size_t row = 0; row < product_.size(); ++row) {
             const bool base_upper = product_[row].sign() >= 0;
-            const bool first_upper = shortlist_uppers_[first].contains(row);
-            const bool second_upper = shortlist_uppers_[second].contains(row);
+            const bool first_upper = support_context_.contains(shortlist_uppers_[first], row);
+            const bool second_upper = support_context_.contains(shortlist_uppers_[second], row);
             result.union_gains += !base_upper && (first_upper || second_upper);
             result.common_losses += base_upper && !first_upper && !second_upper;
             result.total_gains += !base_upper && first_upper;
@@ -1373,19 +1396,19 @@ private:
 
     bool add_certificate()
     {
-        support lower(product_.size());
-        support upper(product_.size());
+        support lower = support_context_.make();
+        support upper = support_context_.make();
         size_t lower_size = 0;
         size_t upper_size = 0;
         for (size_t local = 0; local < indices_.size(); ++local) {
             if (!solution_(local, 0).is_zero()) {
-                lower.set(indices_[local]);
+                support_context_.set(lower, indices_[local]);
                 ++lower_size;
             }
         }
         for (size_t row = 0; row < product_.size(); ++row) {
             if (product_[row].sign() >= 0) {
-                upper.set(row);
+                support_context_.set(upper, row);
                 ++upper_size;
             }
         }
@@ -1403,8 +1426,10 @@ private:
 
 #ifdef COPOSIT_F2_TESTING
         if (captured_lower_ != nullptr) {
-            *captured_lower_ = lower;
-            *captured_upper_ = upper;
+            support_context_.copy(*captured_lower_, lower);
+            support_context_.copy(*captured_upper_, upper);
+            support_context_.release(std::move(lower));
+            support_context_.release(std::move(upper));
             return true;
         }
 #endif
@@ -1419,12 +1444,14 @@ private:
 #ifdef COPOSIT_F2_TESTING
         ++support_curvature_exclusion_count_;
         if (captured_lower_ != nullptr) {
-            support lower(product_.size());
-            support ceiling(product_.size());
-            for (const size_t index : indices_) lower.set(index);
-            ceiling.set_all();
-            *captured_lower_ = lower;
-            *captured_upper_ = ceiling;
+            support lower = support_context_.make();
+            support ceiling = support_context_.make();
+            for (const size_t index : indices_) support_context_.set(lower, index);
+            support_context_.set_all(ceiling);
+            support_context_.copy(*captured_lower_, lower);
+            support_context_.copy(*captured_upper_, ceiling);
+            support_context_.release(std::move(lower));
+            support_context_.release(std::move(ceiling));
             return true;
         }
 #endif
@@ -1491,6 +1518,7 @@ private:
     }
 #endif
 
+    support_context support_context_;
     fraction_free_ldlt_factorization factorization_;
     floating_positive_semidefinite_filter floating_filter_;
     matrix_integer principal_;
@@ -1654,13 +1682,14 @@ size_t f2_fixed_support_upper_size_for_testing() noexcept
 
 std::pair<size_t, size_t> f2_storage_counts_for_testing()
 {
-    split_supports supports(4);
+    support_context context(4);
+    split_supports supports(context);
     supports.add_upward_closure({0, 1});
 
-    support lower(4);
-    lower.set(0);
-    support ceiling(4);
-    ceiling.set_all();
+    support lower = context.make();
+    context.set(lower, 0);
+    support ceiling = context.make();
+    context.set_all(ceiling);
     supports.add_interval(std::move(lower), std::move(ceiling));
     supports.add_downward_closure({0, 1, 2});
     return supports.storage_counts_for_testing();
@@ -1668,12 +1697,13 @@ std::pair<size_t, size_t> f2_storage_counts_for_testing()
 
 std::pair<size_t, size_t> f2_interval_retirement_counts_for_testing()
 {
-    split_supports supports(4);
-    support lower(4);
-    lower.set(0);
-    support upper(4);
-    upper.set(0);
-    upper.set(1);
+    support_context context(4);
+    split_supports supports(context);
+    support lower = context.make();
+    context.set(lower, 0);
+    support upper = context.make();
+    context.set(upper, 0);
+    context.set(upper, 1);
     supports.add_interval(std::move(lower), std::move(upper));
 
     supports.start_cardinality(4, true);
@@ -1684,15 +1714,16 @@ std::pair<size_t, size_t> f2_interval_retirement_counts_for_testing()
 
 bool f2_interval_scan_observes_timeout_for_testing()
 {
-    extra_interval_index intervals(2);
+    support_context context(2);
+    extra_interval_index intervals(context);
     for (size_t count = 0; count < 4096; ++count) {
-        support lower(2);
-        support upper(2);
-        upper.set(0);
+        support lower = context.make();
+        support upper = context.make();
+        context.set(upper, 0);
         intervals.add(std::move(lower), std::move(upper));
     }
-    support candidate(2);
-    candidate.set(1);
+    support candidate = context.make();
+    context.set(candidate, 1);
     request_timeout();
     try {
         static_cast<void>(intervals.contains(candidate, 1));
@@ -1707,24 +1738,26 @@ bool f2_interval_scan_observes_timeout_for_testing()
 size_t f2_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals)
 {
-    split_supports diagram(dimension);
+    support_context context(dimension);
+    split_supports diagram(context);
     for (const auto& [lower_mask, upper_mask] : intervals) {
-        support lower(dimension);
-        support upper(dimension);
+        support lower = context.make();
+        support upper = context.make();
         for (size_t bit = 0; bit < dimension; ++bit) {
-            if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
-            if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
+            if ((lower_mask & (uint64_t{1} << bit)) != 0) context.set(lower, bit);
+            if ((upper_mask & (uint64_t{1} << bit)) != 0) context.set(upper, bit);
         }
-        diagram.add_interval(lower, upper);
+        diagram.add_interval(std::move(lower), std::move(upper));
     }
 
     diagram.start_cardinality(cardinality);
     std::vector<size_t> indices;
     size_t count = 0;
     while (diagram.take_first(indices)) {
-        support exact(dimension);
-        for (const size_t index : indices) exact.set(index);
-        diagram.add_interval(exact, exact);
+        support exact = context.make();
+        for (const size_t index : indices) context.set(exact, index);
+        support lower = context.clone(exact);
+        diagram.add_interval(std::move(lower), std::move(exact));
         ++count;
     }
     return count;
@@ -1733,15 +1766,17 @@ size_t f2_uncovered_count(
 size_t f2_pair_exclusion_uncovered_count(
     size_t dimension, size_t cardinality, size_t first, size_t second)
 {
-    split_supports diagram(dimension);
+    support_context context(dimension);
+    split_supports diagram(context);
     diagram.add_pair_upward_closure(first, second);
     diagram.start_cardinality(cardinality);
     std::vector<size_t> indices;
     size_t count = 0;
     while (diagram.take_first(indices)) {
-        support exact(dimension);
-        for (const size_t index : indices) exact.set(index);
-        diagram.add_interval(exact, exact);
+        support exact = context.make();
+        for (const size_t index : indices) context.set(exact, index);
+        support lower = context.clone(exact);
+        diagram.add_interval(std::move(lower), std::move(exact));
         ++count;
     }
     return count;
@@ -1751,7 +1786,8 @@ size_t f2_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::vector<size_t>>& upward,
     const std::vector<std::vector<size_t>>& downward, const std::vector<std::vector<size_t>>& exact)
 {
-    split_supports supports(dimension);
+    support_context context(dimension);
+    split_supports supports(context);
     for (const auto& indices : upward) supports.add_upward_closure(indices);
     for (const auto& indices : downward) supports.add_downward_closure(indices);
     for (const auto& indices : exact) supports.add_exact_support(indices);
@@ -1769,7 +1805,8 @@ size_t f2_uncovered_count(
 size_t f2_high_filter_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::vector<size_t>>& rejected, bool high_frontier)
 {
-    split_supports supports(dimension);
+    support_context context(dimension);
+    split_supports supports(context);
     supports.start_cardinality(cardinality, high_frontier);
     std::vector<size_t> indices;
     size_t count = 0;

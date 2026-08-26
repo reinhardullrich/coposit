@@ -92,8 +92,9 @@ TEST(SatA5Test, ExactMonotoneExtensionAddsAnIndexWithoutLosingTheRaysUpperSet)
          200, 0, 0,
          200, 0,
          200});
-    support lower(9);
-    support upper(9);
+    support_context context(9);
+    support lower = context.make();
+    support upper = context.make();
     EXPECT_TRUE(model::sat_a5_certificate_for_testing(matrix, {0, 1, 2}, lower, upper));
     EXPECT_GT(model::sat_a5_monotone_lp_attempt_count_for_testing(), 0U);
     EXPECT_GT(model::sat_a5_monotone_lp_feasible_count_for_testing(), 0U);
@@ -101,7 +102,7 @@ TEST(SatA5Test, ExactMonotoneExtensionAddsAnIndexWithoutLosingTheRaysUpperSet)
     EXPECT_EQ(model::sat_a5_monotone_incumbent_upper_size_for_testing(), 5U);
     EXPECT_GT(model::sat_a5_monotone_final_upper_size_for_testing(), 5U);
     for (size_t index = 0; index < 9; ++index)
-        if (model::sat_a5_monotone_incumbent_contains_for_testing(index)) EXPECT_TRUE(upper.contains(index));
+        if (model::sat_a5_monotone_incumbent_contains_for_testing(index)) EXPECT_TRUE(context.contains(upper, index));
 }
 
 TEST(SatA5Test, SelectsTheBestExactMonotoneImprovementInsteadOfTheFirst)
@@ -118,8 +119,9 @@ TEST(SatA5Test, SelectsTheBestExactMonotoneImprovementInsteadOfTheFirst)
         }
     }
 
-    support lower(9);
-    support upper(9);
+    support_context context(9);
+    support lower = context.make();
+    support upper = context.make();
     EXPECT_TRUE(model::sat_a5_certificate_for_testing(matrix, {0, 1, 2}, lower, upper));
     EXPECT_EQ(model::sat_a5_monotone_first_improvement_upper_size_for_testing(), 7U);
     EXPECT_EQ(model::sat_a5_monotone_first_selected_upper_size_for_testing(), 8U);
@@ -144,16 +146,17 @@ TEST(SatA5Test, ExposesTheExactOptimizedFixedSupportCertificate)
 {
     matrix_integer identity;
     identity.set_identity(3);
-    support lower(3);
-    support upper(3);
+    support_context context(3);
+    support lower = context.make();
+    support upper = context.make();
 
     EXPECT_TRUE(model::sat_a5_certificate_for_testing(identity, {0}, lower, upper));
-    EXPECT_TRUE(lower.contains(0));
-    EXPECT_FALSE(lower.contains(1));
-    EXPECT_FALSE(lower.contains(2));
-    EXPECT_TRUE(upper.contains(0));
-    EXPECT_TRUE(upper.contains(1));
-    EXPECT_TRUE(upper.contains(2));
+    EXPECT_TRUE(context.contains(lower, 0));
+    EXPECT_FALSE(context.contains(lower, 1));
+    EXPECT_FALSE(context.contains(lower, 2));
+    EXPECT_TRUE(context.contains(upper, 0));
+    EXPECT_TRUE(context.contains(upper, 1));
+    EXPECT_TRUE(context.contains(upper, 2));
 }
 
 TEST(SatA5Test, AdaptiveShortlistRemainsBounded)

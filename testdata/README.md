@@ -5,18 +5,33 @@
 It contains corpus and reference data plus a two-column cache of the fastest eligible local diagnostic result. Mutable benchmark
 measurements remain in the ignored local `experiments/diagnostics.sqlite3` database.
 
-- Matrices: 5,834
+- Matrices: 7,174
 - Dimensions: 1 through 5,000
 - Strictly copositive: 1,497
-- Copositive but not strictly copositive: 1,526
+- Copositive but not strictly copositive: 1,606
 - Not copositive: 2,718
 - Copositive with strict status not yet established: 0
-- Strict and non-strict copositivity not yet established: 93
+- Strict and non-strict copositivity not yet established: 1,353
 - Schema: the `sources` and `matrices` tables, with no views, triggers, or manually created indexes
 
 The maintained directory contains this database, its `schema.sql`, the reproducible `diagnostics_schema.sql`, this README, and the
 required `matrices/` payload directory.
 One-time construction and migration material is retained under `archive/`.
+
+IDs 15506 through 15805 are a deterministic 300-matrix pilot based on Peng's $A_{c,n}$ spectral construction. They use order 50,
+$c\in\{0.01,0.02\}$, negative inertia 1, 5, or 25, and 50 seeds per profile. They are new reproducible instances, not Peng's
+unpublished random matrices. `archive/import_peng_acn_pilot_2026_08_25.py` regenerates and validates the exact integer rows.
+
+IDs 15806 through 16765 extend the same construction to orders 10, 15, ..., 45. Each order has the two preceding $c$ values,
+negative inertia $1$, approximately $n/10$, or $\lfloor n/2\rfloor$, and 20 seeds per profile, giving 120 matrices per order and
+960 matrices in total. `archive/import_peng_acn_orders_10_to_45_2026_08_25.py` regenerates and validates these exact integer rows.
+
+IDs 16766 through 16845 are a deterministic 80-matrix sample from Peng's $\operatorname{SPN}_n+B_n$ family, with 20 matrices each
+at orders 50, 100, 150, and 200. The exceptional $B_n$ term comes from a five-part blow-up of $C_5$ satisfying the
+Hoffman--Pereira characterization; the SPN term is $vv^T+N$ with an exact seeded sign vector and a sparse symmetric nonnegative
+matrix. Every matrix is exactly copositive and has a recorded two-coordinate zero, so none is strictly copositive. The generator
+`archive/import_peng_spn_plus_bn_2026_08_25.py` reproduces digest
+`32c1d56dd8b931936cde47d5a8aadf8d2cdc31f667f9b33af3668d2e72c5dda9`; these are new local samples, not Peng's unpublished instances.
 
 `matrices` stores the stable ID, dimension, exact matrix data, nullable strict and non-strict copositivity results,
 optional free-form source text, normalized primary `source_id`, the `additional_source_ids` bibliography, the `references_solved`

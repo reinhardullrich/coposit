@@ -16,7 +16,7 @@ python3 visualizations/support-history/render.py MATRIX_ID OUTPUT.jpg --model MO
 ```
 
 Add `--allow-timeout` to stop the model cooperatively at that cutoff and render its incomplete history. The image title marks the
-timeout; unresolved regions remain gray.
+timeout; unresolved regions remain green. Use `--label TEXT` to replace the matrix identifier in the title.
 
 The run uses the existing `coposit` launcher and does not insert a benchmark result. `--mode`, `--preprocessing`, and
 `--model-parameter` select a different supported model call when needed.
@@ -39,13 +39,13 @@ containing at most one million supports is enumerated exactly. Larger layers are
 deterministic samples in image-pixel bins. This changes generation cost, not the JPEG dimensions. Every analyzed source support is a
 uniform small dot: black when exact arithmetic checked it, and gray when only the floating-point high-frontier filter checked it. If
 both checks reached the same support, black takes precedence.
-The fill distinguishes ordinary upward pruning, Dickinson pruning,
-ordinary downward pruning, and pruning produced by a heuristic KKT-search walk; uncovered supports are green. Heuristic-walk pruning
-is dark violet regardless of whether its certificate points upward or downward. Pair curvature remains ordinary upward pruning because
-it is only that rule's cardinality-two special case. `--exact-limit` changes the threshold for an intentionally expensive one-off render.
+Every JPEG uses the same screen-sized 1920-by-1080 canvas; higher-dimensional lattices use tighter vertical spacing.
+The fill distinguishes upward pruning, Dickinson pruning, and downward pruning; uncovered supports are green. Pair curvature remains
+ordinary upward pruning because it is only that rule's cardinality-two special case. `--exact-limit` changes the threshold for an
+intentionally expensive one-off render.
 
 The upper-right summary estimates each class's share of all $2^n-1$ nonempty supports. Exact layers contribute exact counts; sampled
-layers contribute their deterministic sampling weights, so the five displayed percentages always cover the complete nonempty lattice.
+layers contribute their deterministic sampling weights, so the four displayed percentages always cover the complete nonempty lattice.
 An existing JPEG whose raw event stream is unavailable can be updated without rerunning its model using
 `--annotate-existing-dimension N`; this reconstructs the estimate from the colored bands already stored in that image.
 

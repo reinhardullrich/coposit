@@ -74,13 +74,14 @@ TEST(SatHalfspaceRaysDickinsonTest, SelectsAnExactImprovingHalfspaceDirection)
 TEST(SatHalfspaceLpDickinsonTest, AcceptsOnlyAnExactlyVerifiedFullCeilingCandidate)
 {
     const matrix_integer matrix = symmetric_matrix(3, {2, -1, 7, 2, -8, 40});
-    support lower(3);
-    support upper(3);
+    support_context context(3);
+    support lower = context.make();
+    support upper = context.make();
     EXPECT_TRUE(model::sat_halfspace_rays_certificate_for_testing(matrix, {0, 1}, lower, upper));
     EXPECT_EQ(model::sat_halfspace_lp_full_ceiling_hit_count_for_testing(), 1U);
-    EXPECT_TRUE(upper.contains(0));
-    EXPECT_TRUE(upper.contains(1));
-    EXPECT_TRUE(upper.contains(2));
+    EXPECT_TRUE(context.contains(upper, 0));
+    EXPECT_TRUE(context.contains(upper, 1));
+    EXPECT_TRUE(context.contains(upper, 2));
 }
 
 TEST(SatHalfspaceRaysDickinsonTest, ChoosesTheSingularOrientationWithTheLargerUpperSet)
@@ -102,16 +103,17 @@ TEST(SatHalfspaceRaysDickinsonTest, ExposesTheExactOptimizedFixedSupportCertific
 {
     matrix_integer identity;
     identity.set_identity(3);
-    support lower(3);
-    support upper(3);
+    support_context context(3);
+    support lower = context.make();
+    support upper = context.make();
 
     EXPECT_TRUE(model::sat_halfspace_rays_certificate_for_testing(identity, {0}, lower, upper));
-    EXPECT_TRUE(lower.contains(0));
-    EXPECT_FALSE(lower.contains(1));
-    EXPECT_FALSE(lower.contains(2));
-    EXPECT_TRUE(upper.contains(0));
-    EXPECT_TRUE(upper.contains(1));
-    EXPECT_TRUE(upper.contains(2));
+    EXPECT_TRUE(context.contains(lower, 0));
+    EXPECT_FALSE(context.contains(lower, 1));
+    EXPECT_FALSE(context.contains(lower, 2));
+    EXPECT_TRUE(context.contains(upper, 0));
+    EXPECT_TRUE(context.contains(upper, 1));
+    EXPECT_TRUE(context.contains(upper, 2));
 }
 
 TEST(SatHalfspaceRaysDickinsonTest, AdaptiveShortlistRemainsBounded)

@@ -327,6 +327,7 @@ classification_state classify_small_matrix_state(const matrix_integer& matrix)
 
 template<query requested>
 void observe_small_principal_triples(classification_state& state, const matrix_integer& matrix,
+                                     const support_context& support_context,
                                      const std::vector<support>& negative_neighbors)
 {
     std::vector<size_t> neighbors;
@@ -335,7 +336,7 @@ void observe_small_principal_triples(classification_state& state, const matrix_i
     for (size_t center = 0; center < matrix.rows(); ++center) {
         timeout_checkpoint();
         diagnostics::advance_preprocessing(center + 1, matrix.rows());
-        negative_neighbors[center].copy_indices_to(neighbors);
+        support_context.extract_set_indices(negative_neighbors[center], neighbors);
         for (size_t first = 0; first < neighbors.size(); ++first) {
             for (size_t second = first + 1; second < neighbors.size(); ++second) {
                 timeout_checkpoint();
@@ -516,7 +517,8 @@ classification_state root_checks_scanned(const matrix_integer& matrix, const mat
 }
 
 template<query requested>
-classification_state ordinary_checks_scanned(const matrix_integer& matrix, const matrix_scan_result& scan)
+classification_state ordinary_checks_scanned(
+    const matrix_integer& matrix, support_context& support_context, const matrix_scan_result& scan)
 {
     const size_t dimension = matrix.rows();
     if (scan.dimension != dimension) throw std::logic_error("matrix scan dimension does not match matrix");
@@ -524,7 +526,7 @@ classification_state ordinary_checks_scanned(const matrix_integer& matrix, const
     if (dimension <= 3) return classify_small_matrix_state<requested>(matrix);
 
     classification_state state;
-    observe_small_principal_triples<requested>(state, matrix, scan.negative_neighbors);
+    observe_small_principal_triples<requested>(state, matrix, support_context, scan.negative_neighbors);
     if (state.done<requested>()) return state;
 
     diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::negative_part_diagonal_dominance, dimension);
@@ -560,7 +562,7 @@ classification_state ordinary_checks_scanned(const matrix_integer& matrix, const
     // The exact Motzkin--Straus classifier is often the cheapest complete route for large graph matrices, so keep it ahead of both
     // cubic factorizations. Every other matrix defers maximal-Z enumeration until those factorizations have failed.
     if (scan.is_motzkin_straus_pattern) {
-        observe_z_matrix_outcome(state, z_matrix_precheck::check(matrix, scan, z_request));
+        observe_z_matrix_outcome(state, z_matrix_precheck::check(matrix, support_context, scan, z_request));
         if (state.done<requested>()) return state;
     }
 
@@ -599,14 +601,15 @@ classification_state ordinary_checks_scanned(const matrix_integer& matrix, const
     if (negative_part_positive_semidefinite) return state;
 
     if (!scan.is_motzkin_straus_pattern) {
-        observe_z_matrix_outcome(state, z_matrix_precheck::check(matrix, scan, z_request));
+        observe_z_matrix_outcome(state, z_matrix_precheck::check(matrix, support_context, scan, z_request));
     }
     return state;
 }
 
 template<query requested, typename FinalClassifier>
 model::copositivity_classification run_scanned(const matrix_integer& matrix, const options& selected,
-                                               const matrix_scan_result& scan, FinalClassifier& final_classifier)
+                                               support_context& support_context, const matrix_scan_result& scan,
+                                               FinalClassifier& final_classifier)
 {
     const size_t dimension = matrix.rows();
     if (scan.dimension != dimension) throw std::logic_error("matrix scan dimension does not match matrix");
@@ -666,7 +669,7 @@ model::copositivity_classification run_scanned(const matrix_integer& matrix, con
 
     if (check_principal_triples) {
         diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::principal_submatrices, dimension, 0, dimension);
-        observe_small_principal_triples<requested>(state, matrix, scan.negative_neighbors);
+        observe_small_principal_triples<requested>(state, matrix, support_context, scan.negative_neighbors);
         if (state.done<requested>()) return state.value;
     }
 
@@ -675,7 +678,7 @@ model::copositivity_classification run_scanned(const matrix_integer& matrix, con
     else if constexpr (requested == query::strict) z_request = z_matrix_precheck::request::strict;
 
     if (selected.z_matrix && scan.is_motzkin_straus_pattern) {
-        observe_z_matrix_outcome(state, z_matrix_precheck::check(matrix, scan, z_request));
+        observe_z_matrix_outcome(state, z_matrix_precheck::check(matrix, support_context, scan, z_request));
         if (state.done<requested>()) return state.value;
     }
 
@@ -731,7 +734,7 @@ model::copositivity_classification run_scanned(const matrix_integer& matrix, con
     // The individually selectable interface is not guaranteed to receive a connected negative graph, so unlike the complete
     // component pipeline it retains the maximal principal-Z fallback after a singular PSD negative-part certificate.
     if (selected.z_matrix && !scan.is_motzkin_straus_pattern) {
-        observe_z_matrix_outcome(state, z_matrix_precheck::check(matrix, scan, z_request));
+        observe_z_matrix_outcome(state, z_matrix_precheck::check(matrix, support_context, scan, z_request));
         if (state.done<requested>()) return state.value;
     }
 
@@ -745,8 +748,9 @@ model::copositivity_classification run(const matrix_integer& matrix, const optio
 {
     validate_options(selected);
     diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::matrix_scan, matrix.rows(), 0, matrix.rows());
-    const matrix_scan_result scan = scan_matrix(matrix, requirements_for<requested>(selected));
-    return run_scanned<requested>(matrix, selected, scan, final_classifier);
+    support_context support_context(matrix.rows());
+    const matrix_scan_result scan = scan_matrix(matrix, requirements_for<requested>(selected), support_context);
+    return run_scanned<requested>(matrix, selected, support_context, scan, final_classifier);
 }
 
 } // namespace detail

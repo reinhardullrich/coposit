@@ -29,12 +29,13 @@ TEST(ConnectedComponentsTest, FindsEveryComponentInAnExistingNegativeGraph)
     const matrix_integer matrix = symmetric_matrix(3, {0, 0, 0, 2, -1, 2});
     matrix_scan_requirements requirements;
     requirements.negative_graph = true;
-    const matrix_scan_result scan = scan_matrix(matrix, requirements);
+    support_context context(matrix.rows());
+    const matrix_scan_result scan = scan_matrix(matrix, requirements, context);
     size_t component_index = 0;
     std::vector<size_t> indices;
-    EXPECT_EQ(connected_components::visit(scan.negative_neighbors, [&](const support& component, bool is_whole_graph) {
+    EXPECT_EQ(connected_components::visit(context, scan.negative_neighbors, [&](const support& component, bool is_whole_graph) {
         EXPECT_FALSE(is_whole_graph);
-        component.copy_indices_to(indices);
+        context.extract_set_indices(component, indices);
         if (component_index == 0) EXPECT_EQ(indices, std::vector<size_t>({0}));
         else EXPECT_EQ(indices, std::vector<size_t>({1, 2}));
         ++component_index;
@@ -43,7 +44,7 @@ TEST(ConnectedComponentsTest, FindsEveryComponentInAnExistingNegativeGraph)
     EXPECT_EQ(component_index, 2U);
 
     size_t calls = 0;
-    EXPECT_EQ(connected_components::visit(scan.negative_neighbors, [&](const support&, bool) {
+    EXPECT_EQ(connected_components::visit(context, scan.negative_neighbors, [&](const support&, bool) {
         ++calls;
         return false;
     }), 1U);
@@ -55,12 +56,13 @@ TEST(ConnectedComponentsTest, ReturnsOneFullIndexSetForAConnectedGraph)
     const matrix_integer matrix = symmetric_matrix(3, {2, -1, 0, 2, -1, 2});
     matrix_scan_requirements requirements;
     requirements.negative_graph = true;
-    const matrix_scan_result scan = scan_matrix(matrix, requirements);
+    support_context context(matrix.rows());
+    const matrix_scan_result scan = scan_matrix(matrix, requirements, context);
     std::vector<size_t> indices;
 
-    EXPECT_EQ(connected_components::visit(scan.negative_neighbors, [&](const support& component, bool is_whole_graph) {
+    EXPECT_EQ(connected_components::visit(context, scan.negative_neighbors, [&](const support& component, bool is_whole_graph) {
         EXPECT_TRUE(is_whole_graph);
-        component.copy_indices_to(indices);
+        context.extract_set_indices(component, indices);
         return true;
     }), 1U);
     EXPECT_EQ(indices, std::vector<size_t>({0, 1, 2}));
@@ -74,12 +76,13 @@ TEST(ConnectedComponentsTest, HasNoFixedDimensionLimit)
     wide(64, 128) = wide(128, 64) = integer(-4);
     matrix_scan_requirements requirements;
     requirements.negative_graph = true;
-    const matrix_scan_result scan = scan_matrix(wide, requirements);
+    support_context context(wide.rows());
+    const matrix_scan_result scan = scan_matrix(wide, requirements, context);
     size_t size_three = 0;
     std::vector<size_t> indices;
-    EXPECT_EQ(connected_components::visit(scan.negative_neighbors, [&](const support& component, bool is_whole_graph) {
+    EXPECT_EQ(connected_components::visit(context, scan.negative_neighbors, [&](const support& component, bool is_whole_graph) {
         EXPECT_FALSE(is_whole_graph);
-        component.copy_indices_to(indices);
+        context.extract_set_indices(component, indices);
         size_three += indices.size() == 3;
         return true;
     }), 127U);

@@ -93,8 +93,9 @@ TEST(SatA2Test, ExactlyAcceptsAnLpCandidateThatImprovesTheRayIncumbent)
          100, 0, 0,
          100, 0,
          100});
-    support lower(12);
-    support upper(12);
+    support_context context(12);
+    support lower = context.make();
+    support upper = context.make();
     EXPECT_TRUE(model::sat_a2_certificate_for_testing(matrix, {0, 1, 2, 3, 4}, lower, upper));
     EXPECT_EQ(model::sat_a2_lp_relaxation_count_for_testing(), 1U);
     EXPECT_EQ(model::sat_a2_lp_candidate_improvement_count_for_testing(), 1U);
@@ -116,8 +117,9 @@ TEST(SatA2Test, UsesOneLpGuidedMonotoneExtensionWhenTheEstimatedGapIsMaterial)
          200, 0, 0,
          200, 0,
          200});
-    support lower(9);
-    support upper(9);
+    support_context context(9);
+    support lower = context.make();
+    support upper = context.make();
     EXPECT_TRUE(model::sat_a2_certificate_for_testing(matrix, {0, 1, 2}, lower, upper));
     EXPECT_EQ(model::sat_a2_lp_followup_count_for_testing(), 1U);
     EXPECT_EQ(model::sat_a2_lp_followup_improvement_count_for_testing(), 1U);
@@ -129,14 +131,15 @@ TEST(SatA2Test, UsesOneLpGuidedMonotoneExtensionWhenTheEstimatedGapIsMaterial)
 TEST(SatA2Test, RunsOneRelaxationAfterTheRayIncumbent)
 {
     const matrix_integer matrix = symmetric_matrix(4, {1, 0, 1, -4, 1, -4, 1, 10, 0, 10});
-    support lower(4);
-    support upper(4);
+    support_context context(4);
+    support lower = context.make();
+    support upper = context.make();
     EXPECT_TRUE(model::sat_a2_certificate_for_testing(matrix, {0, 1}, lower, upper));
     EXPECT_EQ(model::sat_a2_lp_relaxation_count_for_testing(), 1U);
     EXPECT_GE(model::sat_a2_lp_estimated_upper_bound_for_testing(), 3U);
-    EXPECT_TRUE(upper.contains(0));
-    EXPECT_TRUE(upper.contains(1));
-    EXPECT_EQ(static_cast<size_t>(upper.contains(2)) + static_cast<size_t>(upper.contains(3)), 1U);
+    EXPECT_TRUE(context.contains(upper, 0));
+    EXPECT_TRUE(context.contains(upper, 1));
+    EXPECT_EQ(static_cast<size_t>(context.contains(upper, 2)) + static_cast<size_t>(context.contains(upper, 3)), 1U);
 }
 
 TEST(SatA2Test, ChoosesTheSingularOrientationWithTheLargerUpperSet)
@@ -158,16 +161,17 @@ TEST(SatA2Test, ExposesTheExactOptimizedFixedSupportCertificate)
 {
     matrix_integer identity;
     identity.set_identity(3);
-    support lower(3);
-    support upper(3);
+    support_context context(3);
+    support lower = context.make();
+    support upper = context.make();
 
     EXPECT_TRUE(model::sat_a2_certificate_for_testing(identity, {0}, lower, upper));
-    EXPECT_TRUE(lower.contains(0));
-    EXPECT_FALSE(lower.contains(1));
-    EXPECT_FALSE(lower.contains(2));
-    EXPECT_TRUE(upper.contains(0));
-    EXPECT_TRUE(upper.contains(1));
-    EXPECT_TRUE(upper.contains(2));
+    EXPECT_TRUE(context.contains(lower, 0));
+    EXPECT_FALSE(context.contains(lower, 1));
+    EXPECT_FALSE(context.contains(lower, 2));
+    EXPECT_TRUE(context.contains(upper, 0));
+    EXPECT_TRUE(context.contains(upper, 1));
+    EXPECT_TRUE(context.contains(upper, 2));
 }
 
 TEST(SatA2Test, AdaptiveShortlistRemainsBounded)

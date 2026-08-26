@@ -152,6 +152,7 @@ def _compute_worker(
     mode: str,
     preprocessing: str,
     model_parameter: str | None,
+    collect_diagnostics: bool,
     cpu_id: int,
     messages: Connection,
 ) -> None:
@@ -182,33 +183,36 @@ def _compute_worker(
 
             reset_timeout()
             send(("started", matrix.matrix_id))
-            monitor_stop = Event()
+            monitor_stop = Event() if collect_diagnostics else None
 
             def publish_diagnostics() -> None:
+                assert monitor_stop is not None
                 while not monitor_stop.wait(DIAGNOSTICS_INTERVAL_SECONDS):
                     try:
                         send(("diagnostics", matrix.matrix_id, diagnostics_snapshot()))
                     except BaseException:
                         return
 
-            monitor = Thread(target=publish_diagnostics, name="diagnostics", daemon=True)
-            monitor.start()
+            monitor = Thread(target=publish_diagnostics, name="diagnostics", daemon=True) if collect_diagnostics else None
+            if monitor is not None:
+                monitor.start()
             try:
                 result = compute_matrix(
                     model_id,
                     matrix,
                     mode,
                     preprocessing,
-                    collect_certificate_joint_distribution=True,
+                    collect_certificate_joint_distribution=collect_diagnostics,
                     model_parameter=model_parameter,
-                    _stream_diagnostics=True,
+                    _stream_diagnostics=collect_diagnostics,
                 )
             except BaseException as error:
                 send(("error", f"{type(error).__name__}: {error}"))
                 return
             finally:
-                monitor_stop.set()
-                monitor.join()
+                if monitor is not None:
+                    monitor_stop.set()
+                    monitor.join()
             send(("result", result))
     except BaseException as error:  # the parent must see setup and worker failures
         try:
@@ -220,12 +224,12 @@ def _compute_worker(
 
 
 def _spawn_worker(
-    context, model_id: str, mode: str, preprocessing: str, model_parameter: str | None, cpu_id: int
+    context, model_id: str, mode: str, preprocessing: str, model_parameter: str | None, collect_diagnostics: bool, cpu_id: int
 ):
     parent_messages, child_messages = context.Pipe()
     process = context.Process(
         target=_compute_worker,
-        args=(model_id, mode, preprocessing, model_parameter, cpu_id, child_messages),
+        args=(model_id, mode, preprocessing, model_parameter, collect_diagnostics, cpu_id, child_messages),
     )
     try:
         process.start()
@@ -287,11 +291,14 @@ def _decode_result(
     result,
     mode: str,
     timeout_seconds: float,
+    collect_diagnostics: bool = True,
 ) -> tuple[str, int | None, int | None, int | None, str | None, str | None, str | None]:
-    try:
-        diagnostics, distribution = _encode_diagnostics(result)
-    except ValueError as error:
-        return "error", None, None, None, None, None, str(error)
+    diagnostics = distribution = None
+    if collect_diagnostics:
+        try:
+            diagnostics, distribution = _encode_diagnostics(result)
+        except ValueError as error:
+            return "error", None, None, None, None, None, str(error)
 
     status = int(result["status"])
     if status == int(StatusCode.PARSE_ERROR):
@@ -469,7 +476,7 @@ def run(arguments) -> bool:
             f"explicit_matrix_ids={len(set(arguments.matrix_ids)) if arguments.matrix_ids else 'all'} "
             f"matrix_sets={','.join(arguments.matrix_set) if arguments.matrix_set else 'all'} "
             f"without_results={'yes' if arguments.without_results else 'no'} "
-            "diagnostics=yes "
+            f"diagnostics={'no' if arguments.without_diagnostics else 'yes'} "
             f"dense_bitset_max_n={arguments.dense_bitset_max_n or 'default'} "
             f"dense_bitset_max_gib={arguments.dense_bitset_max_gib or 'default'} "
             f"results_database={arguments.results_database} "
@@ -511,6 +518,7 @@ def run(arguments) -> bool:
                 arguments.mode,
                 arguments.preprocessing,
                 arguments.model_parameter,
+                not arguments.without_diagnostics,
                 cpu_id,
             )
             for cpu_id in arguments.cpus[:worker_count]
@@ -632,6 +640,7 @@ def run(arguments) -> bool:
                     arguments.mode,
                     arguments.preprocessing,
                     arguments.model_parameter,
+                    not arguments.without_diagnostics,
                     cpu_id,
                 )
 
@@ -687,6 +696,7 @@ def run(arguments) -> bool:
                             message[1],
                             arguments.mode,
                             arguments.timeout_seconds,
+                            not arguments.without_diagnostics,
                         )
                         record(worker, *decoded)
                         if decoded[0] == "error":
@@ -802,6 +812,7 @@ def main() -> None:
     parser.add_argument("--matrix-ids", type=int, nargs="+", metavar="ID")
     parser.add_argument("--matrix-set", choices=MATRIX_SETS, nargs="+", help="run the union of the selected corpus selectors")
     parser.add_argument("--without-results", action="store_true", help="select only matrices with no result rows")
+    parser.add_argument("--without-diagnostics", action="store_true", help="do not collect or store runtime diagnostics")
     parser.add_argument("--parent-cpu", type=int, required=True, metavar="ID")
     parser.add_argument("--cpus", type=int, nargs="+", required=True, metavar="ID")
     parser.add_argument("--database", type=Path, default=DEFAULT_DATABASE, help="matrix corpus database")

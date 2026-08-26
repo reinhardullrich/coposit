@@ -91,7 +91,8 @@ bool retain_smaller_root(void* opaque, const std::vector<size_t>& indices)
 
 TEST(NbcB6Test, EnumeratesEachSupportInOneCardinalityExactlyOnce)
 {
-    nbc_upward_supports supports(5);
+    support_context context(5);
+    nbc_upward_supports supports(context);
     std::vector<size_t> expected;
     for (size_t first = 0; first < 5; ++first)
         for (size_t second = first + 1; second < 5; ++second)
@@ -102,7 +103,8 @@ TEST(NbcB6Test, EnumeratesEachSupportInOneCardinalityExactlyOnce)
 
 TEST(NbcB6Test, StreamsAlternatingCardinalitiesWithoutRepeatingSupports)
 {
-    nbc_upward_supports supports(5);
+    support_context context(5);
+    nbc_upward_supports supports(context);
     supports.start_cardinality(2);
     supports.start_cardinality(4, true);
 
@@ -132,7 +134,8 @@ TEST(NbcB6Test, StreamsAlternatingCardinalitiesWithoutRepeatingSupports)
 
 TEST(NbcB6Test, AppliesLiveCertificatesAndKeepsTheCursorAcrossCompaction)
 {
-    nbc_upward_supports supports(4);
+    support_context context(4);
+    nbc_upward_supports supports(context);
     supports.start_cardinality(1);
     supports.start_cardinality(3, true);
 
@@ -161,7 +164,8 @@ TEST(NbcB6Test, AppliesLiveCertificatesAndKeepsTheCursorAcrossCompaction)
 
 TEST(NbcB6Test, StopsEnumerationImmediatelyForAnExactWitness)
 {
-    nbc_upward_supports supports(5);
+    support_context context(5);
+    nbc_upward_supports supports(context);
     count_state state;
     EXPECT_EQ(supports.enumerate_cardinality(2, &state, &stop_after_first_support),
               nbc_upward_supports::enumeration_result::stopped);
@@ -170,7 +174,8 @@ TEST(NbcB6Test, StopsEnumerationImmediatelyForAnExactWitness)
 
 TEST(NbcB6Test, DefersEvenSmallerLowerEndpointsUntilTheLayerEnds)
 {
-    nbc_upward_supports supports(3);
+    support_context context(3);
+    nbc_upward_supports supports(context);
     deferred_state state{supports};
     EXPECT_EQ(supports.enumerate_cardinality(2, &state, &retain_smaller_root),
               nbc_upward_supports::enumeration_result::exhausted);
@@ -182,7 +187,8 @@ TEST(NbcB6Test, DefersEvenSmallerLowerEndpointsUntilTheLayerEnds)
 
 TEST(NbcB6Test, AppliesRetainedPairClosuresToTheNextEnumeration)
 {
-    nbc_upward_supports supports(3);
+    support_context context(3);
+    nbc_upward_supports supports(context);
     supports.add_pair_upward_closure(0, 1);
     supports.commit_layer(0);
     EXPECT_EQ(count_layer(supports, 2), 2U);
@@ -191,7 +197,8 @@ TEST(NbcB6Test, AppliesRetainedPairClosuresToTheNextEnumeration)
 
 TEST(NbcB6Test, CompactsCompleteSiblingClosuresAtTheLayerBoundary)
 {
-    nbc_upward_supports supports(3);
+    support_context context(3);
+    nbc_upward_supports supports(context);
     supports.add_upward_closure({0, 1});
     supports.add_upward_closure({0, 2});
     supports.commit_layer(2);
@@ -208,7 +215,8 @@ TEST(NbcB6Test, CompactionPreservesTheExactOpenFutureSupports)
             pairs.push_back((size_t{1} << first) | (size_t{1} << second));
 
     for (size_t family = 0; family < (size_t{1} << pairs.size()); ++family) {
-        nbc_upward_supports supports(dimension);
+        support_context context(dimension);
+        nbc_upward_supports supports(context);
         for (size_t pair = 0; pair < pairs.size(); ++pair) {
             if ((family & (size_t{1} << pair)) == 0) continue;
             std::vector<size_t> indices;
@@ -236,9 +244,10 @@ TEST(NbcB6Test, CompactionPreservesTheExactOpenFutureSupports)
 
 TEST(NbcB6Test, DropsBoundedIntervalsAfterTheirLastPossibleLayer)
 {
-    nbc_upward_supports supports(3);
-    support singleton(3);
-    singleton.set(0);
+    support_context context(3);
+    nbc_upward_supports supports(context);
+    support singleton = context.make();
+    context.set(singleton, 0);
     supports.add_interval(singleton, singleton);
     supports.commit_layer(0);
     EXPECT_EQ(supports.interval_count(), 1U);
@@ -248,20 +257,21 @@ TEST(NbcB6Test, DropsBoundedIntervalsAfterTheirLastPossibleLayer)
 
 TEST(NbcB6Test, CompactsNewIntervalsAgainstPreviouslyActiveIntervals)
 {
-    nbc_upward_supports supports(4);
-    support inner_lower(4);
-    support inner_upper(4);
-    inner_lower.set(0);
-    inner_upper.set(0);
-    inner_upper.set(1);
+    support_context context(4);
+    nbc_upward_supports supports(context);
+    support inner_lower = context.make();
+    support inner_upper = context.make();
+    context.set(inner_lower, 0);
+    context.set(inner_upper, 0);
+    context.set(inner_upper, 1);
     supports.add_interval(inner_lower, inner_upper);
     supports.commit_frontiers(1, 4);
 
-    support outer_lower(4);
-    support outer_upper(4);
-    outer_upper.set(0);
-    outer_upper.set(1);
-    outer_upper.set(2);
+    support outer_lower = context.make();
+    support outer_upper = context.make();
+    context.set(outer_upper, 0);
+    context.set(outer_upper, 1);
+    context.set(outer_upper, 2);
     supports.add_interval(outer_lower, outer_upper);
     supports.commit_frontiers(1, 4);
 
@@ -274,16 +284,17 @@ TEST(NbcB6Test, BuildsAnExactHalfspaceRaysDickinsonInterval)
 {
     matrix_integer identity;
     identity.set_identity(3);
-    support lower(3);
-    support upper(3);
+    support_context context(3);
+    support lower = context.make();
+    support upper = context.make();
 
     EXPECT_TRUE(model::nbc_b6_certificate_for_testing(identity, {0}, lower, upper));
-    EXPECT_TRUE(lower.contains(0));
-    EXPECT_FALSE(lower.contains(1));
-    EXPECT_FALSE(lower.contains(2));
-    EXPECT_TRUE(upper.contains(0));
-    EXPECT_TRUE(upper.contains(1));
-    EXPECT_TRUE(upper.contains(2));
+    EXPECT_TRUE(context.contains(lower, 0));
+    EXPECT_FALSE(context.contains(lower, 1));
+    EXPECT_FALSE(context.contains(lower, 2));
+    EXPECT_TRUE(context.contains(upper, 0));
+    EXPECT_TRUE(context.contains(upper, 1));
+    EXPECT_TRUE(context.contains(upper, 2));
 }
 
 TEST(NbcB6Test, RetainsTheExactHalfspaceRayOptimization)

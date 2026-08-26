@@ -19,21 +19,22 @@ size_t level_two_skips = 0;
 
 class negative_graph {
 public:
-    explicit negative_graph(const matrix_integer& matrix)
-        : unreached_(matrix.rows())
-        , frontier_(matrix.rows())
-        , next_(matrix.rows())
+    negative_graph(const matrix_integer& matrix, support_context& context)
+        : context_(context)
+        , unreached_(context.make())
+        , frontier_(context.make())
+        , next_(context.make())
     {
         neighbors_.reserve(matrix.rows());
-        for (size_t vertex = 0; vertex < matrix.rows(); ++vertex) neighbors_.emplace_back(matrix.rows());
+        for (size_t vertex = 0; vertex < matrix.rows(); ++vertex) neighbors_.push_back(context.make());
         frontier_indices_.reserve(matrix.rows());
 
         for (size_t row = 0; row < matrix.rows(); ++row) {
             timeout_checkpoint();
             for (size_t column = row + 1; column < matrix.rows(); ++column) {
                 if (matrix(row, column).sign() < 0) {
-                    neighbors_[row].set(column);
-                    neighbors_[column].set(row);
+                    context_.set(neighbors_[row], column);
+                    context_.set(neighbors_[column], row);
                 } else {
                     complete_ = false;
                 }
@@ -44,28 +45,29 @@ public:
     bool induced_is_connected(const support& vertices)
     {
         if (complete_) return true;
-        unreached_ = vertices;
-        const size_t root = unreached_.lowest_index();
-        unreached_.reset(root);
-        if (unreached_.empty()) return true;
-        if (unreached_.is_subset_of(neighbors_[root])) return true;
+        context_.copy(unreached_, vertices);
+        const size_t root = context_.first(unreached_);
+        context_.reset(unreached_, root);
+        if (context_.empty(unreached_)) return true;
+        if (context_.is_subset_of(unreached_, neighbors_[root])) return true;
 
-        frontier_.clear();
-        frontier_.set(root);
-        while (!unreached_.empty()) {
+        context_.clear(frontier_);
+        context_.set(frontier_, root);
+        while (!context_.empty(unreached_)) {
             timeout_checkpoint();
-            next_.clear();
-            frontier_.copy_indices_to(frontier_indices_);
-            for (const size_t vertex : frontier_indices_) next_.add(neighbors_[vertex]);
-            next_.intersect_with(unreached_);
-            if (next_.empty()) return false;
-            unreached_.remove(next_);
-            frontier_.swap(next_);
+            context_.clear(next_);
+            context_.extract_set_indices(frontier_, frontier_indices_);
+            for (const size_t vertex : frontier_indices_) context_.add(next_, neighbors_[vertex]);
+            context_.intersect(next_, unreached_);
+            if (context_.empty(next_)) return false;
+            context_.subtract(unreached_, next_);
+            context_.swap(frontier_, next_);
         }
         return true;
     }
 
 private:
+    support_context& context_;
     std::vector<support> neighbors_;
     support unreached_;
     support frontier_;
@@ -77,16 +79,18 @@ private:
 class hadeler_checker {
 public:
     hadeler_checker(const matrix_integer& matrix, copositivity_mode mode)
-        : factorization_(matrix.rows())
-        , negative_graph_(matrix)
+        : support_context_(matrix.rows())
+        , factorization_(matrix.rows())
+        , negative_graph_(matrix, support_context_)
         , mode_(mode)
     {
     }
 
 
     hadeler_checker(const matrix_integer& matrix, copositivity_classification& classification)
-        : factorization_(matrix.rows())
-        , negative_graph_(matrix)
+        : support_context_(matrix.rows())
+        , factorization_(matrix.rows())
+        , negative_graph_(matrix, support_context_)
         , mode_(copositivity_mode::copositive)
         , classification_(&classification)
     {
@@ -97,10 +101,10 @@ public:
         const size_t matrix_dimension = matrix.rows();
         for (size_t subset_dimension = 1; subset_dimension <= matrix_dimension; ++subset_dimension) {
             std::vector<size_t> indices(subset_dimension);
-            support current_support(matrix_dimension);
+            support current_support = support_context_.make();
             for (size_t i = 0; i < subset_dimension; ++i) {
                 indices[i] = i;
-                current_support.set(i);
+                support_context_.set(current_support, i);
             }
 
             do {
@@ -113,24 +117,25 @@ public:
                 }
                 if (!check_subset(matrix, indices)) return false;
             } while (advance_numeric_mask_order(indices, current_support, matrix_dimension));
+            support_context_.release(std::move(current_support));
         }
         return true;
     }
 
 private:
-    static bool advance_numeric_mask_order(std::vector<size_t>& indices, support& current_support, size_t matrix_dimension)
+    bool advance_numeric_mask_order(std::vector<size_t>& indices, support& current_support, size_t matrix_dimension) const
     {
         for (size_t i = 0; i < indices.size(); ++i) {
             const size_t upper_bound = i + 1 < indices.size() ? indices[i + 1] : matrix_dimension;
             if (indices[i] + 1 == upper_bound) continue;
 
-            current_support.reset(indices[i]);
+            support_context_.reset(current_support, indices[i]);
             ++indices[i];
-            current_support.set(indices[i]);
+            support_context_.set(current_support, indices[i]);
             for (size_t reset = 0; reset < i; ++reset) {
-                current_support.reset(indices[reset]);
+                support_context_.reset(current_support, indices[reset]);
                 indices[reset] = reset;
-                current_support.set(indices[reset]);
+                support_context_.set(current_support, indices[reset]);
             }
             return true;
         }
@@ -195,6 +200,7 @@ private:
         }
     }
 
+    support_context support_context_;
     fraction_free_ldlt_factorization factorization_;
     negative_graph negative_graph_;
     matrix_integer principal_;

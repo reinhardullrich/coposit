@@ -71,8 +71,9 @@ public:
 
 class interval_sat {
 public:
-    explicit interval_sat(size_t dimension)
-        : dimension_(dimension)
+    explicit interval_sat(const support_context& context)
+        : context_(context)
+        , dimension_(context.dimension())
     {
         if (dimension_ > static_cast<size_t>(std::numeric_limits<int>::max() - 1))
             throw std::overflow_error("SAT variable count exceeds CaDiCaL's integer literal range");
@@ -131,9 +132,9 @@ public:
         last_interval_clause_size_ = 0;
 #endif
         for (size_t index = 0; index < dimension_; ++index) {
-            const bool in_upper = upper.contains(index);
+            const bool in_upper = context_.contains(upper, index);
             if (in_upper) ++upper_size;
-            if (lower.contains(index)) {
+            if (context_.contains(lower, index)) {
                 solver_.add(-variable(index));
 #ifdef COPOSIT_SAT_HALFSPACE_RAYS_LOOKAHEAD_DICKINSON_TESTING
                 ++last_interval_clause_size_;
@@ -216,6 +217,9 @@ private:
         bitonic_merge(wires, first, count, descending);
     }
 
+    const support_context& context_;
+
+
     size_t dimension_;
     int next_variable_ = 1;
     size_t cardinality_ = 0;
@@ -234,12 +238,25 @@ struct coverage_score {
 };
 
 struct cached_certificate {
-    explicit cached_certificate(size_t dimension)
-        : lower(dimension)
-        , upper(dimension)
+    explicit cached_certificate(support_context& context)
+        : context_(&context)
+        , lower(context.make())
+        , upper(context.make())
     {
     }
 
+    cached_certificate(cached_certificate&&) noexcept = default;
+    cached_certificate& operator=(cached_certificate&&) = delete;
+    cached_certificate(const cached_certificate&) = delete;
+    cached_certificate& operator=(const cached_certificate&) = delete;
+
+    ~cached_certificate()
+    {
+        context_->release(std::move(lower));
+        context_->release(std::move(upper));
+    }
+
+    support_context* context_;
     support lower;
     support upper;
     coverage_score score;
@@ -283,9 +300,10 @@ struct support_key_hash {
 
 using certificate_cache = std::unordered_map<support_key, cached_certificate, support_key_hash>;
 
-bool interval_is_subset_of(const cached_certificate& inner, const cached_certificate& outer) noexcept
+bool interval_is_subset_of(
+    const support_context& context, const cached_certificate& inner, const cached_certificate& outer) noexcept
 {
-    return outer.lower.is_subset_of(inner.lower) && inner.upper.is_subset_of(outer.upper);
+    return context.is_subset_of(outer.lower, inner.lower) && context.is_subset_of(inner.upper, outer.upper);
 }
 
 bool better_score(const coverage_score& candidate, const coverage_score& current) noexcept
@@ -358,7 +376,8 @@ bool better_pair(const ray_pair& candidate, const ray_pair& current) noexcept
 class dickinson_checker {
 public:
     dickinson_checker(size_t dimension, copositivity_mode mode)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , product_(dimension)
         , shortlist_limit_(ray_shortlist_limit(dimension, dimension))
         , mode_(mode)
@@ -367,11 +386,12 @@ public:
         indices_.reserve(dimension);
         ray_shortlist_.reserve(shortlist_limit_);
         shortlist_uppers_.reserve(shortlist_limit_);
-        for (size_t index = 0; index < shortlist_limit_; ++index) shortlist_uppers_.emplace_back(dimension);
+        for (size_t index = 0; index < shortlist_limit_; ++index) shortlist_uppers_.push_back(support_context_.make());
     }
 
     dickinson_checker(size_t dimension, copositivity_classification& classification)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , product_(dimension)
         , shortlist_limit_(ray_shortlist_limit(dimension, dimension))
         , mode_(copositivity_mode::copositive)
@@ -381,7 +401,7 @@ public:
         indices_.reserve(dimension);
         ray_shortlist_.reserve(shortlist_limit_);
         shortlist_uppers_.reserve(shortlist_limit_);
-        for (size_t index = 0; index < shortlist_limit_; ++index) shortlist_uppers_.emplace_back(dimension);
+        for (size_t index = 0; index < shortlist_limit_; ++index) shortlist_uppers_.push_back(support_context_.make());
     }
 
     bool check(const matrix_integer& matrix)
@@ -393,7 +413,7 @@ public:
         lookahead_analysis_count_ = 0;
         lookahead_cache_hit_count_ = 0;
 #endif
-        supports_.emplace(matrix.rows());
+        supports_.emplace(support_context_);
         for (size_t subset_dimension = 1; subset_dimension <= matrix.rows(); ++subset_dimension) {
             child_cache_.clear();
             diagnostics_.stage(subset_dimension);
@@ -402,7 +422,7 @@ public:
                 timeout_checkpoint();
                 diagnostics_.visit_support();
                 const std::vector<size_t> current_indices = indices_;
-                cached_certificate current(matrix.rows());
+                cached_certificate current(support_context_);
 
                 diagnostics_.secondary();
                 COPOSIT_SAT_HALFSPACE_RAYS_LOOKAHEAD_DIAGNOSTICS("process", subset_dimension);
@@ -434,11 +454,14 @@ public:
 #ifdef COPOSIT_SAT_HALFSPACE_RAYS_LOOKAHEAD_DICKINSON_TESTING
     bool check_support_for_testing(const matrix_integer& matrix, const std::vector<size_t>& indices)
     {
-        support lower(matrix.rows());
-        support upper(matrix.rows());
+        support lower = support_context_.make();
+        support upper = support_context_.make();
         const bool result = optimize_support_for_testing(matrix, indices, lower, upper);
         last_fixed_support_upper_size = 0;
-        for (size_t index = 0; index < matrix.rows(); ++index) last_fixed_support_upper_size += upper.contains(index);
+        for (size_t index = 0; index < matrix.rows(); ++index)
+            last_fixed_support_upper_size += support_context_.contains(upper, index);
+        support_context_.release(std::move(lower));
+        support_context_.release(std::move(upper));
         return result;
     }
 
@@ -506,7 +529,7 @@ private:
             if (candidate == child_cache_.end()) {
                 std::vector<size_t> child_indices = current_indices;
                 child_indices.insert(std::lower_bound(child_indices.begin(), child_indices.end(), added_index), added_index);
-                cached_certificate child(dimension);
+                cached_certificate child(support_context_);
                 diagnostics_.secondary();
                 COPOSIT_SAT_HALFSPACE_RAYS_LOOKAHEAD_DIAGNOSTICS("lookahead", current_indices.size() + 1);
                 if (!analyze_support(matrix, child_indices, child)) {
@@ -523,9 +546,9 @@ private:
 #endif
             }
 
-            const bool child_is_contained = interval_is_subset_of(candidate->second, current);
+            const bool child_is_contained = interval_is_subset_of(support_context_, candidate->second, current);
             if (!child_is_contained) {
-                const bool current_is_contained = interval_is_subset_of(current, candidate->second);
+                const bool current_is_contained = interval_is_subset_of(support_context_, current, candidate->second);
                 commit_certificate(candidate->second);
                 current_is_strictly_contained |= current_is_contained;
             }
@@ -834,7 +857,7 @@ private:
     {
         const ray_candidate& candidate = ray_shortlist_[candidate_index];
         support& upper = shortlist_uppers_[candidate_index];
-        upper.clear();
+        support_context_.clear(upper);
         size_t gains = 0;
         size_t losses = 0;
         for (size_t row = 0; row < product_.size(); ++row) {
@@ -843,7 +866,7 @@ private:
                                    candidate.step.numerator, candidate.step.denominator);
             const bool current_upper = product_[row].sign() >= 0;
             const bool candidate_upper = scratch_.sign() >= 0;
-            if (candidate_upper) upper.set(row);
+            if (candidate_upper) support_context_.set(upper, row);
             gains += !current_upper && candidate_upper;
             losses += current_upper && !candidate_upper;
         }
@@ -857,8 +880,8 @@ private:
         pair_score result;
         for (size_t row = 0; row < product_.size(); ++row) {
             const bool base_upper = product_[row].sign() >= 0;
-            const bool first_upper = shortlist_uppers_[first].contains(row);
-            const bool second_upper = shortlist_uppers_[second].contains(row);
+            const bool first_upper = support_context_.contains(shortlist_uppers_[first], row);
+            const bool second_upper = support_context_.contains(shortlist_uppers_[second], row);
             result.union_gains += !base_upper && (first_upper || second_upper);
             result.common_losses += base_upper && !first_upper && !second_upper;
             result.total_gains += !base_upper && first_upper;
@@ -1063,19 +1086,19 @@ private:
 
     bool add_certificate()
     {
-        support lower(product_.size());
-        support upper(product_.size());
+        support lower = support_context_.make();
+        support upper = support_context_.make();
         size_t lower_size = 0;
         size_t upper_size = 0;
         for (size_t local = 0; local < indices_.size(); ++local) {
             if (!solution_(local, 0).is_zero()) {
-                lower.set(indices_[local]);
+                support_context_.set(lower, indices_[local]);
                 ++lower_size;
             }
         }
         for (size_t row = 0; row < product_.size(); ++row) {
             if (product_[row].sign() >= 0) {
-                upper.set(row);
+                support_context_.set(upper, row);
                 ++upper_size;
             }
         }
@@ -1092,8 +1115,10 @@ private:
         }
 
         if (captured_certificate_ != nullptr) {
-            captured_certificate_->lower = std::move(lower);
-            captured_certificate_->upper = std::move(upper);
+            support_context_.copy(captured_certificate_->lower, lower);
+            support_context_.copy(captured_certificate_->upper, upper);
+            support_context_.release(std::move(lower));
+            support_context_.release(std::move(upper));
             captured_certificate_->score = {upper_size - lower_size, upper_size};
             captured_certificate_->committed = false;
             return true;
@@ -1101,12 +1126,16 @@ private:
 
 #ifdef COPOSIT_SAT_HALFSPACE_RAYS_LOOKAHEAD_DICKINSON_TESTING
         if (captured_lower_ != nullptr) {
-            *captured_lower_ = lower;
-            *captured_upper_ = upper;
+            support_context_.copy(*captured_lower_, lower);
+            support_context_.copy(*captured_upper_, upper);
+            support_context_.release(std::move(lower));
+            support_context_.release(std::move(upper));
             return true;
         }
 #endif
         supports_->add_interval(lower, upper);
+        support_context_.release(std::move(lower));
+        support_context_.release(std::move(upper));
         if (diagnostics_.active()) diagnostics_.certificate(upper_size - lower_size, upper_size);
         return true;
     }
@@ -1130,6 +1159,8 @@ private:
         last_lookahead_cache_hit_count = lookahead_cache_hit_count_;
     }
 #endif
+
+    support_context support_context_;
 
     fraction_free_ldlt_factorization factorization_;
     matrix_integer principal_;
@@ -1225,15 +1256,16 @@ bool sat_halfspace_rays_lookahead_interval_is_subset_for_testing(
     size_t dimension, uint64_t inner_lower_mask, uint64_t inner_upper_mask, uint64_t outer_lower_mask,
     uint64_t outer_upper_mask)
 {
-    cached_certificate inner(dimension);
-    cached_certificate outer(dimension);
+    support_context context(dimension);
+    cached_certificate inner(context);
+    cached_certificate outer(context);
     for (size_t bit = 0; bit < dimension; ++bit) {
-        if ((inner_lower_mask & (uint64_t{1} << bit)) != 0) inner.lower.set(bit);
-        if ((inner_upper_mask & (uint64_t{1} << bit)) != 0) inner.upper.set(bit);
-        if ((outer_lower_mask & (uint64_t{1} << bit)) != 0) outer.lower.set(bit);
-        if ((outer_upper_mask & (uint64_t{1} << bit)) != 0) outer.upper.set(bit);
+        if ((inner_lower_mask & (uint64_t{1} << bit)) != 0) context.set(inner.lower, bit);
+        if ((inner_upper_mask & (uint64_t{1} << bit)) != 0) context.set(inner.upper, bit);
+        if ((outer_lower_mask & (uint64_t{1} << bit)) != 0) context.set(outer.lower, bit);
+        if ((outer_upper_mask & (uint64_t{1} << bit)) != 0) context.set(outer.upper, bit);
     }
-    return interval_is_subset_of(inner, outer);
+    return interval_is_subset_of(context, inner, outer);
 }
 
 size_t sat_halfspace_rays_lookahead_shortlist_limit_for_testing(size_t matrix_dimension, size_t support_dimension)
@@ -1269,24 +1301,28 @@ size_t sat_halfspace_rays_lookahead_fixed_support_upper_size_for_testing() noexc
 size_t sat_halfspace_rays_lookahead_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals)
 {
-    interval_sat diagram(dimension);
+    support_context context(dimension);
+    interval_sat diagram(context);
     for (const auto& [lower_mask, upper_mask] : intervals) {
-        support lower(dimension);
-        support upper(dimension);
+        support lower = context.make();
+        support upper = context.make();
         for (size_t bit = 0; bit < dimension; ++bit) {
-            if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
-            if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
+            if ((lower_mask & (uint64_t{1} << bit)) != 0) context.set(lower, bit);
+            if ((upper_mask & (uint64_t{1} << bit)) != 0) context.set(upper, bit);
         }
         diagram.add_interval(lower, upper);
+        context.release(std::move(lower));
+        context.release(std::move(upper));
     }
 
     diagram.start_cardinality(cardinality);
     std::vector<size_t> indices;
     size_t count = 0;
     while (diagram.take_first(indices)) {
-        support exact(dimension);
-        for (const size_t index : indices) exact.set(index);
+        support exact = context.make();
+        for (const size_t index : indices) context.set(exact, index);
         diagram.add_interval(exact, exact);
+        context.release(std::move(exact));
         ++count;
     }
     return count;
@@ -1294,15 +1330,19 @@ size_t sat_halfspace_rays_lookahead_uncovered_count(
 
 size_t sat_halfspace_rays_lookahead_interval_clause_size(size_t dimension, uint64_t lower_mask, uint64_t upper_mask)
 {
-    interval_sat diagram(dimension);
-    support lower(dimension);
-    support upper(dimension);
+    support_context context(dimension);
+    interval_sat diagram(context);
+    support lower = context.make();
+    support upper = context.make();
     for (size_t bit = 0; bit < dimension; ++bit) {
-        if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
-        if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
+        if ((lower_mask & (uint64_t{1} << bit)) != 0) context.set(lower, bit);
+        if ((upper_mask & (uint64_t{1} << bit)) != 0) context.set(upper, bit);
     }
     diagram.add_interval(lower, upper);
-    return diagram.last_interval_clause_size();
+    const size_t result = diagram.last_interval_clause_size();
+    context.release(std::move(lower));
+    context.release(std::move(upper));
+    return result;
 }
 #endif
 

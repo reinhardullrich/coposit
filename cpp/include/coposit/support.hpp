@@ -1,218 +1,352 @@
 #pragma once
 
+#include <coposit/bitset.hpp>
+
+#include <algorithm>
 #include <cassert>
 #include <cstddef>
 #include <cstdint>
+#include <memory>
+#include <stdexcept>
+#include <utility>
 #include <vector>
-
-#ifdef _MSC_VER
-#include <intrin.h>
-#endif
 
 namespace coposit {
 
+class support_context;
+
+/** One support mask. Its interpretation belongs to the matrix-wide support_context. */
 class support {
+    friend class support_context;
+
 public:
-  explicit support(size_t dimension)
-      : dimension_(dimension),
-        words_(dimension / bits_per_word + (dimension % bits_per_word != 0),
-               0) {}
+    support(const support&) = delete;
+    support& operator=(const support&) = delete;
 
-  void set(size_t index) noexcept {
-    assert(index < dimension_);
-    words_[index / bits_per_word] |= word_type{1} << (index % bits_per_word);
-  }
+    support(support&& other) noexcept : storage_(std::exchange(other.storage_, 0)) {}
 
-  void reset(size_t index) noexcept {
-    assert(index < dimension_);
-    words_[index / bits_per_word] &= ~(word_type{1} << (index % bits_per_word));
-  }
-
-  void clear() noexcept {
-    for (word_type &word : words_)
-      word = 0;
-  }
-
-  void set_all() noexcept {
-    for (word_type &word : words_)
-      word = ~word_type{0};
-    const size_t used_bits = dimension_ % bits_per_word;
-    if (used_bits != 0)
-      words_.back() &= (word_type{1} << used_bits) - 1;
-  }
-
-  size_t dimension() const noexcept { return dimension_; }
-
-  bool empty() const noexcept {
-    for (const word_type word : words_) {
-      if (word != 0)
-        return false;
+    support& operator=(support&& other) noexcept
+    {
+        storage_ = std::exchange(other.storage_, 0);
+        return *this;
     }
-    return true;
-  }
-
-  size_t cardinality() const noexcept {
-    size_t result = 0;
-    for (const word_type word : words_)
-      result += population_count(word);
-    return result;
-  }
-
-  void add(const support &other) noexcept {
-    assert(dimension_ == other.dimension_);
-    for (size_t word_index = 0; word_index < words_.size(); ++word_index)
-      words_[word_index] |= other.words_[word_index];
-  }
-
-  void intersect_with(const support &other) noexcept {
-    assert(dimension_ == other.dimension_);
-    for (size_t word_index = 0; word_index < words_.size(); ++word_index)
-      words_[word_index] &= other.words_[word_index];
-  }
-
-  void remove(const support &other) noexcept {
-    assert(dimension_ == other.dimension_);
-    for (size_t word_index = 0; word_index < words_.size(); ++word_index)
-      words_[word_index] &= ~other.words_[word_index];
-  }
-
-  void swap(support &other) noexcept {
-    assert(dimension_ == other.dimension_);
-    words_.swap(other.words_);
-  }
-
-  // Move index i to i-1 modulo the support dimension.
-  void rotate_one_right() noexcept {
-    const bool wrap = (words_.front() & word_type{1}) != 0;
-    for (size_t word_index = 0; word_index + 1 < words_.size(); ++word_index) {
-      words_[word_index] = (words_[word_index] >> 1) |
-                           (words_[word_index + 1] << (bits_per_word - 1));
-    }
-    words_.back() >>= 1;
-    if (wrap)
-      set(dimension_ - 1);
-  }
-
-  // Mirror index i to dimension-1-i without allocating scratch storage.
-  void reflect() noexcept {
-    size_t left = 0;
-    size_t right = words_.size() - 1;
-    while (left < right) {
-      const word_type low = reverse_bits(words_[left]);
-      words_[left++] = reverse_bits(words_[right]);
-      words_[right--] = low;
-    }
-    if (left == right)
-      words_[left] = reverse_bits(words_[left]);
-
-    const size_t used_bits = dimension_ % bits_per_word;
-    if (used_bits == 0)
-      return;
-
-    const size_t unused_bits = bits_per_word - used_bits;
-    for (size_t word_index = 0; word_index + 1 < words_.size(); ++word_index) {
-      words_[word_index] = (words_[word_index] >> unused_bits) |
-                           (words_[word_index + 1] << used_bits);
-    }
-    words_.back() >>= unused_bits;
-  }
-
-  bool contains(size_t index) const noexcept {
-    assert(index < dimension_);
-    return (words_[index / bits_per_word] &
-            (word_type{1} << (index % bits_per_word))) != 0;
-  }
-
-  bool is_subset_of(const support &other) const noexcept {
-    assert(dimension_ == other.dimension_);
-    for (size_t word_index = 0; word_index < words_.size(); ++word_index) {
-      if ((words_[word_index] & ~other.words_[word_index]) != 0)
-        return false;
-    }
-    return true;
-  }
-
-  size_t lowest_index() const noexcept {
-    for (size_t word_index = 0; word_index < words_.size(); ++word_index) {
-      if (words_[word_index] != 0) {
-        return word_index * bits_per_word +
-               trailing_zero_count(words_[word_index]);
-      }
-    }
-    assert(false);
-    return 0;
-  }
-
-  void copy_indices_to(std::vector<size_t> &indices) const {
-    indices.clear();
-    for (size_t word_index = 0; word_index < words_.size(); ++word_index) {
-      word_type word = words_[word_index];
-      while (word != 0) {
-        const size_t bit = trailing_zero_count(word);
-        indices.push_back(word_index * bits_per_word + bit);
-        word &= word - 1;
-      }
-    }
-  }
-
-  friend bool operator==(const support &left, const support &right) noexcept {
-    return left.dimension_ == right.dimension_ && left.words_ == right.words_;
-  }
-
-  friend bool operator!=(const support &left, const support &right) noexcept {
-    return !(left == right);
-  }
-
-  friend bool operator<(const support &left, const support &right) noexcept {
-    assert(left.dimension_ == right.dimension_);
-    for (size_t word_index = left.words_.size(); word_index > 0; --word_index) {
-      if (left.words_[word_index - 1] != right.words_[word_index - 1]) {
-        return left.words_[word_index - 1] < right.words_[word_index - 1];
-      }
-    }
-    return false;
-  }
 
 private:
-  using word_type = std::uint64_t;
-  static constexpr size_t bits_per_word = 64;
+    explicit support(uint64_t storage) noexcept : storage_(storage) {}
 
-  static size_t trailing_zero_count(word_type word) noexcept {
-#ifdef _MSC_VER
-    unsigned long index;
-    _BitScanForward64(&index, word);
-    return static_cast<size_t>(index);
-#else
-    return static_cast<size_t>(
-        __builtin_ctzll(static_cast<unsigned long long>(word)));
-#endif
-  }
+    uint64_t storage_;
+};
 
-  static size_t population_count(word_type word) noexcept {
-#ifdef _MSC_VER
-    return static_cast<size_t>(__popcnt64(word));
-#else
-    return static_cast<size_t>(
-        __builtin_popcountll(static_cast<unsigned long long>(word)));
-#endif
-  }
+static_assert(sizeof(support) == sizeof(uint64_t));
+static_assert(sizeof(std::uintptr_t) <= sizeof(uint64_t));
 
-  static word_type reverse_bits(word_type word) noexcept {
-    word = ((word & 0x5555555555555555ULL) << 1) |
-           ((word >> 1) & 0x5555555555555555ULL);
-    word = ((word & 0x3333333333333333ULL) << 2) |
-           ((word >> 2) & 0x3333333333333333ULL);
-    word = ((word & 0x0f0f0f0f0f0f0f0fULL) << 4) |
-           ((word >> 4) & 0x0f0f0f0f0f0f0f0fULL);
-    word = ((word & 0x00ff00ff00ff00ffULL) << 8) |
-           ((word >> 8) & 0x00ff00ff00ff00ffULL);
-    word = ((word & 0x0000ffff0000ffffULL) << 16) |
-           ((word >> 16) & 0x0000ffff0000ffffULL);
-    return (word << 32) | (word >> 32);
-  }
+/**
+ * Matrix-wide support representation and storage.
+ *
+ * Through dimension 64, a support stores its bits directly. Above dimension 64, it stores a pointer to an exact-sized word array
+ * owned by this context. The dimension decision and allocation bookkeeping therefore exist once per analyzer, not in every mask.
+ */
+class support_context {
+public:
+    explicit support_context(size_t dimension)
+        : dimension_(dimension)
+        , word_count_(dimension / 64 + static_cast<size_t>(dimension % 64 != 0))
+        , last_word_mask_(make_last_word_mask(dimension))
+    {
+        if (dimension == 0) throw std::invalid_argument("support_context dimension must be positive");
+    }
 
-  size_t dimension_;
-  std::vector<word_type> words_;
+    support_context(const support_context&) = delete;
+    support_context& operator=(const support_context&) = delete;
+    support_context(support_context&&) = delete;
+    support_context& operator=(support_context&&) = delete;
+
+    size_t dimension() const noexcept { return dimension_; }
+    bool is_small() const noexcept { return dimension_ <= support_detail::kMaxBitsetDimension; }
+
+    uint64_t small_bits(const support& value) const noexcept
+    {
+        assert(is_small());
+        return value.storage_;
+    }
+
+    support make()
+    {
+        if (is_small()) return support(0);
+
+        if (released_ != nullptr) {
+            uint64_t* storage = released_;
+            released_ = reinterpret_cast<uint64_t*>(static_cast<std::uintptr_t>(storage[0]));
+            std::fill_n(storage, word_count_, uint64_t{0});
+            return support(static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(storage)));
+        }
+
+        auto words = std::make_unique<uint64_t[]>(word_count_);
+        const auto address = reinterpret_cast<std::uintptr_t>(words.get());
+        allocations_.push_back(std::move(words));
+        return support(static_cast<uint64_t>(address));
+    }
+
+    support clone(const support& source)
+    {
+        support result = make();
+        copy(result, source);
+        return result;
+    }
+
+    // Return a no-longer-needed large slot for reuse. The moved-from handle must not be used again.
+    void release(support&& value) noexcept
+    {
+        if (is_small()) {
+            value.storage_ = 0;
+            return;
+        }
+        if (value.storage_ == 0) return;
+        uint64_t* storage = words(value);
+        storage[0] = static_cast<uint64_t>(reinterpret_cast<std::uintptr_t>(released_));
+        released_ = storage;
+        value.storage_ = 0;
+    }
+
+    void copy(support& destination, const support& source) const noexcept
+    {
+        if (is_small()) destination.storage_ = source.storage_;
+        else std::copy_n(words(source), word_count_, words(destination));
+    }
+
+    void swap(support& left, support& right) const noexcept { std::swap(left.storage_, right.storage_); }
+
+    bool empty(const support& value) const noexcept
+    {
+        if (is_small()) return value.storage_ == 0;
+        for (size_t i = 0; i < word_count_; ++i)
+            if (words(value)[i] != 0) return false;
+        return true;
+    }
+
+    void clear(support& value) const noexcept
+    {
+        if (is_small()) value.storage_ = 0;
+        else std::fill_n(words(value), word_count_, uint64_t{0});
+    }
+
+    void set_all(support& value) const noexcept
+    {
+        if (is_small()) {
+            value.storage_ = support_detail::set_all_n_bits(dimension_);
+            return;
+        }
+        std::fill_n(words(value), word_count_, ~uint64_t{0});
+        words(value)[word_count_ - 1] &= last_word_mask_;
+    }
+
+    bool contains(const support& value, size_t position) const noexcept
+    {
+        assert(position < dimension_);
+        if (is_small()) return (value.storage_ & (uint64_t{1} << position)) != 0;
+        return (words(value)[position / 64] & (uint64_t{1} << (position % 64))) != 0;
+    }
+
+    void set(support& value, size_t position) const noexcept
+    {
+        assert(position < dimension_);
+        if (is_small()) value.storage_ |= uint64_t{1} << position;
+        else words(value)[position / 64] |= uint64_t{1} << (position % 64);
+    }
+
+    void reset(support& value, size_t position) const noexcept
+    {
+        assert(position < dimension_);
+        if (is_small()) value.storage_ &= ~(uint64_t{1} << position);
+        else words(value)[position / 64] &= ~(uint64_t{1} << (position % 64));
+    }
+
+    void add(support& destination, const support& source) const noexcept
+    {
+        if (is_small()) {
+            destination.storage_ |= source.storage_;
+            return;
+        }
+        for (size_t i = 0; i < word_count_; ++i) words(destination)[i] |= words(source)[i];
+    }
+
+    void intersect(support& destination, const support& source) const noexcept
+    {
+        if (is_small()) {
+            destination.storage_ &= source.storage_;
+            return;
+        }
+        for (size_t i = 0; i < word_count_; ++i) words(destination)[i] &= words(source)[i];
+    }
+
+    void subtract(support& destination, const support& source) const noexcept
+    {
+        if (is_small()) {
+            destination.storage_ &= ~source.storage_;
+            return;
+        }
+        for (size_t i = 0; i < word_count_; ++i) words(destination)[i] &= ~words(source)[i];
+    }
+
+    bool is_subset_of(const support& subset, const support& superset) const noexcept
+    {
+        if (is_small()) return (subset.storage_ & ~superset.storage_) == 0;
+        for (size_t i = 0; i < word_count_; ++i)
+            if ((words(subset)[i] & ~words(superset)[i]) != 0) return false;
+        return true;
+    }
+
+    bool equal(const support& left, const support& right) const noexcept
+    {
+        if (is_small()) return left.storage_ == right.storage_;
+        return std::equal(words(left), words(left) + word_count_, words(right));
+    }
+
+    bool less(const support& left, const support& right) const noexcept
+    {
+        if (is_small()) return left.storage_ < right.storage_;
+        for (size_t i = word_count_; i > 0; --i) {
+            if (words(left)[i - 1] != words(right)[i - 1]) return words(left)[i - 1] < words(right)[i - 1];
+        }
+        return false;
+    }
+
+    size_t count(const support& value) const noexcept
+    {
+        if (is_small()) return support_detail::popcount64(value.storage_);
+        size_t result = 0;
+        for (size_t i = 0; i < word_count_; ++i) result += support_detail::popcount64(words(value)[i]);
+        return result;
+    }
+
+    // Caller precondition: value is nonempty.
+    size_t first(const support& value) const noexcept
+    {
+        if (is_small()) return support_detail::ctz64(value.storage_);
+        for (size_t i = 0; i < word_count_; ++i)
+            if (words(value)[i] != 0) return i * 64 + support_detail::ctz64(words(value)[i]);
+        assert(false && "support_context::first requires a nonempty support");
+        return dimension_;
+    }
+
+    void extract_set_indices(const support& value, std::vector<size_t>& indices) const
+    {
+        indices.clear();
+        if (is_small()) {
+            uint64_t word = value.storage_;
+            while (word != 0) {
+                indices.push_back(support_detail::ctz64(word));
+                word &= word - 1;
+            }
+            return;
+        }
+
+        for (size_t word_index = 0; word_index < word_count_; ++word_index) {
+            uint64_t word = words(value)[word_index];
+            while (word != 0) {
+                indices.push_back(word_index * 64 + support_detail::ctz64(word));
+                word &= word - 1;
+            }
+        }
+    }
+
+    void extract_unset_indices(const support& value, std::vector<size_t>& indices) const
+    {
+        indices.clear();
+        if (is_small()) {
+            uint64_t word = ~value.storage_ & support_detail::set_all_n_bits(dimension_);
+            while (word != 0) {
+                indices.push_back(support_detail::ctz64(word));
+                word &= word - 1;
+            }
+            return;
+        }
+
+        for (size_t word_index = 0; word_index < word_count_; ++word_index) {
+            uint64_t word = ~words(value)[word_index];
+            if (word_index + 1 == word_count_) word &= last_word_mask_;
+            while (word != 0) {
+                indices.push_back(word_index * 64 + support_detail::ctz64(word));
+                word &= word - 1;
+            }
+        }
+    }
+
+    void rotate_one_right(support& value) const noexcept
+    {
+        if (is_small()) {
+            value.storage_ = support_detail::rot_one_right(value.storage_, dimension_);
+            return;
+        }
+
+        uint64_t* value_words = words(value);
+        const bool wrap = (value_words[0] & uint64_t{1}) != 0;
+        for (size_t i = 0; i + 1 < word_count_; ++i)
+            value_words[i] = (value_words[i] >> 1) | (value_words[i + 1] << 63);
+        value_words[word_count_ - 1] >>= 1;
+        if (wrap) value_words[(dimension_ - 1) / 64] |= uint64_t{1} << ((dimension_ - 1) % 64);
+    }
+
+    void reflect(support& value) const noexcept
+    {
+        if (is_small()) {
+            value.storage_ = support_detail::reflect(value.storage_, dimension_);
+            return;
+        }
+
+        uint64_t* value_words = words(value);
+        size_t left = 0;
+        size_t right = word_count_ - 1;
+        while (left < right) {
+            const uint64_t low = support_detail::reverse_bits(value_words[left]);
+            value_words[left++] = support_detail::reverse_bits(value_words[right]);
+            value_words[right--] = low;
+        }
+        if (left == right) value_words[left] = support_detail::reverse_bits(value_words[left]);
+
+        const size_t used_bits = dimension_ % 64;
+        if (used_bits == 0) return;
+
+        const size_t unused_bits = 64 - used_bits;
+        for (size_t i = 0; i + 1 < word_count_; ++i)
+            value_words[i] = (value_words[i] >> unused_bits) | (value_words[i + 1] << used_bits);
+        value_words[word_count_ - 1] >>= unused_bits;
+    }
+
+private:
+    friend struct support_context_test_access;
+
+    static uint64_t make_last_word_mask(size_t dimension) noexcept
+    {
+        const size_t used_bits = dimension % 64;
+        return used_bits == 0 ? ~uint64_t{0} : (uint64_t{1} << used_bits) - 1;
+    }
+
+    static uint64_t* words(support& value) noexcept
+    {
+        return reinterpret_cast<uint64_t*>(static_cast<std::uintptr_t>(value.storage_));
+    }
+
+    static const uint64_t* words(const support& value) noexcept
+    {
+        return reinterpret_cast<const uint64_t*>(static_cast<std::uintptr_t>(value.storage_));
+    }
+
+    size_t dimension_;
+    size_t word_count_;
+    uint64_t last_word_mask_;
+    std::vector<std::unique_ptr<uint64_t[]>> allocations_;
+    uint64_t* released_ = nullptr;
+};
+
+struct support_less {
+    const support_context* context = nullptr;
+
+    bool operator()(const support& left, const support& right) const noexcept
+    {
+        assert(context != nullptr);
+        return context->less(left, right);
+    }
 };
 
 } // namespace coposit

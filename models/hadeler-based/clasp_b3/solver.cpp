@@ -271,8 +271,9 @@ private:
 
 class interval_sat {
 public:
-    explicit interval_sat(size_t dimension)
-        : dimension_(dimension)
+    explicit interval_sat(const support_context& context)
+        : context_(context)
+        , dimension_(context.dimension())
     {
         if (dimension_ > static_cast<size_t>(std::numeric_limits<int>::max() - 1))
             throw std::overflow_error("Clasp variable count exceeds its integer literal range");
@@ -317,9 +318,9 @@ public:
 #endif
         std::vector<int> clause;
         for (size_t index = 0; index < dimension_; ++index) {
-            const bool in_upper = upper.contains(index);
+            const bool in_upper = context_.contains(upper, index);
             if (in_upper) ++upper_size;
-            if (lower.contains(index)) {
+            if (context_.contains(lower, index)) {
                 clause.push_back(-variable(index));
 #ifdef COPOSIT_SAT_B3_TESTING
                 ++last_interval_clause_size_;
@@ -455,6 +456,9 @@ private:
         bitonic_merge(wires, first, count, descending);
     }
 
+    const support_context& context_;
+
+
     size_t dimension_;
     int next_variable_ = 1;
     size_t cardinality_ = 0;
@@ -544,7 +548,8 @@ bool better_pair(const ray_pair& candidate, const ray_pair& current) noexcept
 class dickinson_checker {
 public:
     dickinson_checker(size_t dimension, copositivity_mode mode)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , floating_filter_(dimension)
         , product_(dimension)
         , shortlist_limit_(ray_shortlist_limit(dimension, dimension))
@@ -554,11 +559,12 @@ public:
         indices_.reserve(dimension);
         ray_shortlist_.reserve(shortlist_limit_);
         shortlist_uppers_.reserve(shortlist_limit_);
-        for (size_t index = 0; index < shortlist_limit_; ++index) shortlist_uppers_.emplace_back(dimension);
+        for (size_t index = 0; index < shortlist_limit_; ++index) shortlist_uppers_.push_back(support_context_.make());
     }
 
     dickinson_checker(size_t dimension, copositivity_classification& classification)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , floating_filter_(dimension)
         , product_(dimension)
         , shortlist_limit_(ray_shortlist_limit(dimension, dimension))
@@ -569,7 +575,7 @@ public:
         indices_.reserve(dimension);
         ray_shortlist_.reserve(shortlist_limit_);
         shortlist_uppers_.reserve(shortlist_limit_);
-        for (size_t index = 0; index < shortlist_limit_; ++index) shortlist_uppers_.emplace_back(dimension);
+        for (size_t index = 0; index < shortlist_limit_; ++index) shortlist_uppers_.push_back(support_context_.make());
     }
 
     bool check(const matrix_integer& matrix)
@@ -584,7 +590,7 @@ public:
         exact_count_ = 0;
         high_float_rejection_count_ = 0;
 #endif
-        supports_.emplace(matrix.rows());
+        supports_.emplace(support_context_);
         install_pair_curvature_exclusions(matrix);
 
         size_t low = 1;
@@ -601,11 +607,11 @@ public:
 #ifdef COPOSIT_SAT_B3_TESTING
     bool check_support_for_testing(const matrix_integer& matrix, const std::vector<size_t>& indices)
     {
-        support lower(matrix.rows());
-        support upper(matrix.rows());
+        support lower = support_context_.make();
+        support upper = support_context_.make();
         const bool result = optimize_support_for_testing(matrix, indices, lower, upper);
         last_fixed_support_upper_size = 0;
-        for (size_t index = 0; index < matrix.rows(); ++index) last_fixed_support_upper_size += upper.contains(index);
+        for (size_t index = 0; index < matrix.rows(); ++index) last_fixed_support_upper_size += support_context_.contains(upper, index);
         return result;
     }
 
@@ -1124,7 +1130,7 @@ private:
     {
         const ray_candidate& candidate = ray_shortlist_[candidate_index];
         support& upper = shortlist_uppers_[candidate_index];
-        upper.clear();
+        support_context_.clear(upper);
         size_t gains = 0;
         size_t losses = 0;
         for (size_t row = 0; row < product_.size(); ++row) {
@@ -1133,7 +1139,7 @@ private:
                                    candidate.step.numerator, candidate.step.denominator);
             const bool current_upper = product_[row].sign() >= 0;
             const bool candidate_upper = scratch_.sign() >= 0;
-            if (candidate_upper) upper.set(row);
+            if (candidate_upper) support_context_.set(upper, row);
             gains += !current_upper && candidate_upper;
             losses += current_upper && !candidate_upper;
         }
@@ -1147,8 +1153,8 @@ private:
         pair_score result;
         for (size_t row = 0; row < product_.size(); ++row) {
             const bool base_upper = product_[row].sign() >= 0;
-            const bool first_upper = shortlist_uppers_[first].contains(row);
-            const bool second_upper = shortlist_uppers_[second].contains(row);
+            const bool first_upper = support_context_.contains(shortlist_uppers_[first], row);
+            const bool second_upper = support_context_.contains(shortlist_uppers_[second], row);
             result.union_gains += !base_upper && (first_upper || second_upper);
             result.common_losses += base_upper && !first_upper && !second_upper;
             result.total_gains += !base_upper && first_upper;
@@ -1353,19 +1359,19 @@ private:
 
     bool add_certificate()
     {
-        support lower(product_.size());
-        support upper(product_.size());
+        support lower = support_context_.make();
+        support upper = support_context_.make();
         size_t lower_size = 0;
         size_t upper_size = 0;
         for (size_t local = 0; local < indices_.size(); ++local) {
             if (!solution_(local, 0).is_zero()) {
-                lower.set(indices_[local]);
+                support_context_.set(lower, indices_[local]);
                 ++lower_size;
             }
         }
         for (size_t row = 0; row < product_.size(); ++row) {
             if (product_[row].sign() >= 0) {
-                upper.set(row);
+                support_context_.set(upper, row);
                 ++upper_size;
             }
         }
@@ -1383,14 +1389,18 @@ private:
 
 #ifdef COPOSIT_SAT_B3_TESTING
         if (captured_lower_ != nullptr) {
-            *captured_lower_ = lower;
-            *captured_upper_ = upper;
+            support_context_.copy(*captured_lower_, lower);
+            support_context_.copy(*captured_upper_, upper);
+            support_context_.release(std::move(lower));
+            support_context_.release(std::move(upper));
             return true;
         }
 #endif
         supports_->add_interval(lower, upper);
         if (diagnostics_.active()) diagnostics_.certificate(upper_size - lower_size, upper_size);
         COPOSIT_SAT_B3_DIAGNOSTICS("dickinson", indices_.size());
+        support_context_.release(std::move(lower));
+        support_context_.release(std::move(upper));
         return true;
     }
 
@@ -1399,12 +1409,14 @@ private:
 #ifdef COPOSIT_SAT_B3_TESTING
         ++support_curvature_exclusion_count_;
         if (captured_lower_ != nullptr) {
-            support lower(product_.size());
-            support ceiling(product_.size());
-            for (const size_t index : indices_) lower.set(index);
-            ceiling.set_all();
-            *captured_lower_ = lower;
-            *captured_upper_ = ceiling;
+            support lower = support_context_.make();
+            support ceiling = support_context_.make();
+            for (const size_t index : indices_) support_context_.set(lower, index);
+            support_context_.set_all(ceiling);
+            support_context_.copy(*captured_lower_, lower);
+            support_context_.copy(*captured_upper_, ceiling);
+            support_context_.release(std::move(lower));
+            support_context_.release(std::move(ceiling));
             return true;
         }
 #endif
@@ -1470,6 +1482,8 @@ private:
         last_high_float_rejection_count = high_float_rejection_count_;
     }
 #endif
+
+    support_context support_context_;
 
     fraction_free_ldlt_factorization factorization_;
     floating_positive_semidefinite_filter floating_filter_;
@@ -1635,13 +1649,14 @@ size_t sat_b3_fixed_support_upper_size_for_testing() noexcept
 size_t sat_b3_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals)
 {
-    interval_sat diagram(dimension);
+    support_context support_context_(dimension);
+    interval_sat diagram(support_context_);
     for (const auto& [lower_mask, upper_mask] : intervals) {
-        support lower(dimension);
-        support upper(dimension);
+        support lower = support_context_.make();
+        support upper = support_context_.make();
         for (size_t bit = 0; bit < dimension; ++bit) {
-            if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
-            if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
+            if ((lower_mask & (uint64_t{1} << bit)) != 0) support_context_.set(lower, bit);
+            if ((upper_mask & (uint64_t{1} << bit)) != 0) support_context_.set(upper, bit);
         }
         diagram.add_interval(lower, upper);
     }
@@ -1650,9 +1665,10 @@ size_t sat_b3_uncovered_count(
     std::vector<size_t> indices;
     size_t count = 0;
     while (diagram.take_first(indices)) {
-        support exact(dimension);
-        for (const size_t index : indices) exact.set(index);
+        support exact = support_context_.make();
+        for (const size_t index : indices) support_context_.set(exact, index);
         diagram.add_interval(exact, exact);
+        support_context_.release(std::move(exact));
         ++count;
     }
     return count;
@@ -1660,7 +1676,8 @@ size_t sat_b3_uncovered_count(
 
 size_t clasp_b3_native_enumeration_count(size_t dimension, size_t cardinality)
 {
-    interval_sat supports(dimension);
+    support_context support_context_(dimension);
+    interval_sat supports(support_context_);
     supports.start_cardinality(cardinality);
     std::vector<size_t> indices;
     size_t count = 0;
@@ -1671,15 +1688,17 @@ size_t clasp_b3_native_enumeration_count(size_t dimension, size_t cardinality)
 size_t sat_b3_pair_exclusion_uncovered_count(
     size_t dimension, size_t cardinality, size_t first, size_t second)
 {
-    interval_sat diagram(dimension);
+    support_context support_context_(dimension);
+    interval_sat diagram(support_context_);
     diagram.add_pair_upward_closure(first, second);
     diagram.start_cardinality(cardinality);
     std::vector<size_t> indices;
     size_t count = 0;
     while (diagram.take_first(indices)) {
-        support exact(dimension);
-        for (const size_t index : indices) exact.set(index);
+        support exact = support_context_.make();
+        for (const size_t index : indices) support_context_.set(exact, index);
         diagram.add_interval(exact, exact);
+        support_context_.release(std::move(exact));
         ++count;
     }
     return count;
@@ -1689,7 +1708,8 @@ size_t sat_b3_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::vector<size_t>>& upward,
     const std::vector<std::vector<size_t>>& downward, const std::vector<std::vector<size_t>>& exact)
 {
-    interval_sat supports(dimension);
+    support_context support_context_(dimension);
+    interval_sat supports(support_context_);
     for (const auto& indices : upward) supports.add_upward_closure(indices);
     for (const auto& indices : downward) supports.add_downward_closure(indices);
     for (const auto& indices : exact) supports.add_exact_support(indices);
@@ -1707,7 +1727,8 @@ size_t sat_b3_uncovered_count(
 size_t sat_b3_high_filter_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::vector<size_t>>& rejected, bool high_frontier)
 {
-    interval_sat supports(dimension);
+    support_context support_context_(dimension);
+    interval_sat supports(support_context_);
     for (const auto& indices : rejected) supports.reject_from_high_frontier(indices);
 
     supports.start_cardinality(cardinality);
@@ -1722,12 +1743,13 @@ size_t sat_b3_high_filter_uncovered_count(
 
 size_t sat_b3_interval_clause_size(size_t dimension, uint64_t lower_mask, uint64_t upper_mask)
 {
-    interval_sat diagram(dimension);
-    support lower(dimension);
-    support upper(dimension);
+    support_context support_context_(dimension);
+    interval_sat diagram(support_context_);
+    support lower = support_context_.make();
+    support upper = support_context_.make();
     for (size_t bit = 0; bit < dimension; ++bit) {
-        if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
-        if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
+        if ((lower_mask & (uint64_t{1} << bit)) != 0) support_context_.set(lower, bit);
+        if ((upper_mask & (uint64_t{1} << bit)) != 0) support_context_.set(upper, bit);
     }
     diagram.add_interval(lower, upper);
     return diagram.last_interval_clause_size();

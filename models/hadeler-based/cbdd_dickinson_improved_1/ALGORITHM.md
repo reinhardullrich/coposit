@@ -39,11 +39,7 @@ The new singular-space derivation, proofs, counterexamples, and rejected extensi
 
 ## Notation
 
-Let $A\in\mathbb Z^{n\times n}$ be nonempty and symmetric, and let
-
-$$
-[n]=\{1,\ldots,n\}.
-$$
+Let $A\in\mathbb Z^{n\times n}$ be nonempty and symmetric.
 
 For a support $I\subseteq[n]$, $A_I$ is the corresponding principal matrix. For an embedded vector $u\in\mathbb R^n$, define
 

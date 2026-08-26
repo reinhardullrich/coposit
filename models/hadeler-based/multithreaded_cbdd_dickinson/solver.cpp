@@ -35,20 +35,20 @@ namespace coposit::model {
 namespace {
 
 struct subset_result {
-    explicit subset_result(size_t dimension)
-        : lower(dimension)
-        , upper(dimension)
+    explicit subset_result(support_context& context)
+        : lower(context.make())
+        , upper(context.make())
     {
     }
 
-    void reset() noexcept
+    void reset(const support_context& context) noexcept
     {
         ready = false;
         negative_witness = false;
         nonnegative_zero = false;
         upper_size = 0;
-        lower.clear();
-        upper.clear();
+        context.clear(lower);
+        context.clear(upper);
     }
 
     bool ready = false;
@@ -62,10 +62,11 @@ struct subset_result {
 class interval_cbdd {
 public:
     explicit interval_cbdd(size_t dimension, diagnostics::tracker* diagnostics = nullptr)
-        : dimension_(dimension)
+        : support_context_(dimension)
+        , dimension_(dimension)
         , diagnostics_(diagnostics)
         , expiring_(dimension + 1, empty)
-        , current_support_(dimension)
+        , current_support_(support_context_.make())
     {
         nodes_.push_back({dimension_, dimension_, 0, 0}); // Constant false.
         nodes_.push_back({dimension_, dimension_, 1, 1}); // Constant true.
@@ -87,9 +88,10 @@ public:
 
     void take_batch(size_t limit, std::vector<support>& result)
     {
+        for (support& value : result) support_context_.release(std::move(value));
         result.clear();
         if (remaining_ == empty || limit == 0) return;
-        current_support_.clear();
+        support_context_.clear(current_support_);
         enumerate(remaining_, 0, limit, result);
     }
 
@@ -205,16 +207,16 @@ private:
         if ((++enumeration_steps_ & 4095U) == 0) timeout_checkpoint();
         if (variable == dimension_) {
             assert(root == unit);
-            result.push_back(current_support_);
+            result.push_back(support_context_.clone(current_support_));
             return;
         }
 
         if (root == unit || variable < nodes_[root].top) {
             enumerate(root, variable + 1, limit, result);
             if (result.size() == limit) return;
-            current_support_.set(actual_index(variable));
+            support_context_.set(current_support_, actual_index(variable));
             enumerate(root, variable + 1, limit, result);
-            current_support_.reset(actual_index(variable));
+            support_context_.reset(current_support_, actual_index(variable));
             return;
         }
 
@@ -222,9 +224,9 @@ private:
         assert(variable <= value.bottom);
         enumerate(variable == value.bottom ? value.low : root, variable + 1, limit, result);
         if (result.size() == limit) return;
-        current_support_.set(actual_index(variable));
+        support_context_.set(current_support_, actual_index(variable));
         enumerate(value.high, variable + 1, limit, result);
-        current_support_.reset(actual_index(variable));
+        support_context_.reset(current_support_, actual_index(variable));
     }
 
     template <bool ReportDiagnostics>
@@ -274,9 +276,9 @@ private:
         size_t root = unit;
         for (size_t variable_value = dimension_; variable_value-- > 0;) {
             const size_t bit = actual_index(variable_value);
-            if (lower.contains(bit)) {
+            if (support_context_.contains(lower, bit)) {
                 root = make_node(variable_value, empty, root);
-            } else if (!upper.contains(bit)) {
+            } else if (!support_context_.contains(upper, bit)) {
                 root = make_node(variable_value, root, empty);
             }
         }
@@ -394,6 +396,7 @@ private:
         return {make_node(bottom_value + 1, value.bottom, value.low, value.high), value.high};
     }
 
+    support_context support_context_;
     size_t dimension_;
     diagnostics::tracker* diagnostics_;
     std::vector<node> nodes_;
@@ -423,7 +426,8 @@ void copy_principal(const matrix_integer& matrix, const std::vector<size_t>& ind
 class subset_evaluator {
 public:
     explicit subset_evaluator(size_t dimension)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , product_(dimension)
     {
         indices_.reserve(dimension);
@@ -431,8 +435,8 @@ public:
 
     void evaluate(const matrix_integer& matrix, const support& selected, subset_result& result)
     {
-        result.reset();
-        selected.copy_indices_to(indices_);
+        result.reset(support_context_);
+        support_context_.extract_set_indices(selected, indices_);
         const size_t dimension = indices_.size();
         principal_.resize(dimension, dimension);
         solution_.resize(dimension, 1);
@@ -466,7 +470,7 @@ public:
         }
 
         for (size_t local = 0; local < indices_.size(); ++local)
-            if (!solution_(local, 0).is_zero()) result.lower.set(indices_[local]);
+            if (!solution_(local, 0).is_zero()) support_context_.set(result.lower, indices_[local]);
 
         for (integer& value : product_) value.set_zero();
         for (size_t row = 0; row < matrix.rows(); ++row) {
@@ -474,7 +478,7 @@ public:
             for (size_t local = 0; local < indices_.size(); ++local)
                 product_[row].addmul(matrix(row, indices_[local]), solution_(local, 0));
             if (product_[row].sign() >= 0) {
-                result.upper.set(row);
+                support_context_.set(result.upper, row);
                 ++result.upper_size;
             }
         }
@@ -482,6 +486,7 @@ public:
     }
 
 private:
+    support_context support_context_;
     fraction_free_ldlt_factorization factorization_;
     matrix_integer principal_;
     matrix_integer solution_;
@@ -492,7 +497,8 @@ private:
 class support_worker_pool {
 public:
     support_worker_pool(size_t dimension, size_t worker_count, size_t first_cpu)
-        : dimension_(dimension)
+        : support_context_(dimension)
+        , dimension_(dimension)
     {
         evaluators_.reserve(worker_count);
         for (size_t index = 0; index < worker_count; ++index) evaluators_.push_back(std::make_unique<subset_evaluator>(dimension));
@@ -533,8 +539,8 @@ public:
     const std::vector<subset_result>& evaluate(
         const matrix_integer& matrix, const std::vector<support>& batch, bool stop_on_nonnegative_zero)
     {
-        while (results_.size() < batch.size()) results_.emplace_back(dimension_);
-        for (size_t index = 0; index < batch.size(); ++index) results_[index].reset();
+        while (results_.size() < batch.size()) results_.emplace_back(support_context_);
+        for (size_t index = 0; index < batch.size(); ++index) results_[index].reset(support_context_);
 
         std::unique_lock<std::mutex> lock(mutex_);
         matrix_ = &matrix;
@@ -603,6 +609,7 @@ private:
         }
     }
 
+    support_context support_context_;
     const size_t dimension_;
     std::vector<std::unique_ptr<subset_evaluator>> evaluators_;
     std::vector<std::thread> threads_;
@@ -740,16 +747,17 @@ std::pair<size_t, size_t> multithreaded_cbdd_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals)
 {
     interval_cbdd diagram(dimension);
+    support_context context(dimension);
     std::vector<subset_result> certificates;
     certificates.reserve(intervals.size());
     for (const auto& [lower_mask, upper_mask] : intervals) {
-        certificates.emplace_back(dimension);
+        certificates.emplace_back(context);
         subset_result& certificate = certificates.back();
         certificate.ready = true;
         for (size_t bit = 0; bit < dimension; ++bit) {
-            if ((lower_mask & (uint64_t{1} << bit)) != 0) certificate.lower.set(bit);
+            if ((lower_mask & (uint64_t{1} << bit)) != 0) context.set(certificate.lower, bit);
             if ((upper_mask & (uint64_t{1} << bit)) != 0) {
-                certificate.upper.set(bit);
+                context.set(certificate.upper, bit);
                 ++certificate.upper_size;
             }
         }
@@ -765,13 +773,14 @@ std::pair<size_t, size_t> multithreaded_cbdd_uncovered_count(
 size_t multithreaded_cbdd_maximum_interval_chain(size_t dimension, uint64_t lower_mask, uint64_t upper_mask)
 {
     interval_cbdd diagram(dimension);
+    support_context context(dimension);
     std::vector<subset_result> certificates;
-    certificates.emplace_back(dimension);
+    certificates.emplace_back(context);
     certificates.back().ready = true;
     for (size_t bit = 0; bit < dimension; ++bit) {
-        if ((lower_mask & (uint64_t{1} << bit)) != 0) certificates.back().lower.set(bit);
+        if ((lower_mask & (uint64_t{1} << bit)) != 0) context.set(certificates.back().lower, bit);
         if ((upper_mask & (uint64_t{1} << bit)) != 0) {
-            certificates.back().upper.set(bit);
+            context.set(certificates.back().upper, bit);
             ++certificates.back().upper_size;
         }
     }
@@ -783,16 +792,17 @@ size_t multithreaded_cbdd_expired_bucket_count(
     size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals)
 {
     interval_cbdd diagram(dimension);
+    support_context context(dimension);
     std::vector<subset_result> certificates;
     certificates.reserve(intervals.size());
     for (const auto& [lower_mask, upper_mask] : intervals) {
-        certificates.emplace_back(dimension);
+        certificates.emplace_back(context);
         subset_result& certificate = certificates.back();
         certificate.ready = true;
         for (size_t bit = 0; bit < dimension; ++bit) {
-            if ((lower_mask & (uint64_t{1} << bit)) != 0) certificate.lower.set(bit);
+            if ((lower_mask & (uint64_t{1} << bit)) != 0) context.set(certificate.lower, bit);
             if ((upper_mask & (uint64_t{1} << bit)) != 0) {
-                certificate.upper.set(bit);
+                context.set(certificate.upper, bit);
                 ++certificate.upper_size;
             }
         }

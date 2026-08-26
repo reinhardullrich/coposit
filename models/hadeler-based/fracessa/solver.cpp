@@ -20,10 +20,11 @@ namespace {
  */
 class support_generator {
 public:
-    explicit support_generator(size_t dimension)
-        : dimension_(dimension)
-        , forbidden_by_lowest_(dimension)
-        , partial_support_(dimension)
+    explicit support_generator(support_context& context)
+        : context_(context)
+        , dimension_(context.dimension())
+        , forbidden_by_lowest_(dimension_)
+        , partial_support_(context.make())
     {
     }
 
@@ -40,14 +41,14 @@ public:
 
     void add_forbidden(const support& current_support)
     {
-        pending_forbidden_.push_back(current_support);
+        pending_forbidden_.push_back(context_.clone(current_support));
     }
 
 private:
     void activate_pending()
     {
         for (support& forbidden : pending_forbidden_) {
-            forbidden_by_lowest_[forbidden.lowest_index()].push_back(std::move(forbidden));
+            forbidden_by_lowest_[context_.first(forbidden)].push_back(std::move(forbidden));
         }
         pending_forbidden_.clear();
     }
@@ -55,7 +56,7 @@ private:
     bool completes_forbidden(size_t new_lowest_bit) const noexcept
     {
         for (const support& forbidden : forbidden_by_lowest_[new_lowest_bit]) {
-            if (forbidden.is_subset_of(partial_support_)) return true;
+            if (context_.is_subset_of(forbidden, partial_support_)) return true;
         }
         return false;
     }
@@ -73,12 +74,13 @@ private:
         const size_t bit = bits_remaining - 1;
         if (needed < bits_remaining && !generate_from(bit, needed, callback)) return false;
 
-        partial_support_.set(bit);
+        context_.set(partial_support_, bit);
         const bool keep_going = completes_forbidden(bit) || generate_from(bit, needed - 1, callback);
-        partial_support_.reset(bit);
+        context_.reset(partial_support_, bit);
         return keep_going;
     }
 
+    support_context& context_;
     size_t dimension_;
     std::vector<std::vector<support>> forbidden_by_lowest_;
     std::vector<support> pending_forbidden_;
@@ -96,6 +98,7 @@ public:
     explicit candidate_search(const matrix_integer& matrix)
         : input_(matrix)
         , game_(matrix)
+        , support_context_(matrix.rows())
         , factorization_(matrix.rows())
     {
         game_.negate();
@@ -104,12 +107,12 @@ public:
 
     copositivity_classification classify(bool stop_at_zero)
     {
-        support_generator generator(game_.rows());
+        support_generator generator(support_context_);
         bool candidate_found = false;
         bool decision_complete = false;
         copositivity_classification result{true, true};
         generator.generate([&](const support& current_support, size_t support_size) {
-            current_support.copy_indices_to(support_indices_);
+            support_context_.extract_set_indices(current_support, support_indices_);
             if (support_size <= 3) {
                 const copositivity_classification face =
                     small_copositivity::classify_principal(input_, support_indices_.data(), support_size);
@@ -203,7 +206,7 @@ private:
         const size_t reference = support_indices_[0];
         calculate_payoff(payoff_numerator_, reference, support_size);
         for (size_t strategy = 0; strategy < game_.rows(); ++strategy) {
-            if (current_support.contains(strategy)) continue;
+            if (support_context_.contains(current_support, strategy)) continue;
             calculate_payoff(outside_payoff_numerator_, strategy, support_size);
             if (outside_payoff_numerator_.compare(payoff_numerator_) > 0) return false;
         }
@@ -213,6 +216,7 @@ private:
 
     const matrix_integer& input_;
     matrix_integer game_;
+    support_context support_context_;
     fraction_free_ldlt_factorization factorization_;
     std::vector<size_t> support_indices_;
     matrix_integer reduced_system_;

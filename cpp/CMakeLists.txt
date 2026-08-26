@@ -124,7 +124,7 @@ set(COPOSIT_COMBINED_CLASSIFICATION_MODELS
     multithreaded_cbdd_dickinson ceiling_pruned_dickinson kernel_cone_dickinson affine_companion_dickinson
     layered_singular_lift_dickinson
     breadth_first_singular_lift_dickinson
-    czdd_dickinson sat_dickinson sat_halfspace_dickinson sat_halfspace_rays_dickinson sat_b1 sat_b2 sat_b3 clasp_b3 bdd_b3 sat_b4 sat_b5 nbc_b6 nbc_b7 improved_nbc_b7 improved_nbc_b8 improved_nbc_b9 improved_nbc_g2 sat_c1 sat_c2 sat_c3 sat_c4 f1 f2 g1 sat_a1 sat_a2 sat_a3 sat_a4 sat_a5
+    czdd_dickinson sat_dickinson sat_halfspace_dickinson sat_halfspace_rays_dickinson sat_b1 sat_b2 sat_b3 clasp_b3 bdd_b3 sat_b4 sat_b5 nbc_b6 nbc_b7 improved_nbc_b7 dual_frontier_nbc dual_frontier_nbc_two dual_frontier_nbc_three dual_frontier_nbc_four improved_nbc_b8 improved_nbc_b9 improved_nbc_g2 sat_c1 sat_c2 sat_c3 sat_c4 f1 f2 g1 sat_a1 sat_a2 sat_a3 sat_a4 sat_a5
     sat_halfspace_lp_dickinson
     sat_halfspace_milp_dickinson sat_halfspace_rays_lookahead_dickinson
     sat_halfspace_rays_wide_dickinson
@@ -173,6 +173,10 @@ set(COPOSIT_COPOSITIVE_MODELS
     nbc_b6
     nbc_b7
     improved_nbc_b7
+    dual_frontier_nbc
+    dual_frontier_nbc_two
+    dual_frontier_nbc_three
+    dual_frontier_nbc_four
     improved_nbc_b8
     improved_nbc_b9
     improved_nbc_g2
@@ -266,7 +270,10 @@ function(add_coposit_model_interfaces model_name)
             target_link_libraries(${model_target} PRIVATE libclasp)
         elseif(model_name STREQUAL "nbc_b6" OR model_name STREQUAL "nbc_b7")
             target_link_libraries(${model_target} PRIVATE coposit_nbc_upward_supports)
-        elseif(model_name STREQUAL "improved_nbc_b7" OR model_name STREQUAL "improved_nbc_b8"
+        elseif(model_name STREQUAL "improved_nbc_b7" OR model_name STREQUAL "dual_frontier_nbc"
+               OR model_name STREQUAL "dual_frontier_nbc_two" OR model_name STREQUAL "dual_frontier_nbc_three"
+               OR model_name STREQUAL "dual_frontier_nbc_four"
+               OR model_name STREQUAL "improved_nbc_b8"
                OR model_name STREQUAL "improved_nbc_b9" OR model_name STREQUAL "improved_nbc_g2")
             target_link_libraries(${model_target} PRIVATE coposit_improved_nbc_upward_supports)
         elseif(model_name STREQUAL "clingo_dickinson" OR model_name STREQUAL "clingo_halfspace_dickinson")
@@ -316,6 +323,10 @@ add_coposit_model_interfaces(sat_b5)
 add_coposit_model_interfaces(nbc_b6)
 add_coposit_model_interfaces(nbc_b7)
 add_coposit_model_interfaces(improved_nbc_b7)
+add_coposit_model_interfaces(dual_frontier_nbc)
+add_coposit_model_interfaces(dual_frontier_nbc_two)
+add_coposit_model_interfaces(dual_frontier_nbc_three)
+add_coposit_model_interfaces(dual_frontier_nbc_four)
 add_coposit_model_interfaces(improved_nbc_b8)
 add_coposit_model_interfaces(improved_nbc_b9)
 add_coposit_model_interfaces(improved_nbc_g2)
@@ -651,6 +662,34 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
     target_compile_definitions(test_improved_nbc_b7 PRIVATE COPOSIT_IMPROVED_NBC_B7_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
     target_link_libraries(test_improved_nbc_b7 PRIVATE coposit_core coposit_improved_nbc_upward_supports GTest::gtest_main)
     add_test(NAME ImprovedNbcB7ModelTests COMMAND test_improved_nbc_b7)
+
+    add_executable(test_dual_frontier_nbc
+        ../models/hadeler-based/dual_frontier_nbc/test_solver.cpp
+        ../models/hadeler-based/dual_frontier_nbc/solver.cpp)
+    target_compile_definitions(test_dual_frontier_nbc PRIVATE COPOSIT_DUAL_FRONTIER_NBC_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_dual_frontier_nbc PRIVATE coposit_core coposit_improved_nbc_upward_supports GTest::gtest_main)
+    add_test(NAME DualFrontierNbcModelTests COMMAND test_dual_frontier_nbc)
+
+    add_executable(test_dual_frontier_nbc_two
+        ../models/hadeler-based/dual_frontier_nbc_two/test_solver.cpp
+        ../models/hadeler-based/dual_frontier_nbc_two/solver.cpp)
+    target_compile_definitions(test_dual_frontier_nbc_two PRIVATE COPOSIT_DUAL_FRONTIER_NBC_TWO_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_dual_frontier_nbc_two PRIVATE coposit_core coposit_improved_nbc_upward_supports GTest::gtest_main)
+    add_test(NAME DualFrontierNbcTwoModelTests COMMAND test_dual_frontier_nbc_two)
+
+    add_executable(test_dual_frontier_nbc_three
+        ../models/hadeler-based/dual_frontier_nbc_three/test_solver.cpp
+        ../models/hadeler-based/dual_frontier_nbc_three/solver.cpp)
+    target_compile_definitions(test_dual_frontier_nbc_three PRIVATE COPOSIT_DUAL_FRONTIER_NBC_THREE_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_dual_frontier_nbc_three PRIVATE coposit_core coposit_improved_nbc_upward_supports GTest::gtest_main)
+    add_test(NAME DualFrontierNbcThreeModelTests COMMAND test_dual_frontier_nbc_three)
+
+    add_executable(test_dual_frontier_nbc_four
+        ../models/hadeler-based/dual_frontier_nbc_four/test_solver.cpp
+        ../models/hadeler-based/dual_frontier_nbc_four/solver.cpp)
+    target_compile_definitions(test_dual_frontier_nbc_four PRIVATE COPOSIT_DUAL_FRONTIER_NBC_FOUR_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_dual_frontier_nbc_four PRIVATE coposit_core coposit_improved_nbc_upward_supports GTest::gtest_main)
+    add_test(NAME DualFrontierNbcFourModelTests COMMAND test_dual_frontier_nbc_four)
 
     add_executable(test_improved_nbc_b8
         ../models/hadeler-based/improved_nbc_b8/test_solver.cpp

@@ -266,28 +266,31 @@ enum class bounded_coverage { none, skip_curvature, check_curvature };
 
 class bounded_interval_index {
 public:
-  explicit bounded_interval_index(size_t dimension)
-      : dimension_(dimension), by_trigger_(dimension) {}
+  explicit bounded_interval_index(support_context &context)
+      : context_(context), dimension_(context.dimension()), by_trigger_(dimension_) {}
 
   void start_cardinality(size_t cardinality) {
     for (auto &bucket : by_trigger_) {
       bucket.erase(std::remove_if(bucket.begin(), bucket.end(),
-                                  [&](const bounded_interval &interval) {
-                                    return interval.upper_size < cardinality;
+                                  [&](bounded_interval &interval) {
+                                    if (interval.upper_size >= cardinality) return false;
+                                    context_.release(std::move(interval.lower));
+                                    context_.release(std::move(interval.upper));
+                                    return true;
                                   }),
                    bucket.end());
     }
   }
 
   void add(support lower, support upper, bool check_curvature) {
-    assert(!lower.empty());
-    const size_t upper_size = upper.cardinality();
+    assert(!context_.empty(lower));
+    const size_t upper_size = context_.count(upper);
     assert(upper_size < dimension_);
-    assert(lower.is_subset_of(upper));
+    assert(context_.is_subset_of(lower, upper));
 
-    size_t trigger = lower.lowest_index();
+    size_t trigger = context_.first(lower);
     for (size_t bit = trigger + 1; bit < dimension_; ++bit)
-      if (lower.contains(bit) &&
+      if (context_.contains(lower, bit) &&
           by_trigger_[bit].size() < by_trigger_[trigger].size())
         trigger = bit;
     by_trigger_[trigger].push_back(
@@ -297,11 +300,11 @@ public:
   bounded_coverage coverage(const support &candidate) const noexcept {
     bounded_coverage result = bounded_coverage::none;
     for (size_t bit = 0; bit < dimension_; ++bit) {
-      if (!candidate.contains(bit))
+      if (!context_.contains(candidate, bit))
         continue;
       for (const bounded_interval &interval : by_trigger_[bit])
-        if (interval.lower.is_subset_of(candidate) &&
-            candidate.is_subset_of(interval.upper)) {
+        if (context_.is_subset_of(interval.lower, candidate) &&
+            context_.is_subset_of(candidate, interval.upper)) {
           if (interval.check_curvature)
             return bounded_coverage::check_curvature;
           result = bounded_coverage::skip_curvature;
@@ -320,6 +323,7 @@ public:
 #endif
 
 private:
+  support_context &context_;
   size_t dimension_;
   std::vector<std::vector<bounded_interval>> by_trigger_;
 };
@@ -328,10 +332,9 @@ enum class extension_search_result { covered, uncovered, budget_exhausted };
 
 class support_generator {
 public:
-  explicit support_generator(size_t dimension,
-                             diagnostics::tracker *diagnostics = nullptr)
-      : dimension_(dimension), forbidden_by_lowest_(dimension),
-        partial_support_(dimension), diagnostics_(diagnostics) {}
+  support_generator(support_context &context, diagnostics::tracker *diagnostics = nullptr)
+      : context_(context), dimension_(context.dimension()), forbidden_by_lowest_(dimension_),
+        partial_support_(context_.make()), diagnostics_(diagnostics) {}
 
   template <class LayerCallback, class Callback>
   bool generate(LayerCallback &&start_layer, Callback &&callback) {
@@ -367,7 +370,7 @@ public:
   }
 
   void add_forbidden(support lower) {
-    assert(!lower.empty());
+    assert(!context_.empty(lower));
     pending_forbidden_.push_back(std::move(lower));
   }
 
@@ -390,24 +393,26 @@ private:
     for (support &forbidden : pending_forbidden_) {
       const bool check_redundancy = !roots_need_normalization_ &&
                                     forbidden_.size() <= compaction_threshold();
-      if (check_redundancy && is_covered(forbidden))
+      if (check_redundancy && is_covered(forbidden)) {
+        context_.release(std::move(forbidden));
         continue;
+      }
       roots_need_normalization_ |= !check_redundancy;
       const size_t index = forbidden_.size();
       forbidden_.push_back(std::move(forbidden));
-      forbidden_by_lowest_[forbidden_[index].lowest_index()].push_back(index);
+      forbidden_by_lowest_[context_.first(forbidden_[index])].push_back(index);
     }
     pending_forbidden_.clear();
   }
 
   bool is_covered(const support &candidate) const noexcept {
-    if (candidate.empty())
+    if (context_.empty(candidate))
       return all_future_forbidden_;
     for (size_t bit = 0; bit < dimension_; ++bit) {
-      if (!candidate.contains(bit))
+      if (!context_.contains(candidate, bit))
         continue;
       for (const size_t index : forbidden_by_lowest_[bit])
-        if (forbidden_[index].is_subset_of(candidate))
+        if (context_.is_subset_of(forbidden_[index], candidate))
           return true;
     }
     return false;
@@ -415,7 +420,7 @@ private:
 
   bool completes_forbidden(size_t new_lowest_bit) const noexcept {
     for (const size_t index : forbidden_by_lowest_[new_lowest_bit])
-      if (forbidden_[index].is_subset_of(partial_support_))
+      if (context_.is_subset_of(forbidden_[index], partial_support_))
         return true;
     return false;
   }
@@ -448,16 +453,16 @@ private:
     std::vector<size_t> order(forbidden_.size());
     std::iota(order.begin(), order.end(), 0);
     std::sort(order.begin(), order.end(), [&](size_t left, size_t right) {
-      const size_t left_size = forbidden_[left].cardinality();
-      const size_t right_size = forbidden_[right].cardinality();
+      const size_t left_size = context_.count(forbidden_[left]);
+      const size_t right_size = context_.count(forbidden_[right]);
       return left_size != right_size ? left_size < right_size
-                                     : forbidden_[left] < forbidden_[right];
+                                     : context_.less(forbidden_[left], forbidden_[right]);
     });
 
     std::vector<support> expanded;
     expanded.reserve(forbidden_.size());
     for (const size_t index : order) {
-      expanded.push_back(forbidden_[index]);
+      expanded.push_back(context_.clone(forbidden_[index]));
     }
 
     std::vector<bool> still_expandable(expanded.size(), true);
@@ -471,13 +476,13 @@ private:
         if (!still_expandable[index])
           continue;
         still_expandable[index] = false;
-        expanded[index].copy_indices_to(bits);
+        context_.extract_set_indices(expanded[index], bits);
         for (const size_t bit : bits) {
           if (search_budget == 0)
             break;
-          expanded[index].reset(bit);
+          context_.reset(expanded[index], bit);
           const size_t checked_cardinality =
-              std::max(next_cardinality, expanded[index].cardinality());
+              std::max(next_cardinality, context_.count(expanded[index]));
           const extension_search_result result = find_uncovered_extension(
               expanded[index], checked_cardinality, order, search_budget);
           if (result == extension_search_result::covered) {
@@ -486,10 +491,12 @@ private:
             expanded_in_round = true;
             break;
           }
-          expanded[index].set(bit);
+          context_.set(expanded[index], bit);
         }
-        if (expanded[index].empty()) {
+        if (context_.empty(expanded[index])) {
           all_future_forbidden_ = true;
+          for (support &value : forbidden_) context_.release(std::move(value));
+          for (support &value : expanded) context_.release(std::move(value));
           forbidden_.clear();
           for (auto &bucket : forbidden_by_lowest_)
             bucket.clear();
@@ -502,11 +509,11 @@ private:
       return;
 
     std::sort(expanded.begin(), expanded.end(),
-              [](const support &left, const support &right) {
-                const size_t left_size = left.cardinality();
-                const size_t right_size = right.cardinality();
+              [&](const support &left, const support &right) {
+                const size_t left_size = context_.count(left);
+                const size_t right_size = context_.count(right);
                 return left_size != right_size ? left_size < right_size
-                                               : left < right;
+                                               : context_.less(left, right);
               });
     std::vector<support> normalized;
     normalized.reserve(expanded.size());
@@ -514,13 +521,13 @@ private:
     size_t normalization_budget = compaction_work_budget(expanded.size());
     for (support &candidate : expanded) {
       bool covered = false;
-      candidate.copy_indices_to(bits);
+      context_.extract_set_indices(candidate, bits);
       for (const size_t bit : bits) {
         for (const size_t index : normalized_by_bit[bit]) {
           if (normalization_budget == 0)
             break;
           --normalization_budget;
-          if (normalized[index].is_subset_of(candidate)) {
+          if (context_.is_subset_of(normalized[index], candidate)) {
             covered = true;
             break;
           }
@@ -528,18 +535,24 @@ private:
         if (covered || normalization_budget == 0)
           break;
       }
-      if (!normalized.empty() && candidate == normalized.back())
+      if (!normalized.empty() && context_.equal(candidate, normalized.back())) {
+        context_.release(std::move(candidate));
         continue;
-      if (covered)
+      }
+      if (covered) {
+        context_.release(std::move(candidate));
         continue;
+      }
       const size_t index = normalized.size();
       normalized.push_back(std::move(candidate));
-      normalized_by_bit[normalized[index].lowest_index()].push_back(index);
+      normalized_by_bit[context_.first(normalized[index])].push_back(index);
     }
 
     if (normalized.size() < forbidden_.size())
       COPOSIT_G1_DIAGNOSTICS("compaction-roots", normalized.size());
     forbidden_.swap(normalized);
+    for (support &value : normalized) context_.release(std::move(value));
+    for (support &value : expanded) context_.release(std::move(value));
     rebuild_buckets();
     roots_need_normalization_ = false;
   }
@@ -548,12 +561,12 @@ private:
   find_uncovered_extension(const support &required, size_t cardinality,
                            const std::vector<size_t> &order,
                            size_t &work_budget) {
-    assert(required.cardinality() <= cardinality);
-    if (forbidden_[order.front()].cardinality() > cardinality)
+    assert(context_.count(required) <= cardinality);
+    if (context_.count(forbidden_[order.front()]) > cardinality)
       return extension_search_result::uncovered;
-    partial_support_.clear();
+    context_.clear(partial_support_);
     return find_uncovered_extension_from(dimension_, cardinality, required,
-                                         required.cardinality(), order,
+                                         context_.count(required), order,
                                          work_budget);
   }
 
@@ -573,23 +586,23 @@ private:
       return extension_search_result::covered;
 
     const size_t bit = bits_remaining - 1;
-    if (!required.contains(bit) && needed < bits_remaining) {
+    if (!context_.contains(required, bit) && needed < bits_remaining) {
       const extension_search_result without_bit = find_uncovered_extension_from(
           bit, needed, required, required_needed, order, work_budget);
       if (without_bit != extension_search_result::covered)
         return without_bit;
     }
 
-    partial_support_.set(bit);
+    context_.set(partial_support_, bit);
     extension_search_result with_bit = extension_search_result::covered;
     const size_t next_required_needed =
-        required_needed - static_cast<size_t>(required.contains(bit));
+        required_needed - static_cast<size_t>(context_.contains(required, bit));
     bool completes = false;
     if (needed == 1 && next_required_needed == 0) {
       const extension_search_result exact =
           exact_forbidden(partial_support_, order, work_budget);
       if (exact == extension_search_result::budget_exhausted) {
-        partial_support_.reset(bit);
+        context_.reset(partial_support_, bit);
         return exact;
       }
       completes = exact == extension_search_result::covered;
@@ -597,11 +610,11 @@ private:
     if (!completes) {
       for (const size_t index : forbidden_by_lowest_[bit]) {
         if (work_budget == 0) {
-          partial_support_.reset(bit);
+          context_.reset(partial_support_, bit);
           return extension_search_result::budget_exhausted;
         }
         --work_budget;
-        if (forbidden_[index].is_subset_of(partial_support_)) {
+        if (context_.is_subset_of(forbidden_[index], partial_support_)) {
           completes = true;
           break;
         }
@@ -610,14 +623,14 @@ private:
     if (!completes)
       with_bit = find_uncovered_extension_from(
           bit, needed - 1, required, next_required_needed, order, work_budget);
-    partial_support_.reset(bit);
+    context_.reset(partial_support_, bit);
     return with_bit;
   }
 
   extension_search_result exact_forbidden(const support &candidate,
                                           const std::vector<size_t> &order,
                                           size_t &work_budget) const {
-    const size_t candidate_size = candidate.cardinality();
+    const size_t candidate_size = context_.count(candidate);
     size_t first = 0;
     size_t count = order.size();
     while (count != 0) {
@@ -627,16 +640,16 @@ private:
       const size_t step = count / 2;
       const size_t middle = first + step;
       const support &root = forbidden_[order[middle]];
-      const size_t root_size = root.cardinality();
+      const size_t root_size = context_.count(root);
       if (root_size < candidate_size ||
-          (root_size == candidate_size && root < candidate)) {
+          (root_size == candidate_size && context_.less(root, candidate))) {
         first = middle + 1;
         count -= step + 1;
       } else {
         count = step;
       }
     }
-    return first != order.size() && forbidden_[order[first]] == candidate
+    return first != order.size() && context_.equal(forbidden_[order[first]], candidate)
                ? extension_search_result::covered
                : extension_search_result::uncovered;
   }
@@ -645,7 +658,7 @@ private:
     for (auto &bucket : forbidden_by_lowest_)
       bucket.clear();
     for (size_t index = 0; index < forbidden_.size(); ++index)
-      forbidden_by_lowest_[forbidden_[index].lowest_index()].push_back(index);
+      forbidden_by_lowest_[context_.first(forbidden_[index])].push_back(index);
   }
 
   template <class Callback>
@@ -664,7 +677,7 @@ private:
     if (needed < bits_remaining && !generate_from(bit, needed, callback))
       return false;
 
-    partial_support_.set(bit);
+    context_.set(partial_support_, bit);
     bool keep_going = true;
     if (completes_forbidden(bit)) {
       if (diagnostics_ != nullptr)
@@ -672,10 +685,11 @@ private:
     } else {
       keep_going = generate_from(bit, needed - 1, callback);
     }
-    partial_support_.reset(bit);
+    context_.reset(partial_support_, bit);
     return keep_going;
   }
 
+  support_context &context_;
   size_t dimension_;
   std::vector<support> forbidden_;
   std::vector<std::vector<size_t>> forbidden_by_lowest_;
@@ -691,12 +705,12 @@ private:
 class dickinson_checker {
 public:
   dickinson_checker(size_t dimension, copositivity_mode mode)
-      : factorization_(dimension), endpoint_factorization_(dimension),
+      : support_context_(dimension), factorization_(dimension), endpoint_factorization_(dimension),
         floating_filter_(dimension), product_(dimension),
         shortlist_limit_(ray_shortlist_limit(dimension, dimension)),
         mode_(mode), diagnostics_(diagnostics::metric::support, dimension),
-        supports_(dimension, diagnostics_.active() ? &diagnostics_ : nullptr),
-        intervals_(dimension) {
+        supports_(support_context_, diagnostics_.active() ? &diagnostics_ : nullptr),
+        intervals_(support_context_) {
     indices_.reserve(dimension);
     endpoint_indices_.reserve(dimension);
     for (auto &endpoint : checked_endpoint_indices_)
@@ -704,18 +718,18 @@ public:
     ray_shortlist_.reserve(shortlist_limit_);
     shortlist_uppers_.reserve(shortlist_limit_);
     for (size_t index = 0; index < shortlist_limit_; ++index)
-      shortlist_uppers_.emplace_back(dimension);
+      shortlist_uppers_.push_back(support_context_.make());
   }
 
   dickinson_checker(size_t dimension,
                     copositivity_classification &classification)
-      : factorization_(dimension), endpoint_factorization_(dimension),
+      : support_context_(dimension), factorization_(dimension), endpoint_factorization_(dimension),
         floating_filter_(dimension), product_(dimension),
         shortlist_limit_(ray_shortlist_limit(dimension, dimension)),
         mode_(copositivity_mode::copositive), classification_(&classification),
         diagnostics_(diagnostics::metric::support, dimension),
-        supports_(dimension, diagnostics_.active() ? &diagnostics_ : nullptr),
-        intervals_(dimension) {
+        supports_(support_context_, diagnostics_.active() ? &diagnostics_ : nullptr),
+        intervals_(support_context_) {
     indices_.reserve(dimension);
     endpoint_indices_.reserve(dimension);
     for (auto &endpoint : checked_endpoint_indices_)
@@ -723,7 +737,7 @@ public:
     ray_shortlist_.reserve(shortlist_limit_);
     shortlist_uppers_.reserve(shortlist_limit_);
     for (size_t index = 0; index < shortlist_limit_; ++index)
-      shortlist_uppers_.emplace_back(dimension);
+      shortlist_uppers_.push_back(support_context_.make());
   }
 
   bool check(const matrix_integer &matrix) {
@@ -732,7 +746,7 @@ public:
         [&](size_t cardinality) { intervals_.start_cardinality(cardinality); },
         [&](const support &current, size_t cardinality) {
           timeout_checkpoint();
-          current.copy_indices_to(indices_);
+          support_context_.extract_set_indices(current, indices_);
           const bounded_coverage coverage = intervals_.coverage(current);
           if (coverage == bounded_coverage::check_curvature) {
             COPOSIT_G1_DIAGNOSTICS("bounded-covered", cardinality);
@@ -829,9 +843,9 @@ private:
         if (curvature.sign() > 0)
           continue;
 
-        support lower(matrix.rows());
-        lower.set(first);
-        lower.set(second);
+        support lower = support_context_.make();
+        support_context_.set(lower, first);
+        support_context_.set(lower, second);
         supports_.add_forbidden(std::move(lower));
         diagnostics_.certificate(matrix.rows() - 2);
         COPOSIT_G1_DIAGNOSTICS("pair-curvature-certificate", 2);
@@ -1030,9 +1044,9 @@ private:
                                                       endpoint_indices_))
       return false;
 
-    support lower(matrix.rows());
+    support lower = support_context_.make();
     for (const size_t index : endpoint_indices_)
-      lower.set(index);
+      support_context_.set(lower, index);
     supports_.add_forbidden(std::move(lower));
     diagnostics_.certificate(matrix.rows() - endpoint_indices_.size());
     if (stage == endpoint_stage::traditional)
@@ -1289,7 +1303,7 @@ private:
   void materialize_upper(size_t candidate_index) {
     const ray_candidate &candidate = ray_shortlist_[candidate_index];
     support &upper = shortlist_uppers_[candidate_index];
-    upper.clear();
+    support_context_.clear(upper);
     size_t gains = 0;
     size_t losses = 0;
     for (size_t row = 0; row < product_.size(); ++row) {
@@ -1301,7 +1315,7 @@ private:
       const bool current_upper = product_[row].sign() >= 0;
       const bool candidate_upper = scratch_.sign() >= 0;
       if (candidate_upper)
-        upper.set(row);
+        support_context_.set(upper, row);
       gains += !current_upper && candidate_upper;
       losses += current_upper && !candidate_upper;
     }
@@ -1314,8 +1328,8 @@ private:
     pair_score result;
     for (size_t row = 0; row < product_.size(); ++row) {
       const bool base_upper = product_[row].sign() >= 0;
-      const bool first_upper = shortlist_uppers_[first].contains(row);
-      const bool second_upper = shortlist_uppers_[second].contains(row);
+      const bool first_upper = support_context_.contains(shortlist_uppers_[first], row);
+      const bool second_upper = support_context_.contains(shortlist_uppers_[second], row);
       result.union_gains += !base_upper && (first_upper || second_upper);
       result.common_losses += base_upper && !first_upper && !second_upper;
       result.total_gains += !base_upper && first_upper;
@@ -1548,9 +1562,9 @@ private:
   }
 
   void add_curvature_certificate(size_t matrix_dimension) {
-    support lower(matrix_dimension);
+    support lower = support_context_.make();
     for (const size_t index : indices_)
-      lower.set(index);
+      support_context_.set(lower, index);
     supports_.add_forbidden(std::move(lower));
     diagnostics_.certificate(matrix_dimension - indices_.size());
     COPOSIT_G1_DIAGNOSTICS("curvature-certificate", indices_.size());
@@ -1571,37 +1585,40 @@ private:
         return false;
     }
 
-    support lower(product_.size());
+    support lower = support_context_.make();
     size_t lower_size = 0;
     for (size_t local = 0; local < indices_.size(); ++local) {
       if (solution_(local, 0).is_zero())
         continue;
-      lower.set(indices_[local]);
+      support_context_.set(lower, indices_[local]);
       ++lower_size;
     }
 
-    support upper(product_.size());
+    support upper = support_context_.make();
     size_t upper_size = 0;
     for (size_t index = 0; index < product_.size(); ++index) {
       if (product_[index].sign() < 0)
         continue;
-      upper.set(index);
+      support_context_.set(upper, index);
       ++upper_size;
     }
-    assert(lower.is_subset_of(upper));
+    assert(support_context_.is_subset_of(lower, upper));
 
     if (upper_size == product_.size() && curvature_certificate &&
         lower_size == indices_.size()) {
       COPOSIT_G1_DIAGNOSTICS("duplicate-ceiling-certificate", lower_size);
+      support_context_.release(std::move(lower));
+      support_context_.release(std::move(upper));
       return true;
     }
 
     diagnostics_.certificate(upper_size - lower_size);
     if (upper_size == product_.size()) {
       supports_.add_forbidden(std::move(lower));
+      support_context_.release(std::move(upper));
       COPOSIT_G1_DIAGNOSTICS("ceiling-certificate", lower_size);
     } else {
-      upper.copy_indices_to(endpoint_indices_);
+      support_context_.extract_set_indices(upper, endpoint_indices_);
       const bool check_curvature =
           !endpoint_reduced_hessian_is_positive_definite(matrix,
                                                          endpoint_indices_);
@@ -1627,6 +1644,7 @@ private:
     }
   }
 
+  support_context support_context_;
   fraction_free_ldlt_factorization factorization_;
   fraction_free_ldlt_factorization endpoint_factorization_;
   floating_reduced_curvature_filter floating_filter_;
@@ -1680,34 +1698,30 @@ copositivity_classification classify(const matrix_integer &matrix) {
 }
 
 #ifdef COPOSIT_G1_TESTING
-support support_from_mask(size_t dimension, uint64_t mask) {
-  support result(dimension);
-  for (size_t bit = 0; bit < dimension; ++bit)
+support support_from_mask(support_context &context, uint64_t mask) {
+  support result = context.make();
+  for (size_t bit = 0; bit < context.dimension(); ++bit)
     if ((mask & (uint64_t{1} << bit)) != 0)
-      result.set(bit);
+      context.set(result, bit);
   return result;
 }
 
-uint64_t mask_from_support(const support &value) {
-  assert(value.dimension() <= 64);
-  uint64_t result = 0;
-  for (size_t bit = 0; bit < value.dimension(); ++bit)
-    if (value.contains(bit))
-      result |= uint64_t{1} << bit;
-  return result;
+uint64_t mask_from_support(const support_context &context, const support &value) {
+  return context.small_bits(value);
 }
 
 std::vector<uint64_t> g1_generated_masks(size_t dimension,
                                          uint64_t forbidden_trigger) {
   assert(dimension <= 64);
-  support_generator generator(dimension);
+  support_context context(dimension);
+  support_generator generator(context);
   std::vector<uint64_t> result;
   generator.generate([](size_t) {},
                      [&](const support &current, size_t) {
-                       const uint64_t mask = mask_from_support(current);
+                       const uint64_t mask = mask_from_support(context, current);
                        result.push_back(mask);
                        if (mask == forbidden_trigger)
-                         generator.add_forbidden(current);
+                         generator.add_forbidden(context.clone(current));
                        return true;
                      });
   return result;
@@ -1717,16 +1731,17 @@ std::vector<uint64_t> g1_compact_masks(size_t dimension,
                                        size_t completed_cardinality,
                                        const std::vector<uint64_t> &roots) {
   assert(dimension <= 64);
-  support_generator generator(dimension);
+  support_context context(dimension);
+  support_generator generator(context);
   for (const uint64_t root : roots)
-    generator.add_forbidden(support_from_mask(dimension, root));
+    generator.add_forbidden(support_from_mask(context, root));
   generator.compact_for_testing(completed_cardinality);
   if (generator.all_future_forbidden_for_testing())
     return {0};
 
   std::vector<uint64_t> result;
   for (const support &root : generator.roots_for_testing())
-    result.push_back(mask_from_support(root));
+    result.push_back(mask_from_support(context, root));
   std::sort(result.begin(), result.end());
   return result;
 }
@@ -1735,11 +1750,12 @@ std::pair<bool, size_t> g1_interval_contains(size_t dimension, uint64_t lower,
                                              uint64_t upper, uint64_t candidate,
                                              size_t cardinality) {
   assert(dimension <= 64);
-  bounded_interval_index intervals(dimension);
-  intervals.add(support_from_mask(dimension, lower),
-                support_from_mask(dimension, upper), false);
+  support_context context(dimension);
+  bounded_interval_index intervals(context);
+  intervals.add(support_from_mask(context, lower),
+                support_from_mask(context, upper), false);
   intervals.start_cardinality(cardinality);
-  return {intervals.coverage(support_from_mask(dimension, candidate)) !=
+  return {intervals.coverage(support_from_mask(context, candidate)) !=
               bounded_coverage::none,
           intervals.size_for_testing()};
 }
@@ -1748,12 +1764,13 @@ bool g1_overlapping_intervals_check_curvature(
     size_t dimension, uint64_t first_lower, uint64_t first_upper,
     uint64_t second_lower, uint64_t second_upper, uint64_t candidate) {
   assert(dimension <= 64);
-  bounded_interval_index intervals(dimension);
-  intervals.add(support_from_mask(dimension, first_lower),
-                support_from_mask(dimension, first_upper), false);
-  intervals.add(support_from_mask(dimension, second_lower),
-                support_from_mask(dimension, second_upper), true);
-  return intervals.coverage(support_from_mask(dimension, candidate)) ==
+  support_context context(dimension);
+  bounded_interval_index intervals(context);
+  intervals.add(support_from_mask(context, first_lower),
+                support_from_mask(context, first_upper), false);
+  intervals.add(support_from_mask(context, second_lower),
+                support_from_mask(context, second_upper), true);
+  return intervals.coverage(support_from_mask(context, candidate)) ==
          bounded_coverage::check_curvature;
 }
 

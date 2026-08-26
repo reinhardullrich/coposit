@@ -26,8 +26,8 @@ copositivity decision, but the recurring mental picture is simpler: supports are
 all-ones vector measures their stationary balance, and Dickinson asks how far the same balance certificate survives when new
 coordinates are admitted.
 
-Throughout, $A\in\mathbb R^{n\times n}$ is real and symmetric, $[n]=\{1,\ldots,n\}$ is its index set, and $A_I$ is the
-principal matrix selected by a nonempty support $I\subseteq[n]$. Section 1 introduces the optimization problem formally.
+Throughout, $A\in\mathbb R^{n\times n}$ is real and symmetric, and $A_I$ is the principal matrix selected by a nonempty support
+$I\subseteq[n]$. Section 1 introduces the optimization problem formally.
 
 ## **The central map: what moves upward and what moves downward**
 
@@ -227,12 +227,6 @@ the value $\mu(A)$ is attained. Downward pruning directly proves that an entire 
 sometimes no zero value either.
 
 ## 2. Supports and simplex faces
-
-Write
-
-$$
-[n]=\{1,2,\ldots,n\}.
-$$
 
 For any vector $x$, its ordinary support is the set of its nonzero coordinates:
 

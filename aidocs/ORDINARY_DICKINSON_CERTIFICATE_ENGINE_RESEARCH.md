@@ -25,11 +25,7 @@ ceiling-only kernel search is described in
 
 ## 1. Notation And Ordinary Dickinson Coverage
 
-Let $A\in\mathbb Z^{n\times n}$ be symmetric and let
-
-$$
-[n]=\{1,\ldots,n\}.
-$$
+Let $A\in\mathbb Z^{n\times n}$ be symmetric.
 
 For $I\subseteq[n]$, $A_I$ is the principal matrix indexed by $I$. For a full vector $u\in\mathbb R^n$, define
 

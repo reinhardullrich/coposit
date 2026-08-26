@@ -17,10 +17,11 @@ namespace {
 
 class support_generator {
 public:
-    explicit support_generator(size_t dimension)
-        : dimension_(dimension)
-        , forbidden_by_lowest_(dimension)
-        , partial_support_(dimension)
+    explicit support_generator(support_context& context)
+        : context_(context)
+        , dimension_(context.dimension())
+        , forbidden_by_lowest_(dimension_)
+        , partial_support_(context.make())
     {
     }
 
@@ -37,14 +38,14 @@ public:
 
     void add_forbidden(const support& forbidden)
     {
-        pending_forbidden_.push_back(forbidden);
+        pending_forbidden_.push_back(context_.clone(forbidden));
     }
 
 private:
     void activate_pending()
     {
         for (support& forbidden : pending_forbidden_) {
-            forbidden_by_lowest_[forbidden.lowest_index()].push_back(std::move(forbidden));
+            forbidden_by_lowest_[context_.first(forbidden)].push_back(std::move(forbidden));
         }
         pending_forbidden_.clear();
     }
@@ -52,7 +53,7 @@ private:
     bool completes_forbidden(size_t new_lowest_bit) const noexcept
     {
         for (const support& forbidden : forbidden_by_lowest_[new_lowest_bit]) {
-            if (forbidden.is_subset_of(partial_support_)) return true;
+            if (context_.is_subset_of(forbidden, partial_support_)) return true;
         }
         return false;
     }
@@ -70,12 +71,13 @@ private:
         const size_t bit = bits_remaining - 1;
         if (needed < bits_remaining && !generate_from(bit, needed, callback)) return false;
 
-        partial_support_.set(bit);
+        context_.set(partial_support_, bit);
         const bool keep_going = completes_forbidden(bit) || generate_from(bit, needed - 1, callback);
-        partial_support_.reset(bit);
+        context_.reset(partial_support_, bit);
         return keep_going;
     }
 
+    support_context& context_;
     size_t dimension_;
     std::vector<std::vector<support>> forbidden_by_lowest_;
     std::vector<support> pending_forbidden_;
@@ -85,9 +87,9 @@ private:
 };
 
 struct certificate_signature {
-    explicit certificate_signature(size_t dimension)
-        : nonzero_support(dimension)
-        , product_nonnegative(dimension)
+    explicit certificate_signature(support_context& context)
+        : nonzero_support(context.make())
+        , product_nonnegative(context.make())
     {
     }
 
@@ -109,7 +111,8 @@ struct coverage_score {
 class dickinson_checker {
 public:
     dickinson_checker(size_t dimension, copositivity_mode mode)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , product_(dimension)
         , candidate_product_(dimension)
         , certificates_by_lowest_(dimension)
@@ -119,7 +122,8 @@ public:
     }
 
     dickinson_checker(size_t dimension, copositivity_classification& classification)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , product_(dimension)
         , candidate_product_(dimension)
         , certificates_by_lowest_(dimension)
@@ -131,10 +135,10 @@ public:
 
     bool check(const matrix_integer& matrix)
     {
-        support_generator generator(matrix.rows());
+        support_generator generator(support_context_);
         bool result = true;
         generator.generate([&](const support& current_support, size_t subset_dimension) {
-            current_support.copy_indices_to(indices_);
+            support_context_.extract_set_indices(current_support, indices_);
             if (subset_dimension <= 3) {
                 if (classification_ != nullptr) {
                     const copositivity_classification face =
@@ -177,8 +181,8 @@ private:
             const std::vector<certificate_signature>& certificates = certificates_by_lowest_[lowest];
             for (auto certificate = certificates.rbegin(); certificate != certificates.rend(); ++certificate) {
                 timeout_checkpoint();
-                if (certificate->nonzero_support.is_subset_of(current_support)
-                    && current_support.is_subset_of(certificate->product_nonnegative)) return true;
+                if (support_context_.is_subset_of(certificate->nonzero_support, current_support)
+                    && support_context_.is_subset_of(current_support, certificate->product_nonnegative)) return true;
             }
         }
         return false;
@@ -420,9 +424,9 @@ private:
     void add_certificate(const matrix_integer& matrix, const std::vector<size_t>& indices, const matrix_integer& solution,
                          support_generator& generator, bool product_is_ready)
     {
-        certificate_signature certificate(matrix.rows());
+        certificate_signature certificate(support_context_);
         for (size_t local = 0; local < indices.size(); ++local) {
-            if (!solution(local, 0).is_zero()) certificate.nonzero_support.set(indices[local]);
+            if (!solution(local, 0).is_zero()) support_context_.set(certificate.nonzero_support, indices[local]);
         }
 
         if (!product_is_ready) {
@@ -438,14 +442,14 @@ private:
         bool covers_every_superset = true;
         for (size_t row = 0; row < matrix.rows(); ++row) {
             if (product_[row].sign() >= 0) {
-                certificate.product_nonnegative.set(row);
+                support_context_.set(certificate.product_nonnegative, row);
             } else {
                 covers_every_superset = false;
             }
         }
 
         if (covers_every_superset) generator.add_forbidden(certificate.nonzero_support);
-        certificates_by_lowest_[certificate.nonzero_support.lowest_index()].push_back(std::move(certificate));
+        certificates_by_lowest_[support_context_.first(certificate.nonzero_support)].push_back(std::move(certificate));
     }
 
     static void copy_principal(const matrix_integer& matrix, const std::vector<size_t>& indices, matrix_integer& principal)
@@ -458,6 +462,7 @@ private:
         }
     }
 
+    support_context support_context_;
     fraction_free_ldlt_factorization factorization_;
     matrix_integer principal_;
     matrix_integer solution_;

@@ -27,9 +27,10 @@ class interval_cbdd {
 public:
   explicit interval_cbdd(size_t dimension,
                          diagnostics::tracker *diagnostics = nullptr)
-      : dimension_(dimension), diagnostics_(diagnostics),
+      : support_context_(dimension)
+        , dimension_(dimension), diagnostics_(diagnostics),
         expiring_(dimension + 1, empty),
-        current_support_(dimension) {
+        current_support_(support_context_.make()) {
     nodes_.push_back({dimension_, dimension_, 0, 0}); // Constant false.
     nodes_.push_back({dimension_, dimension_, 1, 1}); // Constant true.
   }
@@ -53,7 +54,7 @@ public:
     if (remaining_ == empty)
       return false;
 
-    current_support_.clear();
+    support_context_.clear(current_support_);
     size_t root = remaining_;
     while (root != unit) {
       assert(root != empty);
@@ -61,11 +62,11 @@ public:
       if (value.low != empty) {
         root = value.low;
       } else {
-        current_support_.set(actual_index(value.bottom));
+        support_context_.set(current_support_, actual_index(value.bottom));
         root = value.high;
       }
     }
-    current_support_.copy_indices_to(indices);
+    support_context_.extract_set_indices(current_support_, indices);
     return true;
   }
 
@@ -216,9 +217,9 @@ private:
     size_t root = unit;
     for (size_t variable_value = dimension_; variable_value-- > 0;) {
       const size_t bit = actual_index(variable_value);
-      if (lower.contains(bit)) {
+      if (support_context_.contains(lower, bit)) {
         root = make_node(variable_value, empty, root);
-      } else if (!upper.contains(bit)) {
+      } else if (!support_context_.contains(upper, bit)) {
         root = make_node(variable_value, root, empty);
       }
     }
@@ -352,6 +353,7 @@ private:
             value.high};
   }
 
+  support_context support_context_;
   size_t dimension_;
   diagnostics::tracker *diagnostics_;
   std::vector<node> nodes_;
@@ -370,8 +372,8 @@ private:
 };
 
 struct pending_interval {
-  explicit pending_interval(size_t dimension)
-      : lower(dimension), upper(dimension) {}
+  explicit pending_interval(support_context& context)
+      : lower(context.make()), upper(context.make()) {}
 
   support lower;
   support upper;
@@ -382,7 +384,7 @@ struct pending_interval {
 class dickinson_checker {
 public:
   dickinson_checker(size_t dimension, copositivity_mode mode)
-      : factorization_(dimension), mode_(mode),
+      : support_context_(dimension), factorization_(dimension), mode_(mode),
         diagnostics_(diagnostics::metric::decision_diagram, dimension),
         supports_(dimension, diagnostics_.active() ? &diagnostics_ : nullptr) {
     indices_.reserve(dimension);
@@ -391,7 +393,7 @@ public:
 
   dickinson_checker(size_t dimension,
                     copositivity_classification &classification)
-      : factorization_(dimension), mode_(copositivity_mode::copositive),
+      : support_context_(dimension), factorization_(dimension), mode_(copositivity_mode::copositive),
         classification_(&classification),
         diagnostics_(diagnostics::metric::decision_diagram, dimension),
         supports_(dimension, diagnostics_.active() ? &diagnostics_ : nullptr) {
@@ -433,7 +435,7 @@ public:
     if (factorization_.factorize_inplace(principal_) != 0)
       return {};
 
-    pending_.clear();
+    clear_pending();
     if (!search_singular_candidates(matrix))
       return {};
 
@@ -443,9 +445,9 @@ public:
       uint64_t lower = 0;
       uint64_t upper = 0;
       for (size_t bit = 0; bit < matrix.rows(); ++bit) {
-        if (interval.lower.contains(bit))
+        if (support_context_.contains(interval.lower, bit))
           lower |= uint64_t{1} << bit;
-        if (interval.upper.contains(bit))
+        if (support_context_.contains(interval.upper, bit))
           upper |= uint64_t{1} << bit;
       }
       result.emplace_back(lower, upper);
@@ -459,7 +461,7 @@ private:
     const size_t dimension = indices_.size();
     principal_.resize(dimension, dimension);
     copy_principal(matrix, indices_, principal_);
-    pending_.clear();
+    clear_pending();
 
     if (factorization_.factorize_inplace(principal_) != 0) {
       solution_.resize(dimension, 1);
@@ -687,7 +689,7 @@ private:
 
   void queue_full_product_interval(const matrix_integer &matrix,
                                    const matrix_integer &vector) {
-    pending_.emplace_back(matrix.rows());
+    pending_.emplace_back(support_context_);
     pending_interval &interval = pending_.back();
     fill_lower(vector, interval);
 
@@ -697,21 +699,21 @@ private:
       for (size_t local = 0; local < indices_.size(); ++local)
         product_.addmul(matrix(row, indices_[local]), vector(local, 0));
       if (product_.sign() >= 0) {
-        interval.upper.set(row);
+        support_context_.set(interval.upper, row);
         ++interval.upper_size;
       }
     }
-    assert(interval.lower.is_subset_of(interval.upper));
+    assert(support_context_.is_subset_of(interval.lower, interval.upper));
   }
 
   void queue_projected_interval(const matrix_integer &vector,
                                 const matrix_integer &coefficients) {
-    pending_.emplace_back(indices_.size() + outside_indices_.size());
+    pending_.emplace_back(support_context_);
     pending_interval &interval = pending_.back();
     fill_lower(vector, interval);
 
     for (const size_t index : indices_)
-      interval.upper.set(index);
+      support_context_.set(interval.upper, index);
     interval.upper_size = indices_.size();
     for (size_t outside = 0; outside < outside_indices_.size(); ++outside) {
       timeout_checkpoint();
@@ -719,11 +721,11 @@ private:
       product_.addmul(projected_(outside, 0), coefficients(0, 0));
       product_.addmul(projected_(outside, 1), coefficients(1, 0));
       if (product_.sign() >= 0) {
-        interval.upper.set(outside_indices_[outside]);
+        support_context_.set(interval.upper, outside_indices_[outside]);
         ++interval.upper_size;
       }
     }
-    assert(interval.lower.is_subset_of(interval.upper));
+    assert(support_context_.is_subset_of(interval.lower, interval.upper));
   }
 
   void fill_lower(const matrix_integer &vector,
@@ -731,7 +733,7 @@ private:
     for (size_t local = 0; local < indices_.size(); ++local) {
       if (vector(local, 0).is_zero())
         continue;
-      interval.lower.set(indices_[local]);
+      support_context_.set(interval.lower, indices_[local]);
       ++interval.lower_size;
     }
   }
@@ -749,6 +751,14 @@ private:
                                                 interval.upper_size);
       COPOSIT_CBDD_DICKINSON_IMPROVED_1_DIAGNOSTICS("retained-interval",
                                                     free_indices);
+    }
+    clear_pending();
+  }
+
+  void clear_pending() noexcept {
+    for (pending_interval& interval : pending_) {
+      support_context_.release(std::move(interval.lower));
+      support_context_.release(std::move(interval.upper));
     }
     pending_.clear();
   }
@@ -770,6 +780,7 @@ private:
     }
   }
 
+  support_context support_context_;
   fraction_free_ldlt_factorization factorization_;
   matrix_integer principal_;
   matrix_integer solution_;
@@ -817,20 +828,23 @@ size_t cbdd_dickinson_improved_1_retained_interval_count(
     const std::vector<std::pair<uint64_t, uint64_t>> &intervals) {
   assert(dimension <= 64);
   interval_cbdd diagram(dimension);
+  support_context context(dimension);
   size_t result = 0;
   for (const auto &[lower_mask, upper_mask] : intervals) {
-    support lower(dimension);
-    support upper(dimension);
+    support lower = context.make();
+    support upper = context.make();
     size_t upper_size = 0;
     for (size_t bit = 0; bit < dimension; ++bit) {
       if ((lower_mask & (uint64_t{1} << bit)) != 0)
-        lower.set(bit);
+        context.set(lower, bit);
       if ((upper_mask & (uint64_t{1} << bit)) != 0) {
-        upper.set(bit);
+        context.set(upper, bit);
         ++upper_size;
       }
     }
     result += diagram.add_interval_if_new(lower, upper, upper_size);
+    context.release(std::move(lower));
+    context.release(std::move(upper));
   }
   return result;
 }
@@ -839,28 +853,32 @@ std::pair<size_t, size_t> cbdd_dickinson_improved_1_expiry_result(
     size_t dimension, size_t cardinality,
     const std::vector<std::pair<uint64_t, uint64_t>> &intervals) {
   interval_cbdd diagram(dimension);
+  support_context context(dimension);
   for (const auto &[lower_mask, upper_mask] : intervals) {
-    support lower(dimension);
-    support upper(dimension);
+    support lower = context.make();
+    support upper = context.make();
     size_t upper_size = 0;
     for (size_t bit = 0; bit < dimension; ++bit) {
       if ((lower_mask & (uint64_t{1} << bit)) != 0)
-        lower.set(bit);
+        context.set(lower, bit);
       if ((upper_mask & (uint64_t{1} << bit)) != 0) {
-        upper.set(bit);
+        context.set(upper, bit);
         ++upper_size;
       }
     }
     diagram.add_interval_if_new(lower, upper, upper_size);
+    context.release(std::move(lower));
+    context.release(std::move(upper));
   }
   diagram.start_cardinality(cardinality);
   std::vector<size_t> indices;
   size_t uncovered = 0;
   while (diagram.take_first(indices)) {
-    support exact(dimension);
+    support exact = context.make();
     for (const size_t index : indices)
-      exact.set(index);
+      context.set(exact, index);
     diagram.add_interval_if_new(exact, exact, indices.size());
+    context.release(std::move(exact));
     ++uncovered;
   }
   return {uncovered, diagram.expired_bucket_count()};

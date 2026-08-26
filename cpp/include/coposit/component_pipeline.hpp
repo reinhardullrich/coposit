@@ -128,9 +128,10 @@ void observe_reduction(state& result, outcome reduced) noexcept
 }
 
 template<query requested>
-state check_component(const matrix_integer& matrix, const matrix_scan_result& scan, size_t reduction_depth, size_t maximum_depth)
+state check_component(const matrix_integer& matrix, support_context& support_context, const matrix_scan_result& scan,
+                      size_t reduction_depth, size_t maximum_depth)
 {
-    state result = pre_check::detail::ordinary_checks_scanned<requested>(matrix, scan);
+    state result = pre_check::detail::ordinary_checks_scanned<requested>(matrix, support_context, scan);
     if (result.done<requested>() || reduction_depth >= maximum_depth) return result;
 
     if constexpr (requested == query::combined) {
@@ -154,7 +155,8 @@ preprocessing_result preprocess(const matrix_integer& matrix, size_t reduction_d
     preprocessing_result output;
     diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::matrix_scan, matrix.rows(), 0, matrix.rows());
     const matrix_scan_requirements requirements = pre_check::detail::preprocessing_requirements<requested>();
-    const matrix_scan_result root_scan = scan_matrix(matrix, requirements);
+    support_context root_support_context(matrix.rows());
+    const matrix_scan_result root_scan = scan_matrix(matrix, requirements, root_support_context);
     output.root_result = pre_check::detail::root_checks_scanned<requested>(matrix, root_scan);
     if (output.root_result.done<requested>()) {
         if (reduction_depth == 0) diagnostics::preprocessing_complete(0, 0);
@@ -168,22 +170,23 @@ preprocessing_result preprocess(const matrix_integer& matrix, size_t reduction_d
     size_t component_number = 0;
 
     diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::connected_components, matrix.rows(), 0, matrix.rows());
-    connected_components::visit(root_scan.negative_neighbors, [&](const support& component, bool is_whole_graph) {
+    connected_components::visit(root_support_context, root_scan.negative_neighbors, [&](const support& component, bool is_whole_graph) {
         ++component_number;
         state current;
         if (is_whole_graph) {
             if (reduction_depth == 0) diagnostics::preprocessing_top_component(matrix.rows(), false);
-            current = check_component<requested>(matrix, root_scan, reduction_depth, maximum_depth);
+            current = check_component<requested>(matrix, root_support_context, root_scan, reduction_depth, maximum_depth);
             if (current.done<requested>())
                 output.components.emplace_back(current);
             else
                 output.components.emplace_back(current, matrix);
         } else {
-            component.copy_indices_to(indices);
+            root_support_context.extract_set_indices(component, indices);
             if (reduction_depth == 0) diagnostics::preprocessing_top_component(indices.size(), true);
             diagnostics::preprocessing_stage(diagnostics::preprocessing_phase::component_scan, indices.size(), component_number);
-            scanned_principal_matrix part = scan_principal_matrix(matrix, indices, requirements);
-            current = check_component<requested>(part.matrix, part.scan, reduction_depth, maximum_depth);
+            support_context part_support_context(indices.size());
+            scanned_principal_matrix part = scan_principal_matrix(matrix, indices, requirements, part_support_context);
+            current = check_component<requested>(part.matrix, part_support_context, part.scan, reduction_depth, maximum_depth);
             if (current.done<requested>())
                 output.components.emplace_back(current);
             else

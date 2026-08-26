@@ -68,7 +68,8 @@ public:
 
 class interval_sat {
 public:
-  explicit interval_sat(size_t dimension) : dimension_(dimension) {
+  explicit interval_sat(const support_context& context) : context_(context)
+        , dimension_(context.dimension()) {
     if (dimension_ > static_cast<size_t>(std::numeric_limits<int>::max() - 1))
       throw std::overflow_error(
           "SAT variable count exceeds CaDiCaL's integer literal range");
@@ -136,10 +137,10 @@ public:
     last_interval_clause_size_ = 0;
 #endif
     for (size_t index = 0; index < dimension_; ++index) {
-      const bool in_upper = upper.contains(index);
+      const bool in_upper = context_.contains(upper, index);
       if (in_upper)
         ++upper_size;
-      if (lower.contains(index)) {
+      if (context_.contains(lower, index)) {
         solver_.add(-variable(index));
 #ifdef COPOSIT_SAT_A1_TESTING
         ++last_interval_clause_size_;
@@ -228,6 +229,9 @@ private:
     bitonic_merge(wires, first, count, descending);
   }
 
+  const support_context& context_;
+
+
   size_t dimension_;
   int next_variable_ = 1;
   size_t cardinality_ = 0;
@@ -261,28 +265,28 @@ struct intersection_term {
   bool subtract = false;
 };
 
-void add_selected_upper(std::vector<intersection_term> &terms,
+void add_selected_upper(support_context &context, std::vector<intersection_term> &terms,
                         const support &upper) {
   const size_t old_size = terms.size();
   terms.reserve(old_size * 2);
   for (size_t index = 0; index < old_size; ++index) {
-    support intersection = terms[index].upper;
-    intersection.intersect_with(upper);
+    support intersection = context.clone(terms[index].upper);
+    context.intersect(intersection, upper);
     terms.push_back({std::move(intersection), !terms[index].subtract});
   }
 }
 
-integer marginal_coverage(const support &candidate, size_t anchor_size,
+integer marginal_coverage(support_context &context, const support &candidate, size_t anchor_size,
                           const std::vector<intersection_term> &terms) {
   integer result;
   integer contribution;
-  support intersection(candidate.dimension());
+  support intersection = context.make();
   for (size_t index = 0; index < terms.size(); ++index) {
     if ((index & 255U) == 0)
       timeout_checkpoint();
-    intersection = candidate;
-    intersection.intersect_with(terms[index].upper);
-    const size_t intersection_size = intersection.cardinality();
+    context.copy(intersection, candidate);
+    context.intersect(intersection, terms[index].upper);
+    const size_t intersection_size = context.count(intersection);
     assert(intersection_size >= anchor_size);
     contribution.set_one();
     fmpz_mul_2exp(contribution.native_handle(), contribution.native_handle(),
@@ -292,16 +296,17 @@ integer marginal_coverage(const support &candidate, size_t anchor_size,
     else
       result += contribution;
   }
+  context.release(std::move(intersection));
   return result;
 }
 
-bool retain_maximal_upper(std::vector<upper_endpoint> &endpoints,
+bool retain_maximal_upper(support_context &context, std::vector<upper_endpoint> &endpoints,
                           const support &candidate, size_t candidate_size) {
   for (size_t index = 0; index < endpoints.size(); ++index) {
     if ((index & 255U) == 0)
       timeout_checkpoint();
     if (candidate_size <= endpoints[index].upper_size &&
-        candidate.is_subset_of(endpoints[index].upper))
+        context.is_subset_of(candidate, endpoints[index].upper))
       return false;
   }
 
@@ -310,15 +315,17 @@ bool retain_maximal_upper(std::vector<upper_endpoint> &endpoints,
     if ((read & 255U) == 0)
       timeout_checkpoint();
     if (endpoints[read].upper_size <= candidate_size &&
-        endpoints[read].upper.is_subset_of(candidate))
+        context.is_subset_of(endpoints[read].upper, candidate)) {
+      context.release(std::move(endpoints[read].upper));
       continue;
+    }
     if (write != read)
       endpoints[write] = std::move(endpoints[read]);
     ++write;
   }
   endpoints.erase(endpoints.begin() + static_cast<std::ptrdiff_t>(write),
                   endpoints.end());
-  endpoints.push_back({candidate, candidate_size});
+  endpoints.push_back({context.clone(candidate), candidate_size});
   return true;
 }
 
@@ -403,7 +410,8 @@ bool better_pair(const ray_pair &candidate, const ray_pair &current) noexcept {
 class dickinson_checker {
 public:
   dickinson_checker(size_t dimension, copositivity_mode mode)
-      : factorization_(dimension), product_(dimension), sweep_upper_(dimension),
+      : support_context_(dimension)
+        , factorization_(dimension), product_(dimension), sweep_upper_(support_context_.make()),
         shortlist_limit_(ray_shortlist_limit(dimension, dimension)),
         mode_(mode), diagnostics_(diagnostics::metric::support, dimension) {
     indices_.reserve(dimension);
@@ -411,12 +419,13 @@ public:
     shortlist_uppers_.reserve(shortlist_limit_);
     upper_endpoints_.reserve(shortlist_limit_);
     for (size_t index = 0; index < shortlist_limit_; ++index)
-      shortlist_uppers_.emplace_back(dimension);
+      shortlist_uppers_.push_back(support_context_.make());
   }
 
   dickinson_checker(size_t dimension,
                     copositivity_classification &classification)
-      : factorization_(dimension), product_(dimension), sweep_upper_(dimension),
+      : support_context_(dimension)
+        , factorization_(dimension), product_(dimension), sweep_upper_(support_context_.make()),
         shortlist_limit_(ray_shortlist_limit(dimension, dimension)),
         mode_(copositivity_mode::copositive), classification_(&classification),
         diagnostics_(diagnostics::metric::support, dimension) {
@@ -425,7 +434,7 @@ public:
     shortlist_uppers_.reserve(shortlist_limit_);
     upper_endpoints_.reserve(shortlist_limit_);
     for (size_t index = 0; index < shortlist_limit_; ++index)
-      shortlist_uppers_.emplace_back(dimension);
+      shortlist_uppers_.push_back(support_context_.make());
   }
 
   bool check(const matrix_integer &matrix) {
@@ -434,7 +443,7 @@ public:
     combined_ray_sweep_count_ = 0;
     combined_ray_improvement_count_ = 0;
 #endif
-    supports_.emplace(matrix.rows());
+    supports_.emplace(support_context_);
     for (size_t subset_dimension = 1; subset_dimension <= matrix.rows();
          ++subset_dimension) {
       diagnostics_.stage(subset_dimension);
@@ -464,13 +473,13 @@ public:
 #ifdef COPOSIT_SAT_A1_TESTING
   bool check_support_for_testing(const matrix_integer &matrix,
                                  const std::vector<size_t> &indices) {
-    support lower(matrix.rows());
-    support upper(matrix.rows());
+    support lower = support_context_.make();
+    support upper = support_context_.make();
     const bool result =
         optimize_support_for_testing(matrix, indices, lower, upper);
     last_fixed_support_upper_size = 0;
     for (size_t index = 0; index < matrix.rows(); ++index)
-      last_fixed_support_upper_size += upper.contains(index);
+      last_fixed_support_upper_size += support_context_.contains(upper, index);
     return result;
   }
 
@@ -497,7 +506,7 @@ public:
     combined_ray_sweep_count_ = 0;
     combined_ray_improvement_count_ = 0;
     indices_ = indices;
-    supports_.emplace(matrix.rows());
+    supports_.emplace(support_context_);
     if (!process_subset(matrix))
       return 0;
     publish_test_counters();
@@ -507,6 +516,7 @@ public:
 
 private:
   bool process_subset(const matrix_integer &matrix) {
+    for (upper_endpoint &endpoint : upper_endpoints_) support_context_.release(std::move(endpoint.upper));
     upper_endpoints_.clear();
     const size_t dimension = indices_.size();
     principal_.resize(dimension, dimension);
@@ -621,15 +631,15 @@ private:
   }
 
   void retain_current_upper() {
-    sweep_upper_.clear();
+    support_context_.clear(sweep_upper_);
     size_t upper_size = 0;
     for (size_t row = 0; row < product_.size(); ++row) {
       if (product_[row].sign() < 0)
         continue;
-      sweep_upper_.set(row);
+      support_context_.set(sweep_upper_, row);
       ++upper_size;
     }
-    retain_maximal_upper(upper_endpoints_, sweep_upper_, upper_size);
+    retain_maximal_upper(support_context_, upper_endpoints_, sweep_upper_, upper_size);
   }
 
   bool search_direction(size_t direction, bool remember_ray) {
@@ -715,7 +725,7 @@ private:
     size_t interval_upper_size = 0;
     size_t interval_gain_size = 0;
     size_t interval_loss_size = 0;
-    sweep_upper_.clear();
+    support_context_.clear(sweep_upper_);
     for (size_t row = 0; row < product_.size(); ++row) {
       const int base_sign = product_[row].sign();
       const int direction_sign = direction_products_(row, direction).sign();
@@ -723,7 +733,7 @@ private:
           base_sign > 0 || (base_sign == 0 && direction_sign >= 0);
       interval_upper_size += in_upper;
       if (in_upper)
-        sweep_upper_.set(row);
+        support_context_.set(sweep_upper_, row);
       interval_loss_size += base_sign == 0 && direction_sign < 0;
     }
 
@@ -763,7 +773,7 @@ private:
         } else if (event.direction_sign > 0) {
           ++root_upper_size;
           ++positive_product_event_count;
-          sweep_upper_.set(event.coordinate);
+          support_context_.set(sweep_upper_, event.coordinate);
         } else {
           ++negative_product_event_count;
         }
@@ -773,7 +783,7 @@ private:
           interval_gain_size + positive_product_event_count;
       const size_t root_loss_size = interval_loss_size;
       if (positive_product_event_count > 0)
-        retain_maximal_upper(upper_endpoints_, sweep_upper_, root_upper_size);
+        retain_maximal_upper(support_context_, upper_endpoints_, sweep_upper_, root_upper_size);
       consider_signature(root_lower_size, root_upper_size, root_positive_size,
                          root_gain_size, root_loss_size,
                          breakpoint_events_[group_begin].root);
@@ -789,7 +799,7 @@ private:
       for (size_t index = group_begin; index < group_end; ++index) {
         const breakpoint_event &event = breakpoint_events_[index];
         if (!event.solution_entry && event.direction_sign < 0)
-          sweep_upper_.reset(event.coordinate);
+          support_context_.reset(sweep_upper_, event.coordinate);
       }
 
       if (group_end < breakpoint_events_.size())
@@ -868,7 +878,7 @@ private:
   void materialize_upper(size_t candidate_index) {
     const ray_candidate &candidate = ray_shortlist_[candidate_index];
     support &upper = shortlist_uppers_[candidate_index];
-    upper.clear();
+    support_context_.clear(upper);
     size_t gains = 0;
     size_t losses = 0;
     for (size_t row = 0; row < product_.size(); ++row) {
@@ -880,7 +890,7 @@ private:
       const bool current_upper = product_[row].sign() >= 0;
       const bool candidate_upper = scratch_.sign() >= 0;
       if (candidate_upper)
-        upper.set(row);
+        support_context_.set(upper, row);
       gains += !current_upper && candidate_upper;
       losses += current_upper && !candidate_upper;
     }
@@ -893,8 +903,8 @@ private:
     pair_score result;
     for (size_t row = 0; row < product_.size(); ++row) {
       const bool base_upper = product_[row].sign() >= 0;
-      const bool first_upper = shortlist_uppers_[first].contains(row);
-      const bool second_upper = shortlist_uppers_[second].contains(row);
+      const bool first_upper = support_context_.contains(shortlist_uppers_[first], row);
+      const bool second_upper = support_context_.contains(shortlist_uppers_[second], row);
       result.union_gains += !base_upper && (first_upper || second_upper);
       result.common_losses += base_upper && !first_upper && !second_upper;
       result.total_gains += !base_upper && first_upper;
@@ -1134,19 +1144,19 @@ private:
   }
 
   bool add_certificate() {
-    support lower(product_.size());
-    support upper(product_.size());
+    support lower = support_context_.make();
+    support upper = support_context_.make();
     size_t lower_size = 0;
     size_t upper_size = 0;
     for (size_t local = 0; local < indices_.size(); ++local) {
       if (!solution_(local, 0).is_zero()) {
-        lower.set(indices_[local]);
+        support_context_.set(lower, indices_[local]);
         ++lower_size;
       }
     }
     for (size_t row = 0; row < product_.size(); ++row) {
       if (product_[row].sign() >= 0) {
-        upper.set(row);
+        support_context_.set(upper, row);
         ++upper_size;
       }
     }
@@ -1164,27 +1174,29 @@ private:
         return false;
     }
 
-    retain_maximal_upper(upper_endpoints_, upper, upper_size);
+    retain_maximal_upper(support_context_, upper_endpoints_, upper, upper_size);
 
 #ifdef COPOSIT_SAT_A1_TESTING
     if (captured_lower_ != nullptr) {
-      *captured_lower_ = lower;
-      *captured_upper_ = upper;
+      support_context_.copy(*captured_lower_, lower);
+      support_context_.copy(*captured_upper_, upper);
+      support_context_.release(std::move(lower));
+      support_context_.release(std::move(upper));
       return true;
     }
 #endif
-    support anchor(product_.size());
+    support anchor = support_context_.make();
     for (const size_t index : indices_)
-      anchor.set(index);
+      support_context_.set(anchor, index);
 
     supports_->add_interval(lower, upper);
     if (diagnostics_.active())
       diagnostics_.certificate(upper_size - lower_size, upper_size);
 
     std::vector<intersection_term> intersections;
-    intersections.push_back({support(product_.size()), false});
-    intersections.front().upper.set_all();
-    add_selected_upper(intersections, upper);
+    intersections.push_back({support_context_.make(), false});
+    support_context_.set_all(intersections.front().upper);
+    add_selected_upper(support_context_, intersections, upper);
 
     std::vector<bool> selected(upper_endpoints_.size(), false);
     const size_t budget = endpoint_budget(product_.size());
@@ -1192,10 +1204,10 @@ private:
       size_t best_index = upper_endpoints_.size();
       integer best_marginal;
       for (size_t index = 0; index < upper_endpoints_.size(); ++index) {
-        if (selected[index] || upper_endpoints_[index].upper == upper)
+        if (selected[index] || support_context_.equal(upper_endpoints_[index].upper, upper))
           continue;
         const integer marginal = marginal_coverage(
-            upper_endpoints_[index].upper, indices_.size(), intersections);
+            support_context_, upper_endpoints_[index].upper, indices_.size(), intersections);
         if (marginal.sign() <= 0)
           continue;
         if (best_index == upper_endpoints_.size() ||
@@ -1205,8 +1217,8 @@ private:
                   upper_endpoints_[best_index].upper_size ||
               (upper_endpoints_[index].upper_size ==
                    upper_endpoints_[best_index].upper_size &&
-               upper_endpoints_[index].upper <
-                   upper_endpoints_[best_index].upper)))) {
+               support_context_.less(upper_endpoints_[index].upper,
+                                     upper_endpoints_[best_index].upper))))) {
           best_index = index;
           best_marginal = marginal;
         }
@@ -1222,9 +1234,13 @@ private:
         diagnostics_.certificate(endpoint.upper_size - indices_.size(),
                                  endpoint.upper_size);
       if (retained + 1 < budget)
-        add_selected_upper(intersections, endpoint.upper);
+        add_selected_upper(support_context_, intersections, endpoint.upper);
     }
     COPOSIT_SAT_A1_DIAGNOSTICS("upper_antichain", upper_endpoints_.size());
+    for (intersection_term &term : intersections) support_context_.release(std::move(term.upper));
+    support_context_.release(std::move(anchor));
+    support_context_.release(std::move(lower));
+    support_context_.release(std::move(upper));
     return true;
   }
 
@@ -1246,6 +1262,8 @@ private:
     last_nondominated_upper_count = upper_endpoints_.size();
   }
 #endif
+
+  support_context support_context_;
 
   fraction_free_ldlt_factorization factorization_;
   matrix_integer principal_;
@@ -1370,17 +1388,19 @@ size_t sat_a1_interval_count_for_support_for_testing(
 size_t sat_a1_maximal_upper_count_for_testing(
     size_t dimension, const std::vector<uint64_t> &candidates) {
   assert(dimension <= 64);
+  support_context context(dimension);
   std::vector<upper_endpoint> endpoints;
   for (const uint64_t mask : candidates) {
-    support candidate(dimension);
+    support candidate = context.make();
     size_t candidate_size = 0;
     for (size_t bit = 0; bit < dimension; ++bit) {
       if ((mask & (uint64_t{1} << bit)) == 0)
         continue;
-      candidate.set(bit);
+      context.set(candidate, bit);
       ++candidate_size;
     }
-    retain_maximal_upper(endpoints, candidate, candidate_size);
+    retain_maximal_upper(context, endpoints, candidate, candidate_size);
+    context.release(std::move(candidate));
   }
   return endpoints.size();
 }
@@ -1388,15 +1408,16 @@ size_t sat_a1_maximal_upper_count_for_testing(
 size_t sat_a1_uncovered_count(
     size_t dimension, size_t cardinality,
     const std::vector<std::pair<uint64_t, uint64_t>> &intervals) {
-  interval_sat diagram(dimension);
+  support_context support_context_(dimension);
+    interval_sat diagram(support_context_);
   for (const auto &[lower_mask, upper_mask] : intervals) {
-    support lower(dimension);
-    support upper(dimension);
+    support lower = support_context_.make();
+    support upper = support_context_.make();
     for (size_t bit = 0; bit < dimension; ++bit) {
       if ((lower_mask & (uint64_t{1} << bit)) != 0)
-        lower.set(bit);
+        support_context_.set(lower, bit);
       if ((upper_mask & (uint64_t{1} << bit)) != 0)
-        upper.set(bit);
+        support_context_.set(upper, bit);
     }
     diagram.add_interval(lower, upper);
   }
@@ -1405,10 +1426,11 @@ size_t sat_a1_uncovered_count(
   std::vector<size_t> indices;
   size_t count = 0;
   while (diagram.take_first(indices)) {
-    support exact(dimension);
+    support exact = support_context_.make();
     for (const size_t index : indices)
-      exact.set(index);
+      support_context_.set(exact, index);
     diagram.add_interval(exact, exact);
+        support_context_.release(std::move(exact));
     ++count;
   }
   return count;
@@ -1416,14 +1438,15 @@ size_t sat_a1_uncovered_count(
 
 size_t sat_a1_interval_clause_size(size_t dimension, uint64_t lower_mask,
                                    uint64_t upper_mask) {
-  interval_sat diagram(dimension);
-  support lower(dimension);
-  support upper(dimension);
+  support_context support_context_(dimension);
+    interval_sat diagram(support_context_);
+  support lower = support_context_.make();
+  support upper = support_context_.make();
   for (size_t bit = 0; bit < dimension; ++bit) {
     if ((lower_mask & (uint64_t{1} << bit)) != 0)
-      lower.set(bit);
+      support_context_.set(lower, bit);
     if ((upper_mask & (uint64_t{1} << bit)) != 0)
-      upper.set(bit);
+      support_context_.set(upper, bit);
   }
   diagram.add_interval(lower, upper);
   return diagram.last_interval_clause_size();

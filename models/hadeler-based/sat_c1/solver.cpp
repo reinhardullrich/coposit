@@ -227,8 +227,9 @@ public:
 
 class interval_sat {
 public:
-    explicit interval_sat(size_t dimension)
-        : dimension_(dimension)
+    explicit interval_sat(const support_context& context)
+        : context_(context)
+        , dimension_(context.dimension())
     {
         if (dimension_ > static_cast<size_t>(std::numeric_limits<int>::max() - 1))
             throw std::overflow_error("SAT variable count exceeds CaDiCaL's integer literal range");
@@ -289,9 +290,9 @@ public:
         last_interval_clause_size_ = 0;
 #endif
         for (size_t index = 0; index < dimension_; ++index) {
-            const bool in_upper = upper.contains(index);
+            const bool in_upper = context_.contains(upper, index);
             if (in_upper) ++upper_size;
-            if (lower.contains(index)) {
+            if (context_.contains(lower, index)) {
                 solver_.add(-variable(index));
 #ifdef COPOSIT_SAT_C1_TESTING
                 ++last_interval_clause_size_;
@@ -418,6 +419,9 @@ private:
         bitonic_merge(wires, first, count, descending);
     }
 
+    const support_context& context_;
+
+
     size_t dimension_;
     int next_variable_ = 1;
     size_t cardinality_ = 0;
@@ -436,11 +440,12 @@ class local_curvature_sat {
 public:
     local_curvature_sat(size_t dimension, const support& lower, const support& upper,
                         const std::vector<std::vector<size_t>>& known_bad_cores)
-        : variable_by_index_(dimension)
+        : support_context_(dimension)
+        , variable_by_index_(dimension)
     {
         for (size_t index = 0; index < dimension; ++index) {
-            if (lower.contains(index)) lower_.push_back(index);
-            else if (upper.contains(index)) {
+            if (support_context_.contains(lower, index)) lower_.push_back(index);
+            else if (support_context_.contains(upper, index)) {
                 if (optional_.size() >= static_cast<size_t>(std::numeric_limits<int>::max()))
                     throw std::overflow_error("local curvature SAT variable count exceeds CaDiCaL's literal range");
                 optional_.push_back(index);
@@ -523,11 +528,12 @@ private:
         throw std::runtime_error("CaDiCaL returned an inconclusive local curvature result without a coposit timeout");
     }
 
-    static bool is_subset_of_upper(const std::vector<size_t>& indices, const support& upper)
+    bool is_subset_of_upper(const std::vector<size_t>& indices, const support& upper) const
     {
-        return std::all_of(indices.begin(), indices.end(), [&](size_t index) { return upper.contains(index); });
+        return std::all_of(indices.begin(), indices.end(), [&](size_t index) { return support_context_.contains(upper, index); });
     }
 
+    support_context support_context_;
     timeout_terminator terminator_;
     CaDiCaL::Solver solver_;
     std::vector<size_t> lower_;
@@ -538,7 +544,8 @@ private:
 class tangent_schur_residual {
 public:
     explicit tangent_schur_residual(size_t dimension)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
     {
     }
 
@@ -547,8 +554,8 @@ public:
         lower_.clear();
         optional_.clear();
         for (size_t index = 0; index < matrix.rows(); ++index) {
-            if (lower.contains(index)) lower_.push_back(index);
-            else if (upper.contains(index)) optional_.push_back(index);
+            if (support_context_.contains(lower, index)) lower_.push_back(index);
+            else if (support_context_.contains(upper, index)) optional_.push_back(index);
         }
         if (lower_.empty()) throw std::logic_error("Dickinson certificate has an empty lower support");
 
@@ -638,6 +645,8 @@ private:
         result += matrix(anchor, anchor);
     }
 
+    support_context support_context_;
+
     fraction_free_ldlt_factorization factorization_;
     matrix_integer base_;
     matrix_integer cross_;
@@ -725,7 +734,8 @@ bool better_pair(const ray_pair& candidate, const ray_pair& current) noexcept
 class dickinson_checker {
 public:
     dickinson_checker(size_t dimension, copositivity_mode mode)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , floating_filter_(dimension)
         , curvature_residual_(dimension)
         , product_(dimension)
@@ -736,11 +746,12 @@ public:
         indices_.reserve(dimension);
         ray_shortlist_.reserve(shortlist_limit_);
         shortlist_uppers_.reserve(shortlist_limit_);
-        for (size_t index = 0; index < shortlist_limit_; ++index) shortlist_uppers_.emplace_back(dimension);
+        for (size_t index = 0; index < shortlist_limit_; ++index) shortlist_uppers_.push_back(support_context_.make());
     }
 
     dickinson_checker(size_t dimension, copositivity_classification& classification)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , floating_filter_(dimension)
         , curvature_residual_(dimension)
         , product_(dimension)
@@ -752,7 +763,7 @@ public:
         indices_.reserve(dimension);
         ray_shortlist_.reserve(shortlist_limit_);
         shortlist_uppers_.reserve(shortlist_limit_);
-        for (size_t index = 0; index < shortlist_limit_; ++index) shortlist_uppers_.emplace_back(dimension);
+        for (size_t index = 0; index < shortlist_limit_; ++index) shortlist_uppers_.push_back(support_context_.make());
     }
 
     bool check(const matrix_integer& matrix)
@@ -771,7 +782,7 @@ public:
         local_curvature_exact_query_count_ = 0;
 #endif
         curvature_cores_.clear();
-        supports_.emplace(matrix.rows());
+        supports_.emplace(support_context_);
         install_pair_curvature_exclusions(matrix);
 
         size_t low = 1;
@@ -788,11 +799,11 @@ public:
 #ifdef COPOSIT_SAT_C1_TESTING
     bool check_support_for_testing(const matrix_integer& matrix, const std::vector<size_t>& indices)
     {
-        support lower(matrix.rows());
-        support upper(matrix.rows());
+        support lower = support_context_.make();
+        support upper = support_context_.make();
         const bool result = optimize_support_for_testing(matrix, indices, lower, upper);
         last_fixed_support_upper_size = 0;
-        for (size_t index = 0; index < matrix.rows(); ++index) last_fixed_support_upper_size += upper.contains(index);
+        for (size_t index = 0; index < matrix.rows(); ++index) last_fixed_support_upper_size += support_context_.contains(upper, index);
         return result;
     }
 
@@ -833,15 +844,15 @@ public:
         const matrix_integer& matrix, const std::vector<size_t>& lower_indices,
         const std::vector<size_t>& upper_indices)
     {
-        supports_.emplace(matrix.rows());
+        supports_.emplace(support_context_);
         curvature_cores_.clear();
         local_curvature_search_count_ = 0;
         local_curvature_core_count_ = 0;
         local_curvature_exact_query_count_ = 0;
-        support lower(matrix.rows());
-        support upper(matrix.rows());
-        for (const size_t index : lower_indices) lower.set(index);
-        for (const size_t index : upper_indices) upper.set(index);
+        support lower = support_context_.make();
+        support upper = support_context_.make();
+        for (const size_t index : lower_indices) support_context_.set(lower, index);
+        for (const size_t index : upper_indices) support_context_.set(upper, index);
         search_interval_curvature(matrix, lower, upper);
         publish_test_counters();
         return curvature_cores_;
@@ -1330,7 +1341,7 @@ private:
     {
         const ray_candidate& candidate = ray_shortlist_[candidate_index];
         support& upper = shortlist_uppers_[candidate_index];
-        upper.clear();
+        support_context_.clear(upper);
         size_t gains = 0;
         size_t losses = 0;
         for (size_t row = 0; row < product_.size(); ++row) {
@@ -1339,7 +1350,7 @@ private:
                                    candidate.step.numerator, candidate.step.denominator);
             const bool current_upper = product_[row].sign() >= 0;
             const bool candidate_upper = scratch_.sign() >= 0;
-            if (candidate_upper) upper.set(row);
+            if (candidate_upper) support_context_.set(upper, row);
             gains += !current_upper && candidate_upper;
             losses += current_upper && !candidate_upper;
         }
@@ -1353,8 +1364,8 @@ private:
         pair_score result;
         for (size_t row = 0; row < product_.size(); ++row) {
             const bool base_upper = product_[row].sign() >= 0;
-            const bool first_upper = shortlist_uppers_[first].contains(row);
-            const bool second_upper = shortlist_uppers_[second].contains(row);
+            const bool first_upper = support_context_.contains(shortlist_uppers_[first], row);
+            const bool second_upper = support_context_.contains(shortlist_uppers_[second], row);
             result.union_gains += !base_upper && (first_upper || second_upper);
             result.common_losses += base_upper && !first_upper && !second_upper;
             result.total_gains += !base_upper && first_upper;
@@ -1559,19 +1570,19 @@ private:
 
     bool add_certificate(const matrix_integer& matrix)
     {
-        support lower(product_.size());
-        support upper(product_.size());
+        support lower = support_context_.make();
+        support upper = support_context_.make();
         size_t lower_size = 0;
         size_t upper_size = 0;
         for (size_t local = 0; local < indices_.size(); ++local) {
             if (!solution_(local, 0).is_zero()) {
-                lower.set(indices_[local]);
+                support_context_.set(lower, indices_[local]);
                 ++lower_size;
             }
         }
         for (size_t row = 0; row < product_.size(); ++row) {
             if (product_[row].sign() >= 0) {
-                upper.set(row);
+                support_context_.set(upper, row);
                 ++upper_size;
             }
         }
@@ -1589,8 +1600,10 @@ private:
 
 #ifdef COPOSIT_SAT_C1_TESTING
         if (captured_lower_ != nullptr) {
-            *captured_lower_ = lower;
-            *captured_upper_ = upper;
+            support_context_.copy(*captured_lower_, lower);
+            support_context_.copy(*captured_upper_, upper);
+            support_context_.release(std::move(lower));
+            support_context_.release(std::move(upper));
             return true;
         }
 #endif
@@ -1599,6 +1612,8 @@ private:
         COPOSIT_SAT_C1_DIAGNOSTICS("dickinson", indices_.size());
         add_existing_vector_curvature_cores(matrix, lower, upper, quadratic);
         search_interval_curvature(matrix, lower, upper);
+        support_context_.release(std::move(lower));
+        support_context_.release(std::move(upper));
         return true;
     }
 
@@ -1613,12 +1628,12 @@ private:
         sum_squared.set_product(sum, sum);
         std::vector<size_t> core;
         for (size_t index = 0; index < matrix.rows(); ++index) {
-            if (lower.contains(index)) core.push_back(index);
+            if (support_context_.contains(lower, index)) core.push_back(index);
         }
 
         integer curvature;
         for (size_t index = 0; index < matrix.rows(); ++index) {
-            if (!upper.contains(index) || lower.contains(index)) continue;
+            if (!support_context_.contains(upper, index) || support_context_.contains(lower, index)) continue;
             curvature.set_product(matrix(index, index), sum_squared);
             curvature.submul(product_[index], sum);
             curvature.submul(product_[index], sum);
@@ -1638,12 +1653,12 @@ private:
 
     void search_interval_curvature(const matrix_integer& matrix, const support& lower, const support& upper)
     {
-        if (upper.cardinality() < 2 || upper.cardinality() == lower.cardinality()) return;
+        if (support_context_.count(upper) < 2 || support_context_.count(upper) == support_context_.count(lower)) return;
 
         std::vector<size_t> candidate;
-        candidate.reserve(upper.cardinality());
+        candidate.reserve(support_context_.count(upper));
         for (size_t index = 0; index < matrix.rows(); ++index)
-            if (upper.contains(index)) candidate.push_back(index);
+            if (support_context_.contains(upper, index)) candidate.push_back(index);
 
         floating_filter_.prepare(matrix);
         if (floating_filter_.looks_reduced_hessian_positive_definite(candidate)) return;
@@ -1657,7 +1672,7 @@ private:
 
         local_curvature_sat local(matrix.rows(), lower, upper, curvature_cores_);
         if (!local.take_large(candidate)) return;
-        if (candidate.size() != upper.cardinality()
+        if (candidate.size() != support_context_.count(upper)
             && floating_filter_.looks_reduced_hessian_positive_definite(candidate)) return;
         if (!residual_ready) curvature_residual_.build(matrix, lower, upper);
 
@@ -1665,7 +1680,7 @@ private:
         ++local_curvature_search_count_;
 #endif
         COPOSIT_SAT_C1_DIAGNOSTICS("local_curvature_search", candidate.size());
-        bool candidate_is_known_bad = candidate.size() == upper.cardinality();
+        bool candidate_is_known_bad = candidate.size() == support_context_.count(upper);
         do {
             const bool candidate_is_bad = candidate_is_known_bad || !residual_is_positive_definite(candidate);
             candidate_is_known_bad = false;
@@ -1689,7 +1704,7 @@ private:
     bool contains_known_curvature_core(const support& upper) const
     {
         return std::any_of(curvature_cores_.begin(), curvature_cores_.end(), [&](const auto& core) {
-            return std::all_of(core.begin(), core.end(), [&](size_t index) { return upper.contains(index); });
+            return std::all_of(core.begin(), core.end(), [&](size_t index) { return support_context_.contains(upper, index); });
         });
     }
 
@@ -1718,9 +1733,9 @@ private:
 
     void grow_good_curvature_support(std::vector<size_t>& indices, const support& upper)
     {
-        for (size_t index = 0; index < upper.dimension(); ++index) {
+        for (size_t index = 0; index < support_context_.dimension(); ++index) {
             timeout_checkpoint();
-            if (!upper.contains(index) || std::binary_search(indices.begin(), indices.end(), index)) continue;
+            if (!support_context_.contains(upper, index) || std::binary_search(indices.begin(), indices.end(), index)) continue;
             auto larger = indices;
             larger.insert(std::lower_bound(larger.begin(), larger.end(), index), index);
             if (residual_is_positive_definite(larger)) indices.swap(larger);
@@ -1747,12 +1762,14 @@ private:
 #ifdef COPOSIT_SAT_C1_TESTING
         ++support_curvature_exclusion_count_;
         if (captured_lower_ != nullptr) {
-            support lower(product_.size());
-            support ceiling(product_.size());
-            for (const size_t index : indices_) lower.set(index);
-            ceiling.set_all();
-            *captured_lower_ = lower;
-            *captured_upper_ = ceiling;
+            support lower = support_context_.make();
+            support ceiling = support_context_.make();
+            for (const size_t index : indices_) support_context_.set(lower, index);
+            support_context_.set_all(ceiling);
+            support_context_.copy(*captured_lower_, lower);
+            support_context_.copy(*captured_upper_, ceiling);
+            support_context_.release(std::move(lower));
+            support_context_.release(std::move(ceiling));
             return true;
         }
 #endif
@@ -1822,6 +1839,8 @@ private:
         last_local_curvature_cores = curvature_cores_;
     }
 #endif
+
+    support_context support_context_;
 
     fraction_free_ldlt_factorization factorization_;
     floating_positive_semidefinite_filter floating_filter_;
@@ -1971,13 +1990,17 @@ bool sat_c1_schur_curvature_for_testing(
     const matrix_integer& matrix, const std::vector<size_t>& lower_indices,
     const std::vector<size_t>& upper_indices, const std::vector<size_t>& query)
 {
-    support lower(matrix.rows());
-    support upper(matrix.rows());
-    for (const size_t index : lower_indices) lower.set(index);
-    for (const size_t index : upper_indices) upper.set(index);
+    support_context context(matrix.rows());
+    support lower = context.make();
+    support upper = context.make();
+    for (const size_t index : lower_indices) context.set(lower, index);
+    for (const size_t index : upper_indices) context.set(upper, index);
     tangent_schur_residual residual(matrix.rows());
     residual.build(matrix, lower, upper);
-    return residual.is_positive_definite(query);
+    const bool result = residual.is_positive_definite(query);
+    context.release(std::move(lower));
+    context.release(std::move(upper));
+    return result;
 }
 
 bool sat_c1_floating_psd_candidate_for_testing(const matrix_integer& matrix, const std::vector<size_t>& indices)
@@ -2027,13 +2050,14 @@ size_t sat_c1_fixed_support_upper_size_for_testing() noexcept
 size_t sat_c1_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals)
 {
-    interval_sat diagram(dimension);
+    support_context support_context_(dimension);
+    interval_sat diagram(support_context_);
     for (const auto& [lower_mask, upper_mask] : intervals) {
-        support lower(dimension);
-        support upper(dimension);
+        support lower = support_context_.make();
+        support upper = support_context_.make();
         for (size_t bit = 0; bit < dimension; ++bit) {
-            if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
-            if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
+            if ((lower_mask & (uint64_t{1} << bit)) != 0) support_context_.set(lower, bit);
+            if ((upper_mask & (uint64_t{1} << bit)) != 0) support_context_.set(upper, bit);
         }
         diagram.add_interval(lower, upper);
     }
@@ -2042,9 +2066,10 @@ size_t sat_c1_uncovered_count(
     std::vector<size_t> indices;
     size_t count = 0;
     while (diagram.take_first(indices)) {
-        support exact(dimension);
-        for (const size_t index : indices) exact.set(index);
+        support exact = support_context_.make();
+        for (const size_t index : indices) support_context_.set(exact, index);
         diagram.add_interval(exact, exact);
+        support_context_.release(std::move(exact));
         ++count;
     }
     return count;
@@ -2053,15 +2078,17 @@ size_t sat_c1_uncovered_count(
 size_t sat_c1_pair_exclusion_uncovered_count(
     size_t dimension, size_t cardinality, size_t first, size_t second)
 {
-    interval_sat diagram(dimension);
+    support_context support_context_(dimension);
+    interval_sat diagram(support_context_);
     diagram.add_pair_upward_closure(first, second);
     diagram.start_cardinality(cardinality);
     std::vector<size_t> indices;
     size_t count = 0;
     while (diagram.take_first(indices)) {
-        support exact(dimension);
-        for (const size_t index : indices) exact.set(index);
+        support exact = support_context_.make();
+        for (const size_t index : indices) support_context_.set(exact, index);
         diagram.add_interval(exact, exact);
+        support_context_.release(std::move(exact));
         ++count;
     }
     return count;
@@ -2071,7 +2098,8 @@ size_t sat_c1_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::vector<size_t>>& upward,
     const std::vector<std::vector<size_t>>& downward, const std::vector<std::vector<size_t>>& exact)
 {
-    interval_sat supports(dimension);
+    support_context support_context_(dimension);
+    interval_sat supports(support_context_);
     for (const auto& indices : upward) supports.add_upward_closure(indices);
     for (const auto& indices : downward) supports.add_downward_closure(indices);
     for (const auto& indices : exact) supports.add_exact_support(indices);
@@ -2089,7 +2117,8 @@ size_t sat_c1_uncovered_count(
 size_t sat_c1_high_filter_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::vector<size_t>>& rejected, bool high_frontier)
 {
-    interval_sat supports(dimension);
+    support_context support_context_(dimension);
+    interval_sat supports(support_context_);
     for (const auto& indices : rejected) supports.reject_from_high_frontier(indices);
 
     supports.start_cardinality(cardinality);
@@ -2104,12 +2133,13 @@ size_t sat_c1_high_filter_uncovered_count(
 
 size_t sat_c1_interval_clause_size(size_t dimension, uint64_t lower_mask, uint64_t upper_mask)
 {
-    interval_sat diagram(dimension);
-    support lower(dimension);
-    support upper(dimension);
+    support_context support_context_(dimension);
+    interval_sat diagram(support_context_);
+    support lower = support_context_.make();
+    support upper = support_context_.make();
     for (size_t bit = 0; bit < dimension; ++bit) {
-        if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
-        if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
+        if ((lower_mask & (uint64_t{1} << bit)) != 0) support_context_.set(lower, bit);
+        if ((upper_mask & (uint64_t{1} << bit)) != 0) support_context_.set(upper, bit);
     }
     diagram.add_interval(lower, upper);
     return diagram.last_interval_clause_size();

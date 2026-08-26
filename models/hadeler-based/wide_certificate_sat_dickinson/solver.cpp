@@ -42,8 +42,9 @@ public:
 
 class interval_sat {
 public:
-    explicit interval_sat(size_t dimension)
-        : dimension_(dimension)
+    explicit interval_sat(const support_context& context)
+        : context_(context)
+        , dimension_(context.dimension())
     {
         if (dimension_ > static_cast<size_t>(std::numeric_limits<int>::max() - 1))
             throw std::overflow_error("SAT variable count exceeds CaDiCaL's integer literal range");
@@ -101,9 +102,9 @@ public:
         last_interval_clause_size_ = 0;
 #endif
         for (size_t index = 0; index < dimension_; ++index) {
-            const bool in_upper = upper.contains(index);
+            const bool in_upper = context_.contains(upper, index);
             if (in_upper) ++upper_size;
-            if (lower.contains(index)) {
+            if (context_.contains(lower, index)) {
                 solver_.add(-variable(index));
 #ifdef COPOSIT_WIDE_CERTIFICATE_SAT_DICKINSON_TESTING
                 ++last_interval_clause_size_;
@@ -189,6 +190,9 @@ private:
         bitonic_merge(wires, first, count, descending);
     }
 
+    const support_context& context_;
+
+
     size_t dimension_;
     int next_variable_ = 1;
     size_t cardinality_ = 0;
@@ -204,7 +208,8 @@ private:
 class dickinson_checker {
 public:
     dickinson_checker(size_t dimension, copositivity_mode mode)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , product_(dimension)
         , mode_(mode)
         , diagnostics_(diagnostics::metric::support, dimension)
@@ -213,7 +218,8 @@ public:
     }
 
     dickinson_checker(size_t dimension, copositivity_classification& classification)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , product_(dimension)
         , mode_(copositivity_mode::copositive)
         , classification_(&classification)
@@ -224,7 +230,7 @@ public:
 
     bool check(const matrix_integer& matrix)
     {
-        supports_.emplace(matrix.rows());
+        supports_.emplace(support_context_);
         for (size_t subset_dimension = 1; subset_dimension <= matrix.rows(); ++subset_dimension) {
             diagnostics_.stage(subset_dimension);
             supports_->start_cardinality(subset_dimension);
@@ -286,13 +292,13 @@ private:
 
     std::pair<size_t, size_t> add_certificate(const matrix_integer& matrix)
     {
-        support lower(matrix.rows());
-        support upper(matrix.rows());
+        support lower = support_context_.make();
+        support upper = support_context_.make();
         size_t lower_size = 0;
         size_t upper_size = 0;
         for (size_t local = 0; local < indices_.size(); ++local) {
             if (!solution_(local, 0).is_zero()) {
-                lower.set(indices_[local]);
+                support_context_.set(lower, indices_[local]);
                 ++lower_size;
             }
         }
@@ -303,7 +309,7 @@ private:
             for (size_t local = 0; local < indices_.size(); ++local)
                 product_[row].addmul(matrix(row, indices_[local]), solution_(local, 0));
             if (product_[row].sign() >= 0) {
-                upper.set(row);
+                support_context_.set(upper, row);
                 ++upper_size;
             }
         }
@@ -313,15 +319,17 @@ private:
             supports_->add_interval(lower, upper);
             COPOSIT_WIDE_CERTIFICATE_SAT_DIAGNOSTICS("wide-certificate", free_indices);
         } else {
-            lower.clear();
-            upper.clear();
+            support_context_.clear(lower);
+            support_context_.clear(upper);
             for (const size_t index : indices_) {
-                lower.set(index);
-                upper.set(index);
+                support_context_.set(lower, index);
+                support_context_.set(upper, index);
             }
             supports_->add_interval(lower, upper);
             COPOSIT_WIDE_CERTIFICATE_SAT_DIAGNOSTICS("narrow-certificate", free_indices);
         }
+        support_context_.release(std::move(lower));
+        support_context_.release(std::move(upper));
         return {free_indices, upper_size};
     }
 
@@ -333,6 +341,8 @@ private:
                 principal(row, column) = matrix(indices[row], indices[column]);
         }
     }
+
+    support_context support_context_;
 
     fraction_free_ldlt_factorization factorization_;
     matrix_integer principal_;
@@ -379,13 +389,14 @@ bool wide_certificate_sat_uses_full_interval(size_t dimension, size_t cardinalit
 size_t wide_certificate_sat_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals)
 {
-    interval_sat sat(dimension);
+    support_context support_context_(dimension);
+    interval_sat sat(support_context_);
     for (const auto& [lower_mask, upper_mask] : intervals) {
-        support lower(dimension);
-        support upper(dimension);
+        support lower = support_context_.make();
+        support upper = support_context_.make();
         for (size_t bit = 0; bit < dimension; ++bit) {
-            if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
-            if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
+            if ((lower_mask & (uint64_t{1} << bit)) != 0) support_context_.set(lower, bit);
+            if ((upper_mask & (uint64_t{1} << bit)) != 0) support_context_.set(upper, bit);
         }
         sat.add_interval(lower, upper);
     }
@@ -394,8 +405,8 @@ size_t wide_certificate_sat_uncovered_count(
     std::vector<size_t> indices;
     size_t count = 0;
     while (sat.take_first(indices)) {
-        support exact(dimension);
-        for (const size_t index : indices) exact.set(index);
+        support exact = support_context_.make();
+        for (const size_t index : indices) support_context_.set(exact, index);
         sat.add_interval(exact, exact);
         ++count;
     }
@@ -404,12 +415,13 @@ size_t wide_certificate_sat_uncovered_count(
 
 size_t wide_certificate_sat_interval_count(size_t dimension, uint64_t lower_mask, uint64_t upper_mask)
 {
-    interval_sat sat(dimension);
-    support lower(dimension);
-    support upper(dimension);
+    support_context support_context_(dimension);
+    interval_sat sat(support_context_);
+    support lower = support_context_.make();
+    support upper = support_context_.make();
     for (size_t bit = 0; bit < dimension; ++bit) {
-        if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
-        if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
+        if ((lower_mask & (uint64_t{1} << bit)) != 0) support_context_.set(lower, bit);
+        if ((upper_mask & (uint64_t{1} << bit)) != 0) support_context_.set(upper, bit);
     }
     sat.add_interval(lower, upper);
     return sat.interval_count();
@@ -417,12 +429,13 @@ size_t wide_certificate_sat_interval_count(size_t dimension, uint64_t lower_mask
 
 size_t wide_certificate_sat_interval_clause_size(size_t dimension, uint64_t lower_mask, uint64_t upper_mask)
 {
-    interval_sat sat(dimension);
-    support lower(dimension);
-    support upper(dimension);
+    support_context support_context_(dimension);
+    interval_sat sat(support_context_);
+    support lower = support_context_.make();
+    support upper = support_context_.make();
     for (size_t bit = 0; bit < dimension; ++bit) {
-        if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
-        if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
+        if ((lower_mask & (uint64_t{1} << bit)) != 0) support_context_.set(lower, bit);
+        if ((upper_mask & (uint64_t{1} << bit)) != 0) support_context_.set(upper, bit);
     }
     sat.add_interval(lower, upper);
     return sat.last_interval_clause_size();

@@ -2,6 +2,87 @@
 
 This append-only file records meaningful decisions, results, and evidence that are not clear from Git. Do not log routine edits here.
 
+## 2026-08-26 — Dual-frontier model Four walks from Dickinson upper endpoints
+
+- Added `dual_frontier_nbc_four` as an isolated copy of model Three. Each deterministic NBC seed follows the normal exact Improved
+  NBC-B7 decision: an upward curvature certificate ends the seed; otherwise the optimized Halfspace–Rays Dickinson interval is
+  stored and the coverage-aware dual-frontier walk starts from its exact upper endpoint $U$.
+- Focused tests verify that a bounded interval launches the walk at $U$ and that a curvature seed launches no walk. The complete
+  112-test Release suite passed, and the five-second smoke campaign classified all 46 matrices correctly without a timeout.
+- Reinhard stopped the 180-second BPQY Quick campaign early. Before interruption, model Four completed the order-30, order-35, and
+  order-40 cases in 94.251, 35.919, and 57.743 seconds. The two order-45 cases and the order-60 case were still running. The
+  requested Peng follow-up was canceled and not run.
+
+## 2026-08-26 — Dual-frontier seeds retain their full Dickinson intervals
+
+- Added `dual_frontier_nbc_three` as an isolated copy of `dual_frontier_nbc_two`. Every deterministic NBC seed is now processed
+  once by the exact Improved NBC-B7 Halfspace–Rays path before its coverage-aware frontier walk. The resulting Dickinson interval
+  is retained even when its upper endpoint is below the full support; later path points remain ceiling-only proposals.
+- The complete 111-test Release suite passed. The five-second smoke campaign classified all 46 matrices correctly with complete
+  preprocessing, combined CP/SCP classification, diagnostics, and no timeout.
+- On the BPQY Quick Test, the order-30 matrix completed in 0.084 seconds, versus 0.180 seconds for model Two and 4.760 seconds for
+  stored Improved NBC-B7. Reinhard stopped the campaign after about 173 seconds with the order-35, order-40, and both order-45
+  cases still running; the order-60 case had not started. On Peng matrix 16242, model Three completed in 36.148 seconds. Model Two
+  had timed out at 60 seconds, but Improved NBC-B7 completed in 8.451 seconds.
+
+## 2026-08-26 — Coverage-aware dual-frontier walk remains structurally slow
+
+- Added `dual_frontier_nbc_two` as an isolated copy of `dual_frontier_nbc`. Every proposed one-index walk extension is now checked
+  against NBC before its Schur pivot is considered; the walk chooses the best uncovered extension. When no uncovered extension
+  remains, the current support is checked exactly for both upward and downward closure.
+- The complete 110-test Release suite passed, and the five-second smoke campaign classified all 46 model-relevant matrices without
+  a timeout or truth mismatch.
+- On the BPQY Quick Test, the order-30 matrix improved to 0.180 seconds, but the order-35, order-40, and both order-45 matrices still
+  timed out at 180 seconds; the order-60 run was stopped. On Peng matrix 16242 (order 25), the new model timed out at 60 seconds,
+  whereas the stored Improved NBC-B7 result completed in 8.451 seconds. Redundant travel through covered supports is therefore not
+  the main cause of the frontier model's slowdown on these structured inputs.
+
+## 2026-08-25 — Peng-style SPN-plus-exceptional matrices are not preprocessing-trivial
+
+- Added 80 deterministic exact matrices from Peng's $\operatorname{SPN}_n+B_n$ family, with 20 each at orders 50, 100, 150, and
+  200. A random five-part blow-up of $C_5$ supplies the Hoffman--Pereira exceptional term, while $vv^T$ plus a sparse nonnegative
+  matrix supplies the SPN term. Every instance satisfies $h(Q)\geq0.14$ and has an exact two-coordinate zero, proving that it is
+  copositive but not strictly copositive. These are local reproducible samples rather than Peng's unpublished matrices.
+- A ten-second Improved NBC-B7 run with combined classification, complete preprocessing, diagnostics, CPU 2 dispatch, and workers
+  on CPUs 3--9 found that preprocessing resolved none of the 80 matrices. The model completed all 20 order-50 cases, with median
+  native time 0.469 seconds, and six order-100 cases, with median completed time 7.639 seconds. The other 14 order-100 cases and all
+  40 order-150/order-200 cases timed out; there were no errors or truth mismatches.
+
+## 2026-08-25 — Peng-inspired spectral pilot exposes a strong inertia effect
+
+- Added 300 deterministic exact order-50 matrices based on Peng's $A_{c,n}$ recipe, split over $c\in\{0.01,0.02\}$, negative
+  inertia 1, 5, or 25, and 50 seeds per profile. They are explicitly local reconstructions, not Peng's unpublished instances.
+- Extended the same construction to orders 10, 15, ..., 45 with 20 seeds for each of six profiles per order. The profiles use the
+  same two $c$ values and negative inertia $1$, approximately $n/10$, or $\lfloor n/2\rfloor$. The guarded generator imported 960
+  exact matrices as IDs 15806 through 16765 and reproduces digest
+  `8b0502092038b3f1b34ad93355c654ca79d08128f68892476605adfda93eddd4`.
+- A uniform five-second Improved NBC-B7 run with complete preprocessing classified 131 matrices and timed out on 169. Every
+  completion occurred in preprocessing: 125 were non-copositive and six strictly copositive. The negative-inertia-five profiles
+  were hardest, while 91 of 100 negative-inertia-25 matrices were rejected quickly.
+- The generator, exact settings, group results, and comparison limits are recorded in
+  `experiments/peng_acn_pilot_2026-08-25/README.md`.
+
+## 2026-08-24 — Improved NBC-B7 leads the five-second BPQY baseline comparison
+
+- Reran all eight literature baselines and Improved NBC-B7 on the 404-matrix `bpqy_benchmark` after the shared support migration,
+  with complete preprocessing, diagnostics, a five-second cutoff, CPU 4 for dispatch, and workers on CPUs 5 through 9.
+- Improved NBC-B7 completed 263 full classifications. The strongest literature baseline, Dickinson 2019, completed 101; Hadeler
+  completed 69 and Danninger seven. Among strict-only baselines, Copomatrix completed 18, Bundfuss and Sponsel four each, and Dutour
+  and Safi none. Every other result was a timeout, all completed known cases matched truth, and no unknown matrix completed.
+- The nine campaigns stored 3,636 final rows and took 3,244.380 seconds wall time. Full settings, hashes, and timing summaries are in
+  `aidocs/REFERENCE_RESULTS_BPQY_BENCHMARK.md`.
+
+## 2026-08-24 — Shared support handles adopt FracESSA's compact context design
+
+- Copied FracESSA's `bitset` and `support` design from commit `07d5626c79ce1506c2b1fd2bcf3c02ddd49c560a`, then adapted it to
+  coposit's unrestricted-dimension contract. Supports are now eight-byte move-only handles: up to 64 bits are inline, while wider
+  handles refer to exact-sized storage owned by a `support_context`.
+- Added explicit release and free-list reuse for wide temporaries, so processing many supports above dimension 64 does not retain one
+  allocation per support until the context dies. Shared preprocessing and every maintained model now use the same context-backed
+  representation; no compatibility copy of the former owning support remains.
+- Added focused boundary and recycling checks at dimensions 1, 20, 63, 64, 65, 127, 128, 129, and 260. The complete 108-test Release
+  suite passes, including every maintained model and the Python boundary.
+
 ## 2026-08-24 — Combined results refresh corpus truth and fastest timings
 
 - Promoted 13 previously unknown matrices to strictly copositive from unanimous successful exact `both` results: 12695, 13249,

@@ -71,11 +71,7 @@ is the authoritative description of the maintained model.
 
 ## Notation
 
-Let $A\in\mathbb Z^{n\times n}$ be nonempty and symmetric, and write
-
-$$
-[n]=\{1,\ldots,n\}.
-$$
+Let $A\in\mathbb Z^{n\times n}$ be nonempty and symmetric.
 
 For $I\subseteq[n]$, $A_I$ is the principal matrix on $I$. For a full vector $u\in\mathbb R^n$, define
 

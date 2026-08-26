@@ -15,9 +15,9 @@ namespace coposit::model {
 namespace {
 
 struct certificate_signature {
-    explicit certificate_signature(size_t dimension)
-        : nonzero_support(dimension)
-        , product_nonnegative(dimension)
+    explicit certificate_signature(support_context& context)
+        : nonzero_support(context.make())
+        , product_nonnegative(context.make())
     {
     }
 
@@ -116,7 +116,8 @@ int exact_one_step_frank_wolfe_sign(const matrix_integer& matrix)
 class dickinson_checker {
 public:
     dickinson_checker(size_t dimension, copositivity_mode mode)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , product_(dimension)
         , certificates_by_lowest_(dimension)
         , mode_(mode)
@@ -125,7 +126,8 @@ public:
 
 
     dickinson_checker(size_t dimension, copositivity_classification& classification)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , product_(dimension)
         , certificates_by_lowest_(dimension)
         , mode_(copositivity_mode::copositive)
@@ -138,10 +140,10 @@ public:
         const size_t matrix_dimension = matrix.rows();
         for (size_t subset_dimension = 1; subset_dimension <= matrix_dimension; ++subset_dimension) {
             std::vector<size_t> indices(subset_dimension);
-            support current_support(matrix_dimension);
+            support current_support = support_context_.make();
             for (size_t i = 0; i < subset_dimension; ++i) {
                 indices[i] = i;
-                current_support.set(i);
+                support_context_.set(current_support, i);
             }
 
             do {
@@ -158,25 +160,26 @@ public:
                 }
                 if (!is_covered(current_support, indices) && !process_subset(matrix, indices)) return false;
             } while (advance_numeric_mask_order(indices, current_support, matrix_dimension));
+            support_context_.release(std::move(current_support));
         }
 
         return true;
     }
 
 private:
-    static bool advance_numeric_mask_order(std::vector<size_t>& indices, support& current_support, size_t matrix_dimension)
+    bool advance_numeric_mask_order(std::vector<size_t>& indices, support& current_support, size_t matrix_dimension) const
     {
         for (size_t i = 0; i < indices.size(); ++i) {
             const size_t upper_bound = i + 1 < indices.size() ? indices[i + 1] : matrix_dimension;
             if (indices[i] + 1 == upper_bound) continue;
 
-            current_support.reset(indices[i]);
+            support_context_.reset(current_support, indices[i]);
             ++indices[i];
-            current_support.set(indices[i]);
+            support_context_.set(current_support, indices[i]);
             for (size_t reset = 0; reset < i; ++reset) {
-                current_support.reset(indices[reset]);
+                support_context_.reset(current_support, indices[reset]);
                 indices[reset] = reset;
-                current_support.set(indices[reset]);
+                support_context_.set(current_support, indices[reset]);
             }
             return true;
         }
@@ -189,8 +192,8 @@ private:
             const std::vector<certificate_signature>& certificates = certificates_by_lowest_[lowest];
             for (auto certificate = certificates.rbegin(); certificate != certificates.rend(); ++certificate) {
                 timeout_checkpoint();
-                if (certificate->nonzero_support.is_subset_of(current_support)
-                    && current_support.is_subset_of(certificate->product_nonnegative)) return true;
+                if (support_context_.is_subset_of(certificate->nonzero_support, current_support)
+                    && support_context_.is_subset_of(current_support, certificate->product_nonnegative)) return true;
             }
         }
         return false;
@@ -238,9 +241,9 @@ private:
 
     void add_certificate(const matrix_integer& matrix, const std::vector<size_t>& indices, const matrix_integer& solution)
     {
-        certificate_signature certificate(matrix.rows());
+        certificate_signature certificate(support_context_);
         for (size_t local = 0; local < indices.size(); ++local) {
-            if (!solution(local, 0).is_zero()) certificate.nonzero_support.set(indices[local]);
+            if (!solution(local, 0).is_zero()) support_context_.set(certificate.nonzero_support, indices[local]);
         }
 
         for (integer& value : product_) value.set_zero();
@@ -249,10 +252,10 @@ private:
             for (size_t local = 0; local < indices.size(); ++local) {
                 product_[row].addmul(matrix(row, indices[local]), solution(local, 0));
             }
-            if (product_[row].sign() >= 0) certificate.product_nonnegative.set(row);
+            if (product_[row].sign() >= 0) support_context_.set(certificate.product_nonnegative, row);
         }
 
-        certificates_by_lowest_[certificate.nonzero_support.lowest_index()].push_back(std::move(certificate));
+        certificates_by_lowest_[support_context_.first(certificate.nonzero_support)].push_back(std::move(certificate));
     }
 
     static void copy_principal(const matrix_integer& matrix, const std::vector<size_t>& indices, matrix_integer& principal)
@@ -265,6 +268,7 @@ private:
         }
     }
 
+    support_context support_context_;
     fraction_free_ldlt_factorization factorization_;
     matrix_integer principal_;
     matrix_integer solution_;

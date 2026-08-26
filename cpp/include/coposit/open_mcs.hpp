@@ -30,8 +30,9 @@ struct search_result {
 
 class maximum_clique_search {
 public:
-    explicit maximum_clique_search(const std::vector<support>& adjacency)
-        : adjacency_(adjacency)
+    maximum_clique_search(const support_context& support_context, const std::vector<support>& adjacency)
+        : support_context_(support_context)
+        , adjacency_(adjacency)
         , candidate_stack_(adjacency.size() + 1)
         , color_stack_(adjacency.size() + 1)
         , order_stack_(adjacency.size() + 1)
@@ -59,7 +60,7 @@ public:
 private:
     bool adjacent(size_t left, size_t right) const noexcept
     {
-        return adjacency_[left].contains(right);
+        return support_context_.contains(adjacency_[left], right);
     }
 
     void greedy_color(const std::vector<size_t>& evaluation_order, std::vector<size_t>& color_order, std::vector<size_t>& colors)
@@ -185,7 +186,7 @@ private:
         size_t maximum_degree = 0;
 
         for (size_t vertex = 0; vertex < dimension; ++vertex) {
-            adjacency_[vertex].copy_indices_to(neighbors[vertex]);
+            support_context_.extract_set_indices(adjacency_[vertex], neighbors[vertex]);
             degree[vertex] = static_cast<std::ptrdiff_t>(neighbors[vertex].size());
             location[vertex] = vertices_by_degree[static_cast<size_t>(degree[vertex])].insert(
                 vertices_by_degree[static_cast<size_t>(degree[vertex])].end(), vertex);
@@ -301,6 +302,7 @@ private:
     }
 
     static constexpr size_t no_vertex = std::numeric_limits<size_t>::max();
+    const support_context& support_context_;
     const std::vector<support>& adjacency_;
     std::vector<size_t> clique_;
     std::vector<std::vector<size_t>> candidate_stack_;

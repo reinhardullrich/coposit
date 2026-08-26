@@ -4,6 +4,7 @@
 #include <coposit/diagnostics.hpp>
 #include <coposit/timeout.hpp>
 
+#include <cassert>
 #include <cstddef>
 #include <vector>
 
@@ -15,42 +16,47 @@ namespace coposit::connected_components {
  * only during that call. The return value is the number of visited components.
  */
 template<typename Visitor>
-inline size_t visit(const std::vector<support>& negative_neighbors, Visitor&& visitor)
+inline size_t visit(support_context& context, const std::vector<support>& negative_neighbors, Visitor&& visitor)
 {
     const size_t dimension = negative_neighbors.size();
-    support remaining(dimension);
-    for (size_t index = 0; index < dimension; ++index) remaining.set(index);
-    support component(dimension);
-    support frontier(dimension);
-    support discovered(dimension);
+    assert(context.dimension() == dimension);
+    support remaining = context.make();
+    context.set_all(remaining);
+    support component = context.make();
+    support frontier = context.make();
+    support discovered = context.make();
     size_t visited_components = 0;
     size_t visited_vertices = 0;
 
-    while (!remaining.empty()) {
+    while (!context.empty(remaining)) {
         timeout_checkpoint();
-        component.clear();
-        frontier.clear();
-        const size_t first_vertex = remaining.lowest_index();
-        component.set(first_vertex);
-        frontier.set(first_vertex);
+        context.clear(component);
+        context.clear(frontier);
+        const size_t first_vertex = context.first(remaining);
+        context.set(component, first_vertex);
+        context.set(frontier, first_vertex);
 
-        while (!frontier.empty()) {
+        while (!context.empty(frontier)) {
             timeout_checkpoint();
-            const size_t vertex = frontier.lowest_index();
-            frontier.reset(vertex);
+            const size_t vertex = context.first(frontier);
+            context.reset(frontier, vertex);
             diagnostics::advance_preprocessing(++visited_vertices, dimension);
-            discovered = negative_neighbors[vertex];
-            discovered.remove(component);
-            component.add(discovered);
-            frontier.add(discovered);
+            context.copy(discovered, negative_neighbors[vertex]);
+            context.subtract(discovered, component);
+            context.add(component, discovered);
+            context.add(frontier, discovered);
         }
 
-        remaining.remove(component);
+        context.subtract(remaining, component);
         ++visited_components;
         const support& current = component;
-        if (!visitor(current, visited_components == 1 && remaining.empty())) break;
+        if (!visitor(current, visited_components == 1 && context.empty(remaining))) break;
     }
 
+    context.release(std::move(remaining));
+    context.release(std::move(component));
+    context.release(std::move(frontier));
+    context.release(std::move(discovered));
     return visited_components;
 }
 

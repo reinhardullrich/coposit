@@ -21,20 +21,21 @@ size_t level_two_skips = 0;
 class negative_graph {
 public:
     explicit negative_graph(const matrix_integer& matrix)
-        : unreached_(matrix.rows())
-        , frontier_(matrix.rows())
-        , next_(matrix.rows())
+        : support_context_(matrix.rows())
+        , unreached_(support_context_.make())
+        , frontier_(support_context_.make())
+        , next_(support_context_.make())
     {
         neighbors_.reserve(matrix.rows());
-        for (size_t vertex = 0; vertex < matrix.rows(); ++vertex) neighbors_.emplace_back(matrix.rows());
+        for (size_t vertex = 0; vertex < matrix.rows(); ++vertex) neighbors_.push_back(support_context_.make());
         frontier_indices_.reserve(matrix.rows());
 
         for (size_t row = 0; row < matrix.rows(); ++row) {
             timeout_checkpoint();
             for (size_t column = row + 1; column < matrix.rows(); ++column) {
                 if (matrix(row, column).sign() < 0) {
-                    neighbors_[row].set(column);
-                    neighbors_[column].set(row);
+                    support_context_.set(neighbors_[row], column);
+                    support_context_.set(neighbors_[column], row);
                 } else {
                     complete_ = false;
                 }
@@ -45,28 +46,29 @@ public:
     bool induced_is_connected(const support& vertices)
     {
         if (complete_) return true;
-        unreached_ = vertices;
-        const size_t root = unreached_.lowest_index();
-        unreached_.reset(root);
-        if (unreached_.empty()) return true;
-        if (unreached_.is_subset_of(neighbors_[root])) return true;
+        support_context_.copy(unreached_, vertices);
+        const size_t root = support_context_.first(unreached_);
+        support_context_.reset(unreached_, root);
+        if (support_context_.empty(unreached_)) return true;
+        if (support_context_.is_subset_of(unreached_, neighbors_[root])) return true;
 
-        frontier_.clear();
-        frontier_.set(root);
-        while (!unreached_.empty()) {
+        support_context_.clear(frontier_);
+        support_context_.set(frontier_, root);
+        while (!support_context_.empty(unreached_)) {
             timeout_checkpoint();
-            next_.clear();
-            frontier_.copy_indices_to(frontier_indices_);
-            for (const size_t vertex : frontier_indices_) next_.add(neighbors_[vertex]);
-            next_.intersect_with(unreached_);
-            if (next_.empty()) return false;
-            unreached_.remove(next_);
-            frontier_.swap(next_);
+            support_context_.clear(next_);
+            support_context_.extract_set_indices(frontier_, frontier_indices_);
+            for (const size_t vertex : frontier_indices_) support_context_.add(next_, neighbors_[vertex]);
+            support_context_.intersect(next_, unreached_);
+            if (support_context_.empty(next_)) return false;
+            support_context_.subtract(unreached_, next_);
+            support_context_.swap(frontier_, next_);
         }
         return true;
     }
 
 private:
+    support_context support_context_;
     std::vector<support> neighbors_;
     support unreached_;
     support frontier_;
@@ -78,9 +80,10 @@ private:
 class support_generator {
 public:
     explicit support_generator(size_t dimension)
-        : dimension_(dimension)
+        : support_context_(dimension)
+        , dimension_(dimension)
         , forbidden_by_lowest_(dimension)
-        , partial_support_(dimension)
+        , partial_support_(support_context_.make())
     {
     }
 
@@ -97,20 +100,21 @@ public:
 
     void add_forbidden(const support& current_support)
     {
-        pending_forbidden_.push_back(current_support);
+        pending_forbidden_.push_back(support_context_.clone(current_support));
     }
 
 private:
     void activate_pending()
     {
-        for (support& forbidden : pending_forbidden_) forbidden_by_lowest_[forbidden.lowest_index()].push_back(std::move(forbidden));
+        for (support& forbidden : pending_forbidden_)
+            forbidden_by_lowest_[support_context_.first(forbidden)].push_back(std::move(forbidden));
         pending_forbidden_.clear();
     }
 
     bool completes_forbidden(size_t new_lowest_bit) const noexcept
     {
         for (const support& forbidden : forbidden_by_lowest_[new_lowest_bit]) {
-            if (forbidden.is_subset_of(partial_support_)) return true;
+            if (support_context_.is_subset_of(forbidden, partial_support_)) return true;
         }
         return false;
     }
@@ -128,12 +132,13 @@ private:
         const size_t bit = bits_remaining - 1;
         if (needed < bits_remaining && !generate_from(bit, needed, callback)) return false;
 
-        partial_support_.set(bit);
+        support_context_.set(partial_support_, bit);
         const bool keep_going = completes_forbidden(bit) || generate_from(bit, needed - 1, callback);
-        partial_support_.reset(bit);
+        support_context_.reset(partial_support_, bit);
         return keep_going;
     }
 
+    support_context support_context_;
     size_t dimension_;
     std::vector<std::vector<support>> forbidden_by_lowest_;
     std::vector<support> pending_forbidden_;
@@ -145,7 +150,8 @@ private:
 class candidate_search {
 public:
     explicit candidate_search(const matrix_integer& matrix)
-        : input_(matrix)
+        : support_context_(matrix.rows())
+        , input_(matrix)
         , game_(matrix)
         , factorization_(matrix.rows())
         , negative_graph_(matrix)
@@ -159,7 +165,7 @@ public:
         support_generator generator(game_.rows());
         copositivity_classification result{true, true};
         generator.generate([&](const support& current_support, size_t support_size) {
-            current_support.copy_indices_to(support_indices_);
+            support_context_.extract_set_indices(current_support, support_indices_);
             if (support_size <= 3) {
                 const copositivity_classification face =
                     small_copositivity::classify_principal(input_, support_indices_.data(), support_size);
@@ -249,7 +255,7 @@ private:
         const size_t reference = support_indices_[0];
         calculate_payoff(payoff_numerator_, reference, support_size);
         for (size_t strategy = 0; strategy < game_.rows(); ++strategy) {
-            if (current_support.contains(strategy)) continue;
+            if (support_context_.contains(current_support, strategy)) continue;
             calculate_payoff(outside_payoff_numerator_, strategy, support_size);
             if (outside_payoff_numerator_.compare(payoff_numerator_) > 0) return false;
         }
@@ -257,6 +263,7 @@ private:
         return true;
     }
 
+    support_context support_context_;
     const matrix_integer& input_;
     matrix_integer game_;
     fraction_free_ldlt_factorization factorization_;

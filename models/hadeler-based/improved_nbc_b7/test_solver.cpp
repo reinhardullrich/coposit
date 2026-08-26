@@ -58,11 +58,11 @@ matrix_integer symmetric_matrix(size_t dimension,
   return matrix;
 }
 
-support support_from_mask(size_t dimension, uint64_t mask) {
-  support result(dimension);
-  for (size_t index = 0; index < dimension; ++index)
+support support_from_mask(support_context &context, uint64_t mask) {
+  support result = context.make();
+  for (size_t index = 0; index < context.dimension(); ++index)
     if ((mask & (uint64_t{1} << index)) != 0)
-      result.set(index);
+      context.set(result, index);
   return result;
 }
 
@@ -78,7 +78,8 @@ bool interval_covers(uint64_t mask, uint64_t lower, uint64_t upper) {
 }
 
 TEST(ImprovedNbcB7Test, ResumesOneModelCallsWithoutRepeatingSupports) {
-  improved_nbc_upward_supports supports(5);
+  support_context context(5);
+  improved_nbc_upward_supports supports(context);
   supports.start_cardinality(2);
   std::vector<bool> seen(uint64_t{1} << 5, false);
   std::vector<size_t> indices;
@@ -94,17 +95,18 @@ TEST(ImprovedNbcB7Test, ResumesOneModelCallsWithoutRepeatingSupports) {
 }
 
 TEST(ImprovedNbcB7Test, LatchesCollectiveRootInconsistencyAcrossCalls) {
-  improved_nbc_upward_supports supports(3);
-  supports.add_interval(support_from_mask(3, 0b000),
-                        support_from_mask(3, 0b101));
+  support_context context(3);
+  improved_nbc_upward_supports supports(context);
+  supports.add_interval(support_from_mask(context, 0b000),
+                        support_from_mask(context, 0b101));
   supports.start_cardinality(3);
 
   std::vector<size_t> indices;
   ASSERT_TRUE(supports.take_first(indices));
   EXPECT_EQ(support_mask(indices), 0b111U);
 
-  supports.add_interval(support_from_mask(3, 0b010),
-                        support_from_mask(3, 0b111));
+  supports.add_interval(support_from_mask(context, 0b010),
+                        support_from_mask(context, 0b111));
   EXPECT_FALSE(supports.take_first(indices));
   EXPECT_TRUE(supports.all_future_covered());
 }
@@ -117,9 +119,10 @@ TEST(ImprovedNbcB7Test, ExhaustivelyMatchesSingleIntervalCoverage) {
         if ((lower & ~upper) != 0)
           continue;
         for (size_t cardinality = 1; cardinality <= dimension; ++cardinality) {
-          improved_nbc_upward_supports supports(dimension);
-          supports.add_interval(support_from_mask(dimension, lower),
-                                support_from_mask(dimension, upper));
+          support_context context(dimension);
+          improved_nbc_upward_supports supports(context);
+          supports.add_interval(support_from_mask(context, lower),
+                                support_from_mask(context, upper));
           supports.start_cardinality(cardinality);
           std::vector<bool> seen(end, false);
           std::vector<size_t> indices;
@@ -155,17 +158,18 @@ TEST(ImprovedNbcB7Test, ExhaustivelyMatchesIntervalsAddedBetweenModelCalls) {
             continue;
           for (size_t cardinality = 1; cardinality <= dimension;
                ++cardinality) {
-            improved_nbc_upward_supports supports(dimension);
-            supports.add_interval(support_from_mask(dimension, first_lower),
-                                  support_from_mask(dimension, first_upper));
+            support_context context(dimension);
+            improved_nbc_upward_supports supports(context);
+            supports.add_interval(support_from_mask(context, first_lower),
+                                  support_from_mask(context, first_upper));
             supports.start_cardinality(cardinality);
             std::vector<bool> seen(end, false);
             std::vector<size_t> indices;
             if (supports.take_first(indices))
               seen[support_mask(indices)] = true;
 
-            supports.add_interval(support_from_mask(dimension, second_lower),
-                                  support_from_mask(dimension, second_upper));
+            supports.add_interval(support_from_mask(context, second_lower),
+                                  support_from_mask(context, second_upper));
             while (supports.take_first(indices)) {
               const uint64_t mask = support_mask(indices);
               ASSERT_EQ(indices.size(), cardinality);
@@ -304,17 +308,18 @@ TEST(ImprovedNbcB7Test,
 TEST(ImprovedNbcB7Test, BuildsAnExactDickinsonIntervalOnTheLowPath) {
   matrix_integer identity;
   identity.set_identity(3);
-  support lower(3);
-  support upper(3);
+  support_context context(3);
+  support lower = context.make();
+  support upper = context.make();
 
   EXPECT_TRUE(model::improved_nbc_b7_certificate_for_testing(identity, {0},
                                                              lower, upper));
-  EXPECT_TRUE(lower.contains(0));
-  EXPECT_FALSE(lower.contains(1));
-  EXPECT_FALSE(lower.contains(2));
-  EXPECT_TRUE(upper.contains(0));
-  EXPECT_TRUE(upper.contains(1));
-  EXPECT_TRUE(upper.contains(2));
+  EXPECT_TRUE(context.contains(lower, 0));
+  EXPECT_FALSE(context.contains(lower, 1));
+  EXPECT_FALSE(context.contains(lower, 2));
+  EXPECT_TRUE(context.contains(upper, 0));
+  EXPECT_TRUE(context.contains(upper, 1));
+  EXPECT_TRUE(context.contains(upper, 2));
 }
 
 TEST(ImprovedNbcB7Test, RetainsTheExactHalfspaceRayOptimization) {

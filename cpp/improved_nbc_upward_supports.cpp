@@ -23,17 +23,18 @@ struct interval {
     size_t upper_size;
 };
 
-bool contains(const interval& outer, const interval& inner) noexcept
+bool contains(const support_context& context, const interval& outer, const interval& inner) noexcept
 {
-    return outer.lower.is_subset_of(inner.lower) && inner.upper.is_subset_of(outer.upper);
+    return context.is_subset_of(outer.lower, inner.lower) && context.is_subset_of(inner.upper, outer.upper);
 }
 
 } // namespace
 
 class improved_nbc_upward_supports::impl {
 public:
-    explicit impl(size_t dimension)
-        : dimension_(dimension)
+    explicit impl(support_context& context)
+        : support_context_(context)
+        , dimension_(context.dimension())
     {
         if (dimension_ == 0 || dimension_ > static_cast<size_t>(std::numeric_limits<int>::max() - 1))
             throw std::invalid_argument("Improved NBC support dimension is outside its integer literal range");
@@ -59,10 +60,9 @@ public:
 
     void add_interval(const support& lower, const support& upper)
     {
-        if (lower.dimension() != dimension_ || upper.dimension() != dimension_ || !lower.is_subset_of(upper))
-            throw std::invalid_argument("invalid Improved NBC support interval");
-        pending_.push_back({lower, upper, lower.cardinality(), upper.cardinality()});
-        if (lower.empty() && upper.cardinality() == dimension_) {
+        if (!support_context_.is_subset_of(lower, upper)) throw std::invalid_argument("invalid Improved NBC support interval");
+        pending_.push_back({support_context_.clone(lower), support_context_.clone(upper), support_context_.count(lower), support_context_.count(upper)});
+        if (support_context_.empty(lower) && support_context_.count(upper) == dimension_) {
             all_future_covered_ = true;
             low_stream_.solver.reset();
             high_stream_.solver.reset();
@@ -81,25 +81,29 @@ public:
     {
         if (first >= dimension_ || second >= dimension_ || first == second)
             throw std::invalid_argument("invalid Improved NBC pair closure");
-        support lower(dimension_);
-        support ceiling(dimension_);
-        lower.set(first);
-        lower.set(second);
-        ceiling.set_all();
+        support lower = support_context_.make();
+        support ceiling = support_context_.make();
+        support_context_.set(lower, first);
+        support_context_.set(lower, second);
+        support_context_.set_all(ceiling);
         add_interval(lower, ceiling);
+        support_context_.release(std::move(lower));
+        support_context_.release(std::move(ceiling));
     }
 
     void add_upward_closure(const std::vector<size_t>& indices)
     {
         if (indices.empty()) throw std::invalid_argument("an upward closure needs a nonempty root");
-        support lower(dimension_);
-        support ceiling(dimension_);
+        support lower = support_context_.make();
+        support ceiling = support_context_.make();
         for (const size_t index : indices) {
             if (index >= dimension_) throw std::invalid_argument("Improved NBC upward root index is out of range");
-            lower.set(index);
+            support_context_.set(lower, index);
         }
-        ceiling.set_all();
+        support_context_.set_all(ceiling);
         add_interval(lower, ceiling);
+        support_context_.release(std::move(lower));
+        support_context_.release(std::move(ceiling));
     }
 
     void start_cardinality(size_t cardinality, bool high_frontier)
@@ -110,12 +114,12 @@ public:
         if (selected.cardinality == cardinality) return;
         selected.cardinality = cardinality;
         selected.exhausted = all_future_covered_;
-        selected.unexplored.clear();
+        clear_prefixes(selected.unexplored);
         if (selected.exhausted) {
             selected.solver.reset();
             return;
         }
-        selected.unexplored.push_back({support(dimension_), 0});
+        selected.unexplored.push_back({support_context_.make(), 0});
         selected.solver = make_solver(true);
         selected.exhausted = selected.solver == nullptr;
     }
@@ -135,7 +139,7 @@ public:
             assumptions_.push_back(cardinality_outputs_[selected.cardinality - 1]);
             if (selected.cardinality < dimension_) assumptions_.push_back(-cardinality_outputs_[selected.cardinality]);
             for (size_t index = 0; index < current.length; ++index)
-                assumptions_.push_back(current.values.contains(index) ? variable(index) : -variable(index));
+                assumptions_.push_back(support_context_.contains(current.values, index) ? variable(index) : -variable(index));
 
             indices.clear();
             visitor_ = &capture_first_support;
@@ -153,29 +157,33 @@ public:
             if (result == IMPROVED_NBC_ENUM_ERROR) throw std::runtime_error("Improved NBC enumeration failed");
             if (result == IMPROVED_NBC_ENUM_EXHAUSTED) {
                 if (improved_nbc_solver_is_inconsistent(selected.solver.get())) {
+                    support_context_.release(std::move(current.values));
                     all_future_covered_ = true;
                     low_stream_.solver.reset();
                     high_stream_.solver.reset();
                     return false;
                 }
+                support_context_.release(std::move(current.values));
                 continue;
             }
             if (result != IMPROVED_NBC_ENUM_STOPPED) throw std::runtime_error("Improved NBC returned an unknown enumeration status");
             if (indices.size() != selected.cardinality)
                 throw std::runtime_error("Improved NBC returned a support outside the requested cardinality");
 
-            support model(dimension_);
-            for (const size_t index : indices) model.set(index);
+            support model = support_context_.make();
+            for (const size_t index : indices) support_context_.set(model, index);
             for (size_t index = 0; index < current.length; ++index) {
-                if (model.contains(index) != current.values.contains(index))
+                if (support_context_.contains(model, index) != support_context_.contains(current.values, index))
                     throw std::runtime_error("Improved NBC returned a support outside its unexplored prefix");
             }
             for (size_t index = current.length; index < dimension_; ++index) {
-                support sibling = model;
-                if (model.contains(index)) sibling.reset(index);
-                else sibling.set(index);
+                support sibling = support_context_.clone(model);
+                if (support_context_.contains(model, index)) support_context_.reset(sibling, index);
+                else support_context_.set(sibling, index);
                 selected.unexplored.push_back({std::move(sibling), index + 1});
             }
+            support_context_.release(std::move(model));
+            support_context_.release(std::move(current.values));
             return true;
         }
 
@@ -236,9 +244,9 @@ public:
 
     bool covers(const support& candidate) const
     {
-        if (candidate.dimension() != dimension_) throw std::invalid_argument("Improved NBC support dimension mismatch");
         const auto covered = [&](const interval& certificate) {
-            return certificate.lower.is_subset_of(candidate) && candidate.is_subset_of(certificate.upper);
+            return support_context_.is_subset_of(certificate.lower, candidate)
+                && support_context_.is_subset_of(candidate, certificate.upper);
         };
         return all_future_covered_ || std::any_of(active_.begin(), active_.end(), covered)
             || std::any_of(pending_.begin(), pending_.end(), covered);
@@ -246,10 +254,11 @@ public:
 
     bool covers_interval(const support& lower, const support& upper) const
     {
-        if (lower.dimension() != dimension_ || upper.dimension() != dimension_ || !lower.is_subset_of(upper))
-            throw std::invalid_argument("invalid Improved NBC support interval");
-        const interval candidate{lower, upper, lower.cardinality(), upper.cardinality()};
-        const auto covered = [&](const interval& certificate) { return contains(certificate, candidate); };
+        if (!support_context_.is_subset_of(lower, upper)) throw std::invalid_argument("invalid Improved NBC support interval");
+        const auto covered = [&](const interval& certificate) {
+            return support_context_.is_subset_of(certificate.lower, lower)
+                && support_context_.is_subset_of(upper, certificate.upper);
+        };
         return all_future_covered_ || std::any_of(active_.begin(), active_.end(), covered)
             || std::any_of(pending_.begin(), pending_.end(), covered);
     }
@@ -274,6 +283,30 @@ private:
         std::vector<prefix> unexplored;
         solver_ptr solver;
     };
+
+    void release_interval(interval& value) noexcept
+    {
+        support_context_.release(std::move(value.lower));
+        support_context_.release(std::move(value.upper));
+    }
+
+    void clear_intervals(std::vector<interval>& values) noexcept
+    {
+        for (interval& value : values) release_interval(value);
+        values.clear();
+    }
+
+    void clear_supports(std::vector<support>& values) noexcept
+    {
+        for (support& value : values) support_context_.release(std::move(value));
+        values.clear();
+    }
+
+    void clear_prefixes(std::vector<prefix>& values) noexcept
+    {
+        for (prefix& value : values) support_context_.release(std::move(value.values));
+        values.clear();
+    }
 
     static bool capture_first_support(void* opaque, const std::vector<size_t>& indices)
     {
@@ -316,8 +349,8 @@ private:
         if (solver == nullptr) return true;
         clause_.clear();
         for (size_t index = 0; index < dimension_; ++index) {
-            if (certificate.lower.contains(index)) clause_.push_back(-variable(index));
-            else if (!certificate.upper.contains(index)) clause_.push_back(variable(index));
+            if (support_context_.contains(certificate.lower, index)) clause_.push_back(-variable(index));
+            else if (!support_context_.contains(certificate.upper, index)) clause_.push_back(variable(index));
         }
         if (certificate.upper_size < dimension_) clause_.push_back(cardinality_outputs_[certificate.upper_size]);
         if (clause_.empty()) return false;
@@ -404,16 +437,22 @@ private:
     {
         std::vector<support> roots;
         std::vector<interval> bounded;
-        support ceiling(dimension_);
-        ceiling.set_all();
+        support ceiling = support_context_.make();
+        support_context_.set_all(ceiling);
         for (interval& certificate : active_) {
-            if (certificate.upper == ceiling) roots.push_back(std::move(certificate.lower));
+            if (support_context_.equal(certificate.upper, ceiling)) {
+                roots.push_back(std::move(certificate.lower));
+                support_context_.release(std::move(certificate.upper));
+            }
             else bounded.push_back(std::move(certificate));
         }
+        active_.clear();
 
-        if (std::any_of(roots.begin(), roots.end(), [](const support& root) { return root.empty(); })) {
+        if (std::any_of(roots.begin(), roots.end(), [&](const support& root) { return support_context_.empty(root); })) {
             all_future_covered_ = true;
-            active_.clear();
+            clear_supports(roots);
+            clear_intervals(bounded);
+            support_context_.release(std::move(ceiling));
             return;
         }
 
@@ -421,71 +460,93 @@ private:
         std::vector<size_t> bits;
         while (changed && !roots.empty()) {
             changed = false;
-            std::sort(roots.begin(), roots.end(), [](const support& left, const support& right) {
-                const size_t left_size = left.cardinality();
-                const size_t right_size = right.cardinality();
-                return left_size != right_size ? left_size < right_size : left < right;
+            std::sort(roots.begin(), roots.end(), [&](const support& left, const support& right) {
+                const size_t left_size = support_context_.count(left);
+                const size_t right_size = support_context_.count(right);
+                return left_size != right_size ? left_size < right_size : support_context_.less(left, right);
             });
             std::vector<support> minimal;
             std::vector<std::vector<size_t>> minimal_by_bit(dimension_);
             for (support& candidate : roots) {
                 bool covered = false;
-                candidate.copy_indices_to(bits);
+                support_context_.extract_set_indices(candidate, bits);
                 for (const size_t bit : bits) {
                     for (const size_t retained : minimal_by_bit[bit]) {
-                        if (minimal[retained].is_subset_of(candidate)) {
+                        if (support_context_.is_subset_of(minimal[retained], candidate)) {
                             covered = true;
                             break;
                         }
                     }
                     if (covered) break;
                 }
-                if (covered) continue;
+                if (covered) {
+                    support_context_.release(std::move(candidate));
+                    continue;
+                }
                 const size_t retained = minimal.size();
                 minimal.push_back(std::move(candidate));
-                minimal_by_bit[minimal[retained].lowest_index()].push_back(retained);
+                minimal_by_bit[support_context_.first(minimal[retained])].push_back(retained);
             }
             roots.swap(minimal);
 
-            std::map<support, size_t> parent_counts;
+            std::map<support, size_t, support_less> parent_counts(support_less{&support_context_});
             for (const support& root : roots) {
-                if (root.cardinality() == 0 || root.cardinality() > completed_cardinality) continue;
-                support parent = root;
-                root.copy_indices_to(bits);
+                const size_t root_size = support_context_.count(root);
+                if (root_size == 0 || root_size > completed_cardinality) continue;
+                support parent = support_context_.clone(root);
+                support_context_.extract_set_indices(root, bits);
                 for (const size_t bit : bits) {
-                    parent.reset(bit);
-                    ++parent_counts[parent];
-                    parent.set(bit);
+                    support_context_.reset(parent, bit);
+                    const auto found = parent_counts.find(parent);
+                    if (found == parent_counts.end()) parent_counts.emplace(support_context_.clone(parent), 1);
+                    else ++found->second;
+                    support_context_.set(parent, bit);
                 }
+                support_context_.release(std::move(parent));
             }
-            for (const auto& [parent, count] : parent_counts) {
-                if (count != dimension_ - parent.cardinality()) continue;
-                if (parent.empty()) {
+            while (!parent_counts.empty()) {
+                auto node = parent_counts.extract(parent_counts.begin());
+                support& parent = node.key();
+                if (node.mapped() != dimension_ - support_context_.count(parent)) {
+                    support_context_.release(std::move(parent));
+                    continue;
+                }
+                if (support_context_.empty(parent)) {
                     all_future_covered_ = true;
-                    active_.clear();
+                    support_context_.release(std::move(parent));
+                    clear_supports(roots);
+                    clear_intervals(bounded);
+                    support_context_.release(std::move(ceiling));
                     return;
                 }
-                roots.push_back(parent);
+                roots.push_back(std::move(parent));
                 changed = true;
             }
         }
 
         active_ = std::move(bounded);
-        for (support& root : roots) active_.push_back({std::move(root), ceiling, 0, dimension_});
-        for (interval& certificate : active_) certificate.lower_size = certificate.lower.cardinality();
+        for (support& root : roots)
+            active_.push_back({std::move(root), support_context_.clone(ceiling), 0, dimension_});
+        for (interval& certificate : active_) certificate.lower_size = support_context_.count(certificate.lower);
+        support_context_.release(std::move(ceiling));
     }
 
     void compact_contained_intervals(size_t first_remaining_cardinality, size_t last_remaining_cardinality)
     {
-        active_.erase(std::remove_if(active_.begin(), active_.end(), [&](const interval& certificate) {
-            return certificate.upper_size < first_remaining_cardinality || certificate.lower_size > last_remaining_cardinality;
-        }), active_.end());
+        std::vector<interval> retained;
+        retained.reserve(active_.size());
+        for (interval& certificate : active_) {
+            if (certificate.upper_size < first_remaining_cardinality || certificate.lower_size > last_remaining_cardinality)
+                release_interval(certificate);
+            else retained.push_back(std::move(certificate));
+        }
+        active_.swap(retained);
         if (active_.size() < 2) return;
-        std::sort(active_.begin(), active_.end(), [](const interval& left, const interval& right) {
+        std::sort(active_.begin(), active_.end(), [&](const interval& left, const interval& right) {
             if (left.lower_size != right.lower_size) return left.lower_size < right.lower_size;
             if (left.upper_size != right.upper_size) return left.upper_size > right.upper_size;
-            if (left.lower != right.lower) return left.lower < right.lower;
-            return left.upper < right.upper;
+            if (!support_context_.equal(left.lower, right.lower)) return support_context_.less(left.lower, right.lower);
+            return support_context_.less(left.upper, right.upper);
         });
 
         std::vector<interval> compacted;
@@ -496,34 +557,38 @@ private:
             bool covered = false;
             for (const size_t retained_index : by_lower_bit[dimension_]) {
                 const interval& retained = compacted[retained_index];
-                if (retained.upper_size >= candidate.upper_size && contains(retained, candidate)) {
+                if (retained.upper_size >= candidate.upper_size && contains(support_context_, retained, candidate)) {
                     covered = true;
                     break;
                 }
             }
-            candidate.lower.copy_indices_to(bits);
+            support_context_.extract_set_indices(candidate.lower, bits);
             for (const size_t bit : bits) {
                 if (covered) break;
                 for (const size_t retained_index : by_lower_bit[bit]) {
                     const interval& retained = compacted[retained_index];
                     if (retained.lower_size <= candidate.lower_size && retained.upper_size >= candidate.upper_size
-                        && contains(retained, candidate)) {
+                        && contains(support_context_, retained, candidate)) {
                         covered = true;
                         break;
                     }
                 }
                 if (covered) break;
             }
-            if (covered) continue;
+            if (covered) {
+                release_interval(candidate);
+                continue;
+            }
             const size_t index = compacted.size();
             compacted.push_back(std::move(candidate));
-            const size_t bucket = compacted[index].lower.empty() ? dimension_ : compacted[index].lower.lowest_index();
+            const size_t bucket = support_context_.empty(compacted[index].lower) ? dimension_ : support_context_.first(compacted[index].lower);
             by_lower_bit[bucket].push_back(index);
         }
         active_.swap(compacted);
     }
 
 
+    support_context& support_context_;
     size_t dimension_;
     int next_variable_ = 1;
     std::vector<std::vector<int>> base_clauses_;
@@ -541,8 +606,8 @@ private:
     bool all_future_covered_ = false;
 };
 
-improved_nbc_upward_supports::improved_nbc_upward_supports(size_t dimension)
-    : impl_(std::make_unique<impl>(dimension))
+improved_nbc_upward_supports::improved_nbc_upward_supports(support_context& context)
+    : impl_(std::make_unique<impl>(context))
 {
 }
 

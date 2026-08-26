@@ -31,7 +31,10 @@ public:
     };
 
     explicit heuristic_kkt_search(size_t dimension)
-        : dimension_(dimension)
+        : support_context_(dimension)
+        , dimension_(dimension)
+        , candidate_support_(support_context_.make())
+        , visited_(support_less{&support_context_})
         , factorization_(dimension > 0 ? dimension - 1 : 0)
     {
     }
@@ -43,7 +46,8 @@ public:
         indices_.resize(dimension_);
         std::iota(indices_.begin(), indices_.end(), size_t{0});
         visited_.clear();
-        visited_.insert(make_support(indices_));
+        write_support(indices_, candidate_support_);
+        visited_.insert(support_context_.clone(candidate_support_));
 
         result outcome;
         bool exact_mode = false;
@@ -423,9 +427,8 @@ private:
         }
 
         candidates.clear();
-        const support current = make_support(indices_);
         for (size_t index = 0; index < dimension_; ++index) {
-            if (current.contains(index)) continue;
+            if (std::binary_search(indices_.begin(), indices_.end(), index)) continue;
             if (floating_products_[index] < floating_payoff_ - face.tolerance) candidates.push_back(index);
         }
         std::sort(candidates.begin(), candidates.end(), [&](size_t left, size_t right) {
@@ -534,9 +537,9 @@ private:
         }
         if (face.is_kkt) return std::nullopt;
 
-        const support current = make_support(indices_);
         for (size_t index = 0; index < dimension_; ++index)
-            if (!current.contains(index) && products_(index, 0).compare(payoff_) < 0) candidates.push_back(index);
+            if (!std::binary_search(indices_.begin(), indices_.end(), index)
+                && products_(index, 0).compare(payoff_) < 0) candidates.push_back(index);
         std::sort(candidates.begin(), candidates.end(), [&](size_t left, size_t right) {
             const int comparison = products_(left, 0).compare(products_(right, 0));
             return comparison != 0 ? comparison < 0 : left < right;
@@ -593,27 +596,31 @@ private:
         return admissible(next) ? std::optional{std::move(next)} : std::nullopt;
     }
 
-    support make_support(const std::vector<size_t>& indices) const
+    void write_support(const std::vector<size_t>& indices, support& result)
     {
-        support result(dimension_);
-        for (size_t index : indices) result.set(index);
-        return result;
+        support_context_.clear(result);
+        for (size_t index : indices) support_context_.set(result, index);
     }
 
-    bool admissible(const std::vector<size_t>& indices) const
+    bool admissible(const std::vector<size_t>& indices)
     {
-        return !indices.empty() && visited_.find(make_support(indices)) == visited_.end();
+        if (indices.empty()) return false;
+        write_support(indices, candidate_support_);
+        return visited_.find(candidate_support_) == visited_.end();
     }
 
     void move_to(std::vector<size_t> next)
     {
         indices_ = std::move(next);
-        visited_.insert(make_support(indices_));
+        write_support(indices_, candidate_support_);
+        visited_.insert(support_context_.clone(candidate_support_));
     }
 
+    support_context support_context_;
     size_t dimension_ = 0;
     std::vector<size_t> indices_;
-    std::set<support> visited_;
+    support candidate_support_;
+    std::set<support, support_less> visited_;
     double_matrix floating_matrix_;
     double_matrix floating_reduced_;
     std::vector<double> floating_rhs_;

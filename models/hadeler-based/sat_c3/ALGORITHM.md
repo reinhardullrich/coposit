@@ -43,7 +43,7 @@ Dickinson policy is a coposit-created variant, not a faithful implementation of 
 
 ## Notation
 
-Let $A\in\mathbb Z^{n\times n}$ be symmetric and let $[n]=\{1,\ldots,n\}$. A support is a nonempty set $I\subseteq[n]$, and
+Let $A\in\mathbb Z^{n\times n}$ be symmetric. A support is a nonempty set $I\subseteq[n]$, and
 $A_I$ is the corresponding principal matrix.
 
 For an exact vector $u$ embedded in $\mathbb R^n$ by putting zeros outside $I$, define

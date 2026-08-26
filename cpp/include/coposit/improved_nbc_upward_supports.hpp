@@ -13,7 +13,7 @@ public:
     enum class enumeration_result { exhausted, stopped };
     using visitor = bool (*)(void*, const std::vector<size_t>&);
 
-    explicit improved_nbc_upward_supports(size_t dimension);
+    explicit improved_nbc_upward_supports(support_context& context);
     ~improved_nbc_upward_supports();
 
     improved_nbc_upward_supports(const improved_nbc_upward_supports&) = delete;

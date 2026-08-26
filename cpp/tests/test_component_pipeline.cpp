@@ -46,9 +46,9 @@ matrix_integer unresolved_matrix()
 }
 
 template<pre_check::detail::query requested>
-matrix_scan_result full_scan(const matrix_integer& matrix)
+matrix_scan_result full_scan(const matrix_integer& matrix, support_context& context)
 {
-    return scan_matrix(matrix, pre_check::detail::preprocessing_requirements<requested>());
+    return scan_matrix(matrix, pre_check::detail::preprocessing_requirements<requested>(), context);
 }
 
 TEST(ComponentPipelineTest, FixedPreprocessingDefaultsOn)
@@ -90,19 +90,21 @@ TEST(ComponentPipelineTest, CompleteSmallCheckDecidesWithoutTheModel)
 TEST(ComponentPipelineTest, OneScanCollectsBothGraphsPivotCountsAndMotzkinPattern)
 {
     const matrix_integer matrix = symmetric_matrix(3, {1, -1, 1, 1, -1, 1});
-    const matrix_scan_result scan = full_scan<pre_check::detail::query::combined>(matrix);
+    support_context context(matrix.rows());
+    const matrix_scan_result scan = full_scan<pre_check::detail::query::combined>(matrix, context);
 
     EXPECT_EQ(scan.negative_off_diagonal_counts, (std::vector<size_t>{1, 2, 1}));
     EXPECT_EQ(scan.positive_off_diagonal_counts, (std::vector<size_t>{1, 0, 1}));
-    EXPECT_TRUE(scan.negative_neighbors[0].contains(1));
-    EXPECT_TRUE(scan.nonpositive_neighbors[0].contains(1));
+    EXPECT_TRUE(context.contains(scan.negative_neighbors[0], 1));
+    EXPECT_TRUE(context.contains(scan.nonpositive_neighbors[0], 1));
     EXPECT_TRUE(scan.is_motzkin_straus_pattern);
 }
 
 TEST(ComponentPipelineTest, DanningerHandlesTwoChildrenAndANonStrictZeroPivot)
 {
     const matrix_integer mixed = symmetric_matrix(4, {4, 1, 0, -1, 4, -1, 0, 4, 1, 4});
-    const matrix_scan_result mixed_scan = full_scan<pre_check::detail::query::strict>(mixed);
+    support_context mixed_context(mixed.rows());
+    const matrix_scan_result mixed_scan = full_scan<pre_check::detail::query::strict>(mixed, mixed_context);
     const auto pivot = danninger_precheck::detail::minimum_small_pivot(mixed, mixed_scan, strict);
     EXPECT_EQ(pivot.index, 0U);
     EXPECT_EQ(pivot.children, 2U);
@@ -118,7 +120,8 @@ TEST(ComponentPipelineTest, DanningerHandlesTwoChildrenAndANonStrictZeroPivot)
     EXPECT_EQ(children, 2U);
 
     const matrix_integer zero_pivot = symmetric_matrix(2, {0, -1, 1});
-    const matrix_scan_result zero_scan = full_scan<pre_check::detail::query::copositive>(zero_pivot);
+    support_context zero_context(zero_pivot.rows());
+    const matrix_scan_result zero_scan = full_scan<pre_check::detail::query::copositive>(zero_pivot, zero_context);
     EXPECT_EQ(danninger_precheck::check(zero_pivot, zero_scan, copositive,
                                         [&](const matrix_integer&) {
                                             ++children;

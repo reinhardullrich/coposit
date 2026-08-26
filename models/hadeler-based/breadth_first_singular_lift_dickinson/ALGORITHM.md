@@ -55,7 +55,7 @@ are coposit changes. Relative to `layered_singular_lift_dickinson`, only the tra
 
 ## Mathematical Problem And Notation
 
-Let $A\in\mathbb Z^{n\times n}$ be symmetric and let $[n]=\{1,\ldots,n\}$. The model decides
+Let $A\in\mathbb Z^{n\times n}$ be symmetric. The model decides
 
 $$
 A\in\operatorname{COP}_n

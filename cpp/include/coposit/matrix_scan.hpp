@@ -49,7 +49,8 @@ struct matrix_scan_result {
 
 namespace matrix_scan_detail {
 
-inline matrix_scan_result initialize(size_t dimension, const matrix_scan_requirements& requirements)
+inline matrix_scan_result initialize(
+    size_t dimension, const matrix_scan_requirements& requirements, support_context& support_context)
 {
     matrix_scan_result result;
     result.dimension = dimension;
@@ -58,11 +59,11 @@ inline matrix_scan_result initialize(size_t dimension, const matrix_scan_require
     if (requirements.frank_wolfe) result.full_row_sums.resize(dimension);
     if (requirements.negative_graph) {
         result.negative_neighbors.reserve(dimension);
-        for (size_t index = 0; index < dimension; ++index) result.negative_neighbors.emplace_back(dimension);
+        for (size_t index = 0; index < dimension; ++index) result.negative_neighbors.push_back(support_context.make());
     }
     if (requirements.nonpositive_graph) {
         result.nonpositive_neighbors.reserve(dimension);
-        for (size_t index = 0; index < dimension; ++index) result.nonpositive_neighbors.emplace_back(dimension);
+        for (size_t index = 0; index < dimension; ++index) result.nonpositive_neighbors.push_back(support_context.make());
     }
     if (requirements.off_diagonal_sign_counts) {
         result.positive_off_diagonal_counts.resize(dimension);
@@ -94,7 +95,8 @@ inline void observe_diagonal(matrix_scan_result& result, const matrix_scan_requi
     }
 }
 
-inline void observe_off_diagonal(matrix_scan_result& result, const matrix_scan_requirements& requirements, size_t row,
+inline void observe_off_diagonal(matrix_scan_result& result, support_context& support_context,
+                                 const matrix_scan_requirements& requirements, size_t row,
                                  size_t column, integer::const_reference entry, integer::const_reference row_diagonal,
                                  integer::const_reference column_diagonal)
 {
@@ -109,8 +111,8 @@ inline void observe_off_diagonal(matrix_scan_result& result, const matrix_scan_r
             result.negative_part_row_sums[column] += entry;
         }
         if (requirements.negative_graph) {
-            result.negative_neighbors[row].set(column);
-            result.negative_neighbors[column].set(row);
+            support_context.set(result.negative_neighbors[row], column);
+            support_context.set(result.negative_neighbors[column], row);
         }
         if (requirements.copositive_principal_pairs) {
             result.all_principal_pairs_copositive &= small_copositivity::check_2x2<model::copositivity_mode::copositive>(
@@ -129,8 +131,8 @@ inline void observe_off_diagonal(matrix_scan_result& result, const matrix_scan_r
         }
     }
     if (entry.sign() <= 0 && requirements.nonpositive_graph) {
-        result.nonpositive_neighbors[row].set(column);
-        result.nonpositive_neighbors[column].set(row);
+        support_context.set(result.nonpositive_neighbors[row], column);
+        support_context.set(result.nonpositive_neighbors[column], row);
     }
     if (requirements.all_ones) {
         result.all_ones_quadratic_value += entry;
@@ -161,10 +163,12 @@ inline void finalize(matrix_scan_result& result, const matrix_scan_requirements&
 
 } // namespace matrix_scan_detail
 
-inline matrix_scan_result scan_matrix(const matrix_integer& matrix, const matrix_scan_requirements& requirements)
+inline matrix_scan_result scan_matrix(
+    const matrix_integer& matrix, const matrix_scan_requirements& requirements, support_context& support_context)
 {
     const size_t dimension = matrix.rows();
-    matrix_scan_result result = matrix_scan_detail::initialize(dimension, requirements);
+    assert(support_context.dimension() == dimension);
+    matrix_scan_result result = matrix_scan_detail::initialize(dimension, requirements, support_context);
     for (size_t index = 0; index < dimension; ++index) {
         timeout_checkpoint();
         matrix_scan_detail::observe_diagonal(result, requirements, index, matrix(index, index));
@@ -174,8 +178,8 @@ inline matrix_scan_result scan_matrix(const matrix_integer& matrix, const matrix
         timeout_checkpoint();
         diagnostics::advance_preprocessing(row + 1, dimension);
         for (size_t column = row + 1; column < dimension; ++column) {
-            matrix_scan_detail::observe_off_diagonal(result, requirements, row, column, matrix(row, column), matrix(row, row),
-                                                      matrix(column, column));
+            matrix_scan_detail::observe_off_diagonal(
+                result, support_context, requirements, row, column, matrix(row, column), matrix(row, row), matrix(column, column));
         }
     }
     matrix_scan_detail::finalize(result, requirements);
@@ -188,11 +192,13 @@ struct scanned_principal_matrix {
 };
 
 inline scanned_principal_matrix scan_principal_matrix(const matrix_integer& source, const std::vector<size_t>& indices,
-                                                      const matrix_scan_requirements& requirements)
+                                                      const matrix_scan_requirements& requirements,
+                                                      support_context& support_context)
 {
     const size_t dimension = indices.size();
+    assert(support_context.dimension() == dimension);
     scanned_principal_matrix result{matrix_integer(dimension, dimension),
-                                    matrix_scan_detail::initialize(dimension, requirements)};
+                                    matrix_scan_detail::initialize(dimension, requirements, support_context)};
 
     for (size_t row = 0; row < dimension; ++row) {
         timeout_checkpoint();
@@ -204,8 +210,9 @@ inline scanned_principal_matrix scan_principal_matrix(const matrix_integer& sour
             const size_t source_column = indices[column];
             result.matrix(row, column) = source(source_row, source_column);
             result.matrix(column, row) = result.matrix(row, column);
-            matrix_scan_detail::observe_off_diagonal(result.scan, requirements, row, column, result.matrix(row, column),
-                                                      result.matrix(row, row), source(source_column, source_column));
+            matrix_scan_detail::observe_off_diagonal(result.scan, support_context, requirements, row, column,
+                                                      result.matrix(row, column), result.matrix(row, row),
+                                                      source(source_column, source_column));
         }
     }
     matrix_scan_detail::finalize(result.scan, requirements);

@@ -24,10 +24,11 @@ namespace {
 class interval_cbdd {
 public:
     explicit interval_cbdd(size_t dimension, diagnostics::tracker* diagnostics = nullptr)
-        : dimension_(dimension)
+        : support_context_(dimension)
+        , dimension_(dimension)
         , diagnostics_(diagnostics)
         , expiring_(dimension + 1, empty)
-        , current_support_(dimension)
+        , current_support_(support_context_.make())
     {
         nodes_.push_back({dimension_, dimension_, 0, 0}); // Constant false.
         nodes_.push_back({dimension_, dimension_, 1, 1}); // Constant true.
@@ -51,7 +52,7 @@ public:
     {
         if (remaining_ == empty) return false;
 
-        current_support_.clear();
+        support_context_.clear(current_support_);
         size_t root = remaining_;
         while (root != unit) {
             assert(root != empty);
@@ -59,11 +60,11 @@ public:
             if (value.low != empty) {
                 root = value.low;
             } else {
-                current_support_.set(actual_index(value.bottom));
+                support_context_.set(current_support_, actual_index(value.bottom));
                 root = value.high;
             }
         }
-        current_support_.copy_indices_to(indices);
+        support_context_.extract_set_indices(current_support_, indices);
         return true;
     }
 
@@ -210,9 +211,9 @@ private:
         size_t root = unit;
         for (size_t variable_value = dimension_; variable_value-- > 0;) {
             const size_t bit = actual_index(variable_value);
-            if (lower.contains(bit)) {
+            if (support_context_.contains(lower, bit)) {
                 root = make_node(variable_value, empty, root);
-            } else if (!upper.contains(bit)) {
+            } else if (!support_context_.contains(upper, bit)) {
                 root = make_node(variable_value, root, empty);
             }
         }
@@ -336,6 +337,7 @@ private:
         return {make_node(bottom_value + 1, value.bottom, value.low, value.high), value.high};
     }
 
+    support_context support_context_;
     size_t dimension_;
     diagnostics::tracker* diagnostics_;
     std::vector<node> nodes_;
@@ -356,7 +358,8 @@ private:
 class dickinson_checker {
 public:
     dickinson_checker(size_t dimension, copositivity_mode mode)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , product_(dimension)
         , mode_(mode)
         , diagnostics_(diagnostics::metric::decision_diagram, dimension)
@@ -366,7 +369,8 @@ public:
     }
 
     dickinson_checker(size_t dimension, copositivity_classification& classification)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , product_(dimension)
         , mode_(copositivity_mode::copositive)
         , classification_(&classification)
@@ -443,13 +447,13 @@ private:
     template <bool CountSizes>
     std::pair<size_t, size_t> add_certificate(const matrix_integer& matrix)
     {
-        support lower(matrix.rows());
-        support upper(matrix.rows());
+        support lower = support_context_.make();
+        support upper = support_context_.make();
         size_t lower_size = 0;
         size_t upper_size = 0;
         for (size_t local = 0; local < indices_.size(); ++local) {
             if (!solution_(local, 0).is_zero()) {
-                lower.set(indices_[local]);
+                support_context_.set(lower, indices_[local]);
                 if constexpr (CountSizes) ++lower_size;
             }
         }
@@ -460,12 +464,14 @@ private:
             for (size_t local = 0; local < indices_.size(); ++local)
                 product_[row].addmul(matrix(row, indices_[local]), solution_(local, 0));
             if (product_[row].sign() >= 0) {
-                upper.set(row);
+                support_context_.set(upper, row);
                 ++upper_size;
             }
         }
 
         supports_.add_interval(lower, upper, upper_size);
+        support_context_.release(std::move(lower));
+        support_context_.release(std::move(upper));
         if constexpr (CountSizes) return {upper_size - lower_size, upper_size};
         return {0, 0};
     }
@@ -479,6 +485,7 @@ private:
         }
     }
 
+    support_context support_context_;
     fraction_free_ldlt_factorization factorization_;
     matrix_integer principal_;
     matrix_integer solution_;
@@ -511,26 +518,30 @@ std::pair<size_t, size_t> cbdd_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals)
 {
     interval_cbdd diagram(dimension);
+    support_context context(dimension);
     for (const auto& [lower_mask, upper_mask] : intervals) {
-        support lower(dimension);
-        support upper(dimension);
+        support lower = context.make();
+        support upper = context.make();
         for (size_t bit = 0; bit < dimension; ++bit) {
-            if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
-            if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
+            if ((lower_mask & (uint64_t{1} << bit)) != 0) context.set(lower, bit);
+            if ((upper_mask & (uint64_t{1} << bit)) != 0) context.set(upper, bit);
         }
         size_t upper_size = 0;
         for (size_t bit = 0; bit < dimension; ++bit)
-            upper_size += upper.contains(bit);
+            upper_size += context.contains(upper, bit);
         diagram.add_interval(lower, upper, upper_size);
+        context.release(std::move(lower));
+        context.release(std::move(upper));
     }
 
     diagram.start_cardinality(cardinality);
     std::vector<size_t> indices;
     size_t count = 0;
     while (diagram.take_first(indices)) {
-        support exact(dimension);
-        for (const size_t index : indices) exact.set(index);
+        support exact = context.make();
+        for (const size_t index : indices) context.set(exact, index);
         diagram.add_interval(exact, exact, indices.size());
+        context.release(std::move(exact));
         ++count;
     }
     return {count, diagram.node_count()};
@@ -539,16 +550,19 @@ std::pair<size_t, size_t> cbdd_uncovered_count(
 size_t cbdd_maximum_interval_chain(size_t dimension, uint64_t lower_mask, uint64_t upper_mask)
 {
     interval_cbdd diagram(dimension);
-    support lower(dimension);
-    support upper(dimension);
+    support_context context(dimension);
+    support lower = context.make();
+    support upper = context.make();
     for (size_t bit = 0; bit < dimension; ++bit) {
-        if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
-        if ((upper_mask & (uint64_t{1} << bit)) != 0) upper.set(bit);
+        if ((lower_mask & (uint64_t{1} << bit)) != 0) context.set(lower, bit);
+        if ((upper_mask & (uint64_t{1} << bit)) != 0) context.set(upper, bit);
     }
     size_t upper_size = 0;
     for (size_t bit = 0; bit < dimension; ++bit)
-        upper_size += upper.contains(bit);
+        upper_size += context.contains(upper, bit);
     diagram.add_interval(lower, upper, upper_size);
+    context.release(std::move(lower));
+    context.release(std::move(upper));
     return diagram.maximum_chain_length();
 }
 
@@ -556,18 +570,21 @@ size_t cbdd_expired_bucket_count(
     size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals)
 {
     interval_cbdd diagram(dimension);
+    support_context context(dimension);
     for (const auto& [lower_mask, upper_mask] : intervals) {
-        support lower(dimension);
-        support upper(dimension);
+        support lower = context.make();
+        support upper = context.make();
         size_t upper_size = 0;
         for (size_t bit = 0; bit < dimension; ++bit) {
-            if ((lower_mask & (uint64_t{1} << bit)) != 0) lower.set(bit);
+            if ((lower_mask & (uint64_t{1} << bit)) != 0) context.set(lower, bit);
             if ((upper_mask & (uint64_t{1} << bit)) != 0) {
-                upper.set(bit);
+                context.set(upper, bit);
                 ++upper_size;
             }
         }
         diagram.add_interval(lower, upper, upper_size);
+        context.release(std::move(lower));
+        context.release(std::move(upper));
     }
     diagram.start_cardinality(cardinality);
     return diagram.expired_bucket_count();

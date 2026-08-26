@@ -44,9 +44,10 @@ uint64_t saturated_binomial(size_t n, size_t k) noexcept
 class support_generator {
 public:
     explicit support_generator(size_t dimension, diagnostics::tracker* diagnostics = nullptr)
-        : dimension_(dimension)
+        : support_context_(dimension)
+        , dimension_(dimension)
         , forbidden_by_lowest_(dimension)
-        , partial_support_(dimension)
+        , partial_support_(support_context_.make())
         , diagnostics_(diagnostics)
     {
     }
@@ -71,22 +72,27 @@ public:
 
     void add_forbidden(support lower)
     {
-        assert(!lower.empty());
+        assert(!support_context_.empty(lower));
         pending_forbidden_.push_back(std::move(lower));
     }
+
+#ifdef COPOSIT_CEILING_PRUNED_DICKINSON_TESTING
+    uint64_t mask_for_testing(const support& value) const noexcept { return support_context_.small_bits(value); }
+    void add_forbidden_copy_for_testing(const support& lower) { add_forbidden(support_context_.clone(lower)); }
+#endif
 
 private:
     void activate_pending()
     {
         for (support& forbidden : pending_forbidden_)
-            forbidden_by_lowest_[forbidden.lowest_index()].push_back(std::move(forbidden));
+            forbidden_by_lowest_[support_context_.first(forbidden)].push_back(std::move(forbidden));
         pending_forbidden_.clear();
     }
 
     bool completes_forbidden(size_t new_lowest_bit) const noexcept
     {
         for (const support& forbidden : forbidden_by_lowest_[new_lowest_bit])
-            if (forbidden.is_subset_of(partial_support_)) return true;
+            if (support_context_.is_subset_of(forbidden, partial_support_)) return true;
         return false;
     }
 
@@ -104,17 +110,18 @@ private:
         const size_t bit = bits_remaining - 1;
         if (needed < bits_remaining && !generate_from(bit, needed, callback)) return false;
 
-        partial_support_.set(bit);
+        support_context_.set(partial_support_, bit);
         bool keep_going = true;
         if (completes_forbidden(bit)) {
             if (diagnostics_ != nullptr) diagnostics_->skip_supports(saturated_binomial(bit, needed - 1));
         } else {
             keep_going = generate_from(bit, needed - 1, callback);
         }
-        partial_support_.reset(bit);
+        support_context_.reset(partial_support_, bit);
         return keep_going;
     }
 
+    support_context support_context_;
     size_t dimension_;
     std::vector<std::vector<support>> forbidden_by_lowest_;
     std::vector<support> pending_forbidden_;
@@ -127,7 +134,8 @@ private:
 class dickinson_checker {
 public:
     dickinson_checker(size_t dimension, copositivity_mode mode)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , mode_(mode)
         , diagnostics_(diagnostics::metric::support, dimension)
         , supports_(dimension, diagnostics_.active() ? &diagnostics_ : nullptr)
@@ -136,7 +144,8 @@ public:
     }
 
     dickinson_checker(size_t dimension, copositivity_classification& classification)
-        : factorization_(dimension)
+        : support_context_(dimension)
+        , factorization_(dimension)
         , mode_(copositivity_mode::copositive)
         , classification_(&classification)
         , diagnostics_(diagnostics::metric::support, dimension)
@@ -149,7 +158,7 @@ public:
     {
         const bool result = supports_.generate([&](const support& current, size_t cardinality) {
             timeout_checkpoint();
-            current.copy_indices_to(indices_);
+            support_context_.extract_set_indices(current, indices_);
             COPOSIT_CEILING_DICKINSON_DIAGNOSTICS("process", cardinality);
             return process_subset(matrix);
         });
@@ -215,11 +224,11 @@ private:
             }
         }
 
-        support lower(matrix.rows());
+        support lower = support_context_.make();
         size_t lower_size = 0;
         for (size_t local = 0; local < indices_.size(); ++local) {
             if (solution_(local, 0).is_zero()) continue;
-            lower.set(indices_[local]);
+            support_context_.set(lower, indices_[local]);
             ++lower_size;
         }
 
@@ -237,6 +246,7 @@ private:
         }
     }
 
+    support_context support_context_;
     fraction_free_ldlt_factorization factorization_;
     matrix_integer principal_;
     matrix_integer solution_;
@@ -271,11 +281,9 @@ std::vector<uint64_t> ceiling_pruned_generated_masks(size_t dimension, uint64_t 
     support_generator generator(dimension);
     std::vector<uint64_t> result;
     generator.generate([&](const support& current, size_t) {
-        uint64_t mask = 0;
-        for (size_t bit = 0; bit < dimension; ++bit)
-            if (current.contains(bit)) mask |= uint64_t{1} << bit;
+        const uint64_t mask = generator.mask_for_testing(current);
         result.push_back(mask);
-        if (mask == forbidden_trigger) generator.add_forbidden(current);
+        if (mask == forbidden_trigger) generator.add_forbidden_copy_for_testing(current);
         return true;
     });
     return result;

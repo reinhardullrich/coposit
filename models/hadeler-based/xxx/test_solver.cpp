@@ -145,16 +145,17 @@ TEST(XxxTest, ExposesTheExactOptimizedFixedSupportCertificate)
 {
     matrix_integer identity;
     identity.set_identity(3);
-    support lower(3);
-    support upper(3);
+    support_context context(3);
+    support lower = context.make();
+    support upper = context.make();
 
     EXPECT_TRUE(model::sat_halfspace_rays_certificate_for_testing(identity, {0}, lower, upper));
-    EXPECT_TRUE(lower.contains(0));
-    EXPECT_FALSE(lower.contains(1));
-    EXPECT_FALSE(lower.contains(2));
-    EXPECT_TRUE(upper.contains(0));
-    EXPECT_TRUE(upper.contains(1));
-    EXPECT_TRUE(upper.contains(2));
+    EXPECT_TRUE(context.contains(lower, 0));
+    EXPECT_FALSE(context.contains(lower, 1));
+    EXPECT_FALSE(context.contains(lower, 2));
+    EXPECT_TRUE(context.contains(upper, 0));
+    EXPECT_TRUE(context.contains(upper, 1));
+    EXPECT_TRUE(context.contains(upper, 2));
 }
 
 TEST(XxxTest, AdaptiveShortlistRemainsBounded)
@@ -269,13 +270,14 @@ TEST(XxxTest, CommitsTheWholePathWhenNoOpenPreferredSuccessorRemains)
 TEST(XxxTest, EveryVisitedSupportContributesItsOptimizedDickinsonInterval)
 {
     const matrix_integer matrix = interval_regression_matrix();
-    support lower(matrix.rows());
-    support upper(matrix.rows());
+    support_context context(matrix.rows());
+    support lower = context.make();
+    support upper = context.make();
     ASSERT_TRUE(model::sat_halfspace_rays_certificate_for_testing(matrix, {0, 1}, lower, upper));
 
     for (size_t index = 0; index < matrix.rows(); ++index) {
-        EXPECT_EQ(lower.contains(index), index == 0 || index == 1);
-        EXPECT_EQ(upper.contains(index), index == 0 || index == 1 || index == 3);
+        EXPECT_EQ(context.contains(lower, index), index == 0 || index == 1);
+        EXPECT_EQ(context.contains(upper, index), index == 0 || index == 1 || index == 3);
     }
 }
 

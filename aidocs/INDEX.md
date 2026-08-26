@@ -22,8 +22,8 @@ This file routes to every other Markdown document under `aidocs/` without duplic
   models in the current campaign.
 - `REFERENCE_RESULTS_BASELINES_AND_EXPERIMENTS.md` — **current** — five-second ordinary-copositivity Smoke and Core/Stress results
   for the literature cone baselines and completed coposit-created cone experiments.
-- `REFERENCE_RESULTS_BPQY_BENCHMARK.md` — **current** — ten-second BPQY benchmark results for the eight literature baselines,
-  Adaptive Sponsel/Copomatrix, and SAT-B3, plus the 180-second SAT-B3 follow-up.
+- `REFERENCE_RESULTS_BPQY_BENCHMARK.md` — **current** — BPQY benchmark results for the eight literature baselines and selected
+  coposit models, including the current-support five-second comparison with Improved NBC-B7.
 
 ## Research
 
@@ -32,6 +32,9 @@ This file routes to every other Markdown document under `aidocs/` without duplic
 - `COPOSITIVITY_CURVATURE_HADELER_DICKINSON.md` — **theory paper** — an intuition-first unified treatment of simplex faces,
   upward and downward curvature pruning, exact inertia tests, face versus full-simplex KKT conditions, Hadeler's all-ones criterion,
   and Dickinson's interval reuse.
+- `DICKINSON_CURVATURE_SCHUR_BRIDGE.md` — **research finding** — the exact paired Schur-complement reduction connecting canonical
+  Dickinson responses, ordinary definiteness, simplex-tangent curvature, child all-ones solves, and curvature search inside widened
+  intervals.
 - `XXX_IMPLEMENTATION_PLAN.md` — **current implementation record** — retained SAT-Halfspace-Rays certificates, alternating complete
   cardinality layers, exact KKT paths, singular nullspace-to-boundary navigation, additional upward/downward intervals, and the
   proof-complete one-SAT invariant.

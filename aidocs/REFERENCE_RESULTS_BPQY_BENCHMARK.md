@@ -177,3 +177,37 @@ returned `strictly_copositive = 1`.
 | Adaptive Sponsel/Copomatrix | `strictly_copositive` | `0ccb0f333b2ffada8501a54eca83866b4d3c251846f8b558fc5825cdd165779b` |
 
 The current per-matrix rows and diagnostics are stored in `experiments/diagnostics.sqlite3`.
+
+## Current-Support Comparison at 5 Seconds
+
+On 2026-08-24, the eight literature baselines and Improved NBC-B7 were rerun after the shared `Support`/`SupportContext` migration.
+The campaign used the current 404-matrix `bpqy_benchmark`, complete preprocessing, diagnostics, a five-second per-matrix cutoff,
+CPU 4 for dispatch and database writes, and workers on CPUs 5 through 9. Combined-capable models ran in `both` mode; the other five
+baselines ran the strict predicate only. Total campaign wall time was 3,244.380 seconds (54 minutes 4.380 seconds).
+
+| Model | Mode | Completed | Timeout | Completion rate | Median successful time | Cutoff-substituted work | Wall time |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Improved NBC-B7 | both | 263 | 141 | 65.10% | 111.878 ms | 874.581 s | 179.048 s |
+| Dickinson 2019 | both | 101 | 303 | 25.00% | 19.674 ms | 1,574.085 s | 316.233 s |
+| Hadeler 1983 | both | 69 | 335 | 17.08% | 269.829 ms | 1,687.792 s | 338.709 s |
+| Copomatrix 2011 | strict | 18 | 386 | 4.46% | 49.425 ms | 1,938.802 s | 390.926 s |
+| Danninger 1990 | both | 7 | 397 | 1.73% | 1,578.531 ms | 1,994.981 s | 401.591 s |
+| Bundfuss 2008 | strict | 4 | 400 | 0.99% | 142.368 ms | 2,001.640 s | 403.620 s |
+| Sponsel 2012 | strict | 4 | 400 | 0.99% | 2.790 ms | 2,000.020 s | 401.185 s |
+| Dutour 2018 | strict | 0 | 404 | 0.00% | — | 2,020.000 s | 406.278 s |
+| Safi 2021 | strict | 0 | 404 | 0.00% | — | 2,020.000 s | 406.790 s |
+
+The campaign stored exactly 3,636 final rows. Every non-completion was a timeout, every completed known case matched corpus truth,
+and none of the 93 truth-unknown matrices completed. Improved NBC-B7 completed 162 more full classifications than the strongest
+literature baseline, Dickinson 2019. Strict-only results remain predicate results and must not be presented as full CP/SCP
+classifications.
+
+The native SHA-256 identities were `a90323e07737f527f32e8f2c0610bbe72c86fbaf67a26ceec8dc8df4c38ce161` (Improved NBC-B7),
+`2b93424b2c4394f7674182987aa160363e7ddff2857aacb7f779a5a4cf50da24` (Dickinson),
+`8245019385b76635933564d0ae9cbb639b5196d5f209c700bd24cac9eb79f3e0` (Hadeler),
+`a916c7dce91bc85614782c95f45b9be3e20c1346bb95222feda2f1cdc3e53c1e` (Danninger),
+`c8e0ff60e6fe28b2c62dc51841e1a4d44a42f560131b025df829258cb1b7795b` (Dutour),
+`625ebdee15c835a7cdfd90ed061d9f79fa6e09b03bc081db45a01f56c9fd4aba` (Copomatrix),
+`6cc232c80ca36a44ab65ca10926e85fcf031197410755c3365fa65a3887fba49` (Safi),
+`fafa09f09510adfb0bdd0d234f775fcbcaff92d9805a378acd490f13395dfdab` (Bundfuss), and
+`156f64b684a2946476e4b198ec5c073e1fe909a055f307d6282024d9c0d70fef` (Sponsel).

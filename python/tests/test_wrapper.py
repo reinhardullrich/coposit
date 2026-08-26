@@ -143,6 +143,10 @@ class WrapperTests(unittest.TestCase):
             or algorithm == "nbc_b6"
             or algorithm == "nbc_b7"
             or algorithm == "improved_nbc_b7"
+            or algorithm == "dual_frontier_nbc"
+            or algorithm == "dual_frontier_nbc_two"
+            or algorithm == "dual_frontier_nbc_three"
+            or algorithm == "dual_frontier_nbc_four"
             or algorithm == "improved_nbc_b8"
             or algorithm == "improved_nbc_b9"
             or algorithm == "improved_nbc_g2"
@@ -514,10 +518,19 @@ class ResultsRunnerTests(unittest.TestCase):
                 str(corpus),
                 "--results-database",
                 str(diagnostics),
+                "--without-diagnostics",
             ]
             environment = os.environ.copy()
             environment["PYTHONPATH"] = str(root / "python")
             subprocess.run(command, cwd=root, env=environment, check=True, capture_output=True, text=True)
+
+            with closing(sqlite3.connect(diagnostics)) as connection:
+                self.assertEqual(
+                    connection.execute(
+                        "SELECT diagnostics, certificate_joint_distribution FROM results WHERE model_id = 'hadeler_1983'"
+                    ).fetchall(),
+                    [(None, None), (None, None), (None, None)],
+                )
 
             with closing(sqlite3.connect(corpus)) as connection:
                 cached = connection.execute(

@@ -76,18 +76,19 @@ size_t maximum_clique(size_t dimension, std::uint32_t edges)
     return best;
 }
 
-std::vector<support> graph_adjacency(size_t dimension, std::uint32_t edges)
+std::vector<support> graph_adjacency(support_context& context, std::uint32_t edges)
 {
+    const size_t dimension = context.dimension();
     std::vector<support> adjacency;
     adjacency.reserve(dimension);
-    for (size_t vertex = 0; vertex < dimension; ++vertex) adjacency.emplace_back(dimension);
+    for (size_t vertex = 0; vertex < dimension; ++vertex) adjacency.push_back(context.make());
 
     std::uint32_t edge = 1;
     for (size_t row = 0; row < dimension; ++row) {
         for (size_t column = row + 1; column < dimension; ++column) {
             if ((edges & edge) != 0) {
-                adjacency[row].set(column);
-                adjacency[column].set(row);
+                context.set(adjacency[row], column);
+                context.set(adjacency[column], row);
             }
             edge <<= 1;
         }
@@ -205,9 +206,10 @@ TEST(PreCheckTest, OpenMcsMatchesEveryOrderSixGraph)
 {
     constexpr size_t dimension = 6;
     constexpr std::uint32_t graph_count = std::uint32_t{1} << (dimension * (dimension - 1) / 2);
+    support_context context(dimension);
     for (std::uint32_t edges = 0; edges < graph_count; ++edges) {
-        const auto adjacency = graph_adjacency(dimension, edges);
-        open_mcs::maximum_clique_search search(adjacency);
+        const auto adjacency = graph_adjacency(context, edges);
+        open_mcs::maximum_clique_search search(context, adjacency);
         const auto result = search.run([](size_t) { return false; });
         ASSERT_TRUE(result.complete) << "graph=" << edges;
         ASSERT_EQ(result.best, maximum_clique(dimension, edges)) << "graph=" << edges;
@@ -216,15 +218,16 @@ TEST(PreCheckTest, OpenMcsMatchesEveryOrderSixGraph)
 
 TEST(PreCheckTest, OpenMcsThresholdStopReturnsAProvedCliqueWithoutClaimingCompleteness)
 {
+    support_context context(5);
     std::vector<support> cycle;
-    for (size_t vertex = 0; vertex < 5; ++vertex) cycle.emplace_back(5);
+    for (size_t vertex = 0; vertex < 5; ++vertex) cycle.push_back(context.make());
     for (size_t vertex = 0; vertex < 5; ++vertex) {
         const size_t next = (vertex + 1) % 5;
-        cycle[vertex].set(next);
-        cycle[next].set(vertex);
+        context.set(cycle[vertex], next);
+        context.set(cycle[next], vertex);
     }
 
-    open_mcs::maximum_clique_search search(cycle);
+    open_mcs::maximum_clique_search search(context, cycle);
     const auto result = search.run([](size_t best) { return best >= 2; });
     EXPECT_EQ(result.best, 2U);
     EXPECT_FALSE(result.complete);

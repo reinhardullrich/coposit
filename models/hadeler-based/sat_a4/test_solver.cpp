@@ -113,8 +113,9 @@ TEST(SatA4Test, MonotoneExtensionStrictlyEnlargesTheAllOnesUpperEndpoint)
          200, 0, 0,
          200, 0,
          200});
-    support lower(9);
-    support upper(9);
+    support_context context(9);
+    support lower = context.make();
+    support upper = context.make();
 
     EXPECT_TRUE(model::sat_a4_certificate_for_testing(matrix, {0, 1, 2}, lower, upper));
     EXPECT_GT(model::sat_a4_monotone_lp_attempt_count_for_testing(), 0U);
@@ -123,7 +124,7 @@ TEST(SatA4Test, MonotoneExtensionStrictlyEnlargesTheAllOnesUpperEndpoint)
     EXPECT_GT(model::sat_a4_monotone_final_upper_size_for_testing(),
               model::sat_a4_monotone_incumbent_upper_size_for_testing());
     for (size_t index = 0; index < 9; ++index)
-        if (model::sat_a4_monotone_incumbent_contains_for_testing(index)) EXPECT_TRUE(upper.contains(index));
+        if (model::sat_a4_monotone_incumbent_contains_for_testing(index)) EXPECT_TRUE(context.contains(upper, index));
 }
 
 TEST(SatA4Test, SubtractsTheUnionOfBoundedIntervals)

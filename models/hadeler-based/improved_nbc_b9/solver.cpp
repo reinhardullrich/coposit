@@ -618,29 +618,31 @@ bool better_pair(const ray_pair &candidate, const ray_pair &current) noexcept {
 class dickinson_checker {
 public:
   dickinson_checker(size_t dimension, copositivity_mode mode)
-      : dimension_(dimension), factorization_(dimension),
+      : dimension_(dimension), support_context_(dimension), factorization_(dimension),
         floating_filter_(dimension), product_(dimension),
         shortlist_limit_(ray_shortlist_limit(dimension, dimension)),
-        mode_(mode), diagnostics_(diagnostics::metric::support, dimension) {
+        mode_(mode), diagnostics_(diagnostics::metric::support, dimension),
+        path_visited_(support_less{&support_context_}) {
     indices_.reserve(dimension);
     ray_shortlist_.reserve(shortlist_limit_);
     shortlist_uppers_.reserve(shortlist_limit_);
     for (size_t index = 0; index < shortlist_limit_; ++index)
-      shortlist_uppers_.emplace_back(dimension);
+      shortlist_uppers_.push_back(support_context_.make());
   }
 
   dickinson_checker(size_t dimension,
                     copositivity_classification &classification)
-      : dimension_(dimension), factorization_(dimension),
+      : dimension_(dimension), support_context_(dimension), factorization_(dimension),
         floating_filter_(dimension), product_(dimension),
         shortlist_limit_(ray_shortlist_limit(dimension, dimension)),
         mode_(copositivity_mode::copositive), classification_(&classification),
-        diagnostics_(diagnostics::metric::support, dimension) {
+        diagnostics_(diagnostics::metric::support, dimension),
+        path_visited_(support_less{&support_context_}) {
     indices_.reserve(dimension);
     ray_shortlist_.reserve(shortlist_limit_);
     shortlist_uppers_.reserve(shortlist_limit_);
     for (size_t index = 0; index < shortlist_limit_; ++index)
-      shortlist_uppers_.emplace_back(dimension);
+      shortlist_uppers_.push_back(support_context_.make());
   }
 
   bool check(const matrix_integer &matrix) {
@@ -653,7 +655,7 @@ public:
     downward_count_ = 0;
     high_float_rejection_count_ = 0;
 #endif
-    supports_.emplace(matrix.rows());
+    supports_.emplace(support_context_);
     floating_filter_.prepare(matrix);
     prepare_floating_matrix(matrix);
     random_.seed(matrix_seed(matrix));
@@ -678,19 +680,18 @@ public:
 #ifdef COPOSIT_IMPROVED_NBC_B9_TESTING
   bool check_support_for_testing(const matrix_integer &matrix,
                                  const std::vector<size_t> &indices) {
-    support lower(matrix.rows());
-    support upper(matrix.rows());
+    std::vector<size_t> lower;
+    std::vector<size_t> upper;
     const bool result =
         optimize_support_for_testing(matrix, indices, lower, upper);
-    last_fixed_support_upper_size = 0;
-    for (size_t index = 0; index < matrix.rows(); ++index)
-      last_fixed_support_upper_size += upper.contains(index);
+    last_fixed_support_upper_size = upper.size();
     return result;
   }
 
   bool optimize_support_for_testing(const matrix_integer &matrix,
                                     const std::vector<size_t> &indices,
-                                    support &lower, support &upper) {
+                                    std::vector<size_t> &lower,
+                                    std::vector<size_t> &upper) {
     optimized_certificate_count_ = 0;
     combined_ray_sweep_count_ = 0;
     combined_ray_improvement_count_ = 0;
@@ -741,7 +742,7 @@ public:
 
   bool kkt_walk_for_testing(const matrix_integer &matrix,
                             const std::vector<size_t> &seed) {
-    supports_.emplace(matrix.rows());
+    supports_.emplace(support_context_);
     floating_filter_.prepare(matrix);
     prepare_floating_matrix(matrix);
     random_.seed(matrix_seed(matrix));
@@ -763,12 +764,11 @@ private:
     event << ']';
   }
 
-  static void append_support(std::ostringstream &event,
-                             const support &indices) {
+  void append_support(std::ostringstream &event, const support &indices) const {
     event << '[';
     bool first = true;
-    for (size_t index = 0; index < indices.dimension(); ++index) {
-      if (!indices.contains(index))
+    for (size_t index = 0; index < dimension_; ++index) {
+      if (!support_context_.contains(indices, index))
         continue;
       if (!first)
         event << ',';
@@ -1057,7 +1057,7 @@ private:
     if (ran_walk) {
       const std::vector<size_t> seed = indices_;
       defer_seed_certificate_ = true;
-      deferred_seed_certificate_.reset();
+      discard_deferred_seed_certificate();
       const bool seed_result =
           process_subset(matrix, direction, from_low_frontier);
       defer_seed_certificate_ = false;
@@ -1247,10 +1247,10 @@ private:
     return {true, tolerance, false, negative, true, factorization};
   }
 
-  support make_support(const std::vector<size_t> &indices) const {
-    support result(dimension_);
+  support make_support(const std::vector<size_t> &indices) {
+    support result = support_context_.make();
     for (const size_t index : indices)
-      result.set(index);
+      support_context_.set(result, index);
     return result;
   }
 
@@ -1281,17 +1281,20 @@ private:
           ++walk_choice_trace_.rejected_empty;
         continue;
       }
-      const support candidate_support = make_support(candidate);
+      support candidate_support = make_support(candidate);
       if (path_visited_.find(candidate_support) != path_visited_.end()) {
+        support_context_.release(std::move(candidate_support));
         if (trace_choices)
           ++walk_choice_trace_.rejected_path;
         continue;
       }
       if (supports_->covers(candidate_support)) {
+        support_context_.release(std::move(candidate_support));
         if (trace_choices)
           ++walk_choice_trace_.rejected_covered;
         continue;
       }
+      support_context_.release(std::move(candidate_support));
       return candidate;
     }
     return std::nullopt;
@@ -1339,12 +1342,13 @@ private:
       return choose_successor(std::move(candidates), "remove_zero");
     }
 
-    const support current = make_support(indices_);
+    support current = make_support(indices_);
     std::vector<size_t> additions;
     for (size_t index = 0; index < dimension_; ++index)
-      if (!current.contains(index) &&
+      if (!support_context_.contains(current, index) &&
           floating_products_[index] < floating_payoff_ - face.tolerance)
         additions.push_back(index);
+    support_context_.release(std::move(current));
     std::sort(
         additions.begin(), additions.end(), [&](size_t left, size_t right) {
           return floating_products_[left] != floating_products_[right]
@@ -1564,12 +1568,13 @@ private:
     if (face.is_kkt)
       return std::nullopt;
 
-    const support current = make_support(indices_);
+    support current = make_support(indices_);
     std::vector<size_t> additions;
     for (size_t index = 0; index < dimension_; ++index)
-      if (!current.contains(index) &&
+      if (!support_context_.contains(current, index) &&
           walk_products_(index, 0).compare(walk_payoff_) < 0)
         additions.push_back(index);
+    support_context_.release(std::move(current));
     std::sort(additions.begin(), additions.end(),
               [&](size_t left, size_t right) {
                 const int comparison =
@@ -1691,17 +1696,19 @@ private:
   }
 
   void commit_walk_closures() {
-    support floor(dimension_);
-    support ceiling(dimension_);
-    ceiling.set_all();
+    support floor = support_context_.make();
+    support ceiling = support_context_.make();
+    support_context_.set_all(ceiling);
     for (const buffered_walk_closure &closure : buffered_walk_closures_) {
-      const support root = make_support(closure.indices);
+      support root = make_support(closure.indices);
       const support &lower =
           closure.direction == walk_closure_direction::upward ? root : floor;
       const support &upper =
           closure.direction == walk_closure_direction::upward ? ceiling : root;
-      if (supports_->covers_interval(lower, upper))
+      if (supports_->covers_interval(lower, upper)) {
+        support_context_.release(std::move(root));
         continue;
+      }
       supports_->add_interval(lower, upper);
       if (closure.direction == walk_closure_direction::upward) {
         diagnostics_.certificate(dimension_ - closure.indices.size(),
@@ -1717,6 +1724,24 @@ private:
         COPOSIT_IMPROVED_NBC_B9_DIAGNOSTICS("walk_downward",
                                             closure.indices.size());
       }
+      support_context_.release(std::move(root));
+    }
+    support_context_.release(std::move(floor));
+    support_context_.release(std::move(ceiling));
+  }
+
+  void discard_deferred_seed_certificate() {
+    if (!deferred_seed_certificate_)
+      return;
+    support_context_.release(std::move(deferred_seed_certificate_->lower));
+    support_context_.release(std::move(deferred_seed_certificate_->upper));
+    deferred_seed_certificate_.reset();
+  }
+
+  void clear_path_visited() {
+    while (!path_visited_.empty()) {
+      auto node = path_visited_.extract(path_visited_.begin());
+      support_context_.release(std::move(node.value()));
     }
   }
 
@@ -1726,8 +1751,11 @@ private:
     buffered_seed_certificate certificate =
         std::move(*deferred_seed_certificate_);
     deferred_seed_certificate_.reset();
-    if (supports_->covers_interval(certificate.lower, certificate.upper))
+    if (supports_->covers_interval(certificate.lower, certificate.upper)) {
+      support_context_.release(std::move(certificate.lower));
+      support_context_.release(std::move(certificate.upper));
       return false;
+    }
 
     supports_->add_interval(certificate.lower, certificate.upper);
     switch (certificate.type) {
@@ -1753,17 +1781,24 @@ private:
       COPOSIT_IMPROVED_NBC_B9_DIAGNOSTICS("downward", indices_.size());
       break;
     }
+    support_context_.release(std::move(certificate.lower));
+    support_context_.release(std::move(certificate.upper));
     return true;
   }
 
   bool process_kkt_walk(const matrix_integer &matrix,
                         const std::vector<size_t> &seed) {
-    if (seed.empty() || supports_->covers(make_support(seed)))
+    if (seed.empty())
+      return true;
+    support seed_support = make_support(seed);
+    const bool seed_covered = supports_->covers(seed_support);
+    support_context_.release(std::move(seed_support));
+    if (seed_covered)
       return true;
     active_walk_id_ = ++walk_count_;
     active_walk_seed_ = seed;
     indices_ = seed;
-    path_visited_.clear();
+    clear_path_visited();
     buffered_walk_closures_.clear();
     walk_reached_kkt_ = false;
     path_visited_.insert(make_support(seed));
@@ -1888,6 +1923,7 @@ private:
     record_terminal_principal_factorization(visited_steps, terminal);
     last_walk_reached_kkt_ = walk_reached_kkt_;
     commit_walk_closures();
+    clear_path_visited();
     return true;
   }
 
@@ -2404,7 +2440,7 @@ private:
   void materialize_upper(size_t candidate_index) {
     const ray_candidate &candidate = ray_shortlist_[candidate_index];
     support &upper = shortlist_uppers_[candidate_index];
-    upper.clear();
+    support_context_.clear(upper);
     size_t gains = 0;
     size_t losses = 0;
     for (size_t row = 0; row < product_.size(); ++row) {
@@ -2416,7 +2452,7 @@ private:
       const bool current_upper = product_[row].sign() >= 0;
       const bool candidate_upper = scratch_.sign() >= 0;
       if (candidate_upper)
-        upper.set(row);
+        support_context_.set(upper, row);
       gains += !current_upper && candidate_upper;
       losses += current_upper && !candidate_upper;
     }
@@ -2429,8 +2465,10 @@ private:
     pair_score result;
     for (size_t row = 0; row < product_.size(); ++row) {
       const bool base_upper = product_[row].sign() >= 0;
-      const bool first_upper = shortlist_uppers_[first].contains(row);
-      const bool second_upper = shortlist_uppers_[second].contains(row);
+      const bool first_upper =
+          support_context_.contains(shortlist_uppers_[first], row);
+      const bool second_upper =
+          support_context_.contains(shortlist_uppers_[second], row);
       result.union_gains += !base_upper && (first_upper || second_upper);
       result.common_losses += base_upper && !first_upper && !second_upper;
       result.total_gains += !base_upper && first_upper;
@@ -2670,19 +2708,19 @@ private:
   }
 
   bool add_certificate() {
-    support lower(product_.size());
-    support upper(product_.size());
+    support lower = support_context_.make();
+    support upper = support_context_.make();
     size_t lower_size = 0;
     size_t upper_size = 0;
     for (size_t local = 0; local < indices_.size(); ++local) {
       if (!solution_(local, 0).is_zero()) {
-        lower.set(indices_[local]);
+        support_context_.set(lower, indices_[local]);
         ++lower_size;
       }
     }
     for (size_t row = 0; row < product_.size(); ++row) {
       if (product_[row].sign() >= 0) {
-        upper.set(row);
+        support_context_.set(upper, row);
         ++upper_size;
       }
     }
@@ -2696,21 +2734,26 @@ private:
     if (solution_nonnegative && quadratic.is_zero()) {
       if (classification_ != nullptr)
         classification_->is_strictly_copositive = false;
-      else if (mode_ == copositivity_mode::strictly_copositive)
+      else if (mode_ == copositivity_mode::strictly_copositive) {
+        support_context_.release(std::move(lower));
+        support_context_.release(std::move(upper));
         return false;
+      }
     }
 
 #ifdef COPOSIT_IMPROVED_NBC_B9_TESTING
     if (captured_lower_ != nullptr) {
-      *captured_lower_ = lower;
-      *captured_upper_ = upper;
+      support_context_.extract_set_indices(lower, *captured_lower_);
+      support_context_.extract_set_indices(upper, *captured_upper_);
+      support_context_.release(std::move(lower));
+      support_context_.release(std::move(upper));
       return true;
     }
 #endif
     if (defer_seed_certificate_) {
       assert(!deferred_seed_certificate_);
       deferred_seed_certificate_.emplace(buffered_seed_certificate{
-          lower, upper, seed_certificate_type::dickinson, "dickinson",
+          std::move(lower), std::move(upper), seed_certificate_type::dickinson, "dickinson",
           upper_size - lower_size, upper_size});
       return true;
     }
@@ -2718,6 +2761,8 @@ private:
     if (diagnostics_.active())
       diagnostics_.certificate(upper_size - lower_size, upper_size);
     record_interval_certificate(lower, upper);
+    support_context_.release(std::move(lower));
+    support_context_.release(std::move(upper));
     COPOSIT_IMPROVED_NBC_B9_DIAGNOSTICS("dickinson", indices_.size());
     return true;
   }
@@ -2726,13 +2771,15 @@ private:
 #ifdef COPOSIT_IMPROVED_NBC_B9_TESTING
     ++support_curvature_exclusion_count_;
     if (captured_lower_ != nullptr) {
-      support lower(product_.size());
-      support ceiling(product_.size());
+      support lower = support_context_.make();
+      support ceiling = support_context_.make();
       for (const size_t index : indices_)
-        lower.set(index);
-      ceiling.set_all();
-      *captured_lower_ = lower;
-      *captured_upper_ = ceiling;
+        support_context_.set(lower, index);
+      support_context_.set_all(ceiling);
+      support_context_.extract_set_indices(lower, *captured_lower_);
+      support_context_.extract_set_indices(ceiling, *captured_upper_);
+      support_context_.release(std::move(lower));
+      support_context_.release(std::move(ceiling));
       return true;
     }
 #endif
@@ -2741,19 +2788,21 @@ private:
   }
 
   void add_upward_closure() {
-    support lower(product_.size());
-    support ceiling(product_.size());
+    support lower = support_context_.make();
+    support ceiling = support_context_.make();
     for (const size_t index : indices_)
-      lower.set(index);
-    ceiling.set_all();
+      support_context_.set(lower, index);
+    support_context_.set_all(ceiling);
     if (defer_seed_certificate_) {
       assert(!deferred_seed_certificate_);
       deferred_seed_certificate_.emplace(buffered_seed_certificate{
-          lower, ceiling, seed_certificate_type::upward, "support_curvature",
+          std::move(lower), std::move(ceiling), seed_certificate_type::upward, "support_curvature",
           product_.size() - indices_.size(), product_.size()});
       return;
     }
     supports_->add_interval(lower, ceiling);
+    support_context_.release(std::move(lower));
+    support_context_.release(std::move(ceiling));
     if (diagnostics_.active())
       diagnostics_.certificate(product_.size() - indices_.size(),
                                product_.size());
@@ -2763,20 +2812,22 @@ private:
   }
 
   void add_downward_closure(std::string_view kind) {
-    support floor(product_.size());
-    support upper(product_.size());
+    support floor = support_context_.make();
+    support upper = support_context_.make();
     for (const size_t index : indices_)
-      upper.set(index);
+      support_context_.set(upper, index);
     if (defer_seed_certificate_) {
       assert(!deferred_seed_certificate_);
       deferred_seed_certificate_.emplace(buffered_seed_certificate{
-          floor, upper, seed_certificate_type::downward, kind, 0, 0});
+          std::move(floor), std::move(upper), seed_certificate_type::downward, kind, 0, 0});
 #ifdef COPOSIT_IMPROVED_NBC_B9_TESTING
       ++downward_count_;
 #endif
       return;
     }
     supports_->add_interval(floor, upper);
+    support_context_.release(std::move(floor));
+    support_context_.release(std::move(upper));
     diagnostics_.certificate();
     record_closure_certificate(kind, "downward", certificate_frontier_,
                                indices_, certificate_frontier_ == "high");
@@ -2817,6 +2868,7 @@ private:
 #endif
 
   size_t dimension_;
+  support_context support_context_;
   fraction_free_ldlt_factorization factorization_;
   floating_positive_semidefinite_filter floating_filter_;
   double_matrix floating_matrix_;
@@ -2864,7 +2916,7 @@ private:
   copositivity_classification *classification_ = nullptr;
   diagnostics::tracker diagnostics_;
   std::optional<improved_nbc_upward_supports> supports_;
-  std::set<support> path_visited_;
+  std::set<support, support_less> path_visited_;
   std::set<std::string> kkt_signatures_;
   std::vector<buffered_walk_closure> buffered_walk_closures_;
   walk_choice_trace walk_choice_trace_;
@@ -2889,8 +2941,8 @@ private:
   size_t support_curvature_exclusion_count_ = 0;
   size_t downward_count_ = 0;
   size_t high_float_rejection_count_ = 0;
-  support *captured_lower_ = nullptr;
-  support *captured_upper_ = nullptr;
+  std::vector<size_t> *captured_lower_ = nullptr;
+  std::vector<size_t> *captured_upper_ = nullptr;
 #endif
 };
 
@@ -3007,7 +3059,8 @@ bool improved_nbc_b9_check_support_for_testing(
 
 bool improved_nbc_b9_certificate_for_testing(const matrix_integer &matrix,
                                              const std::vector<size_t> &indices,
-                                             support &lower, support &upper) {
+                                             std::vector<size_t> &lower,
+                                             std::vector<size_t> &upper) {
   return dickinson_checker(matrix.rows(), copositivity_mode::copositive)
       .optimize_support_for_testing(matrix, indices, lower, upper);
 }
@@ -3024,17 +3077,20 @@ bool count_uncovered_support(void *opaque, const std::vector<size_t> &) {
 size_t improved_nbc_b9_uncovered_count(
     size_t dimension, size_t cardinality,
     const std::vector<std::pair<uint64_t, uint64_t>> &intervals) {
-  improved_nbc_upward_supports diagram(dimension);
+  support_context context(dimension);
+  improved_nbc_upward_supports diagram(context);
   for (const auto &[lower_mask, upper_mask] : intervals) {
-    support lower(dimension);
-    support upper(dimension);
+    support lower = context.make();
+    support upper = context.make();
     for (size_t bit = 0; bit < dimension; ++bit) {
       if ((lower_mask & (uint64_t{1} << bit)) != 0)
-        lower.set(bit);
+        context.set(lower, bit);
       if ((upper_mask & (uint64_t{1} << bit)) != 0)
-        upper.set(bit);
+        context.set(upper, bit);
     }
     diagram.add_interval(lower, upper);
+    context.release(std::move(lower));
+    context.release(std::move(upper));
   }
 
   diagram.commit_frontiers(1, dimension);
@@ -3049,7 +3105,8 @@ size_t improved_nbc_b9_pair_exclusion_uncovered_count(size_t dimension,
                                                       size_t cardinality,
                                                       size_t first,
                                                       size_t second) {
-  improved_nbc_upward_supports diagram(dimension);
+  support_context context(dimension);
+  improved_nbc_upward_supports diagram(context);
   diagram.add_pair_upward_closure(first, second);
   diagram.commit_frontiers(1, dimension);
   size_t count = 0;
@@ -3064,28 +3121,34 @@ size_t improved_nbc_b9_uncovered_count(
     const std::vector<std::vector<size_t>> &upward,
     const std::vector<std::vector<size_t>> &downward,
     const std::vector<std::vector<size_t>> &exact) {
-  improved_nbc_upward_supports supports(dimension);
-  support ceiling(dimension);
-  ceiling.set_all();
+  support_context context(dimension);
+  improved_nbc_upward_supports supports(context);
+  support ceiling = context.make();
+  context.set_all(ceiling);
   for (const auto &indices : upward) {
-    support lower(dimension);
+    support lower = context.make();
     for (const size_t index : indices)
-      lower.set(index);
+      context.set(lower, index);
     supports.add_interval(lower, ceiling);
+    context.release(std::move(lower));
   }
   for (const auto &indices : downward) {
-    support floor(dimension);
-    support upper(dimension);
+    support floor = context.make();
+    support upper = context.make();
     for (const size_t index : indices)
-      upper.set(index);
+      context.set(upper, index);
     supports.add_interval(floor, upper);
+    context.release(std::move(floor));
+    context.release(std::move(upper));
   }
   for (const auto &indices : exact) {
-    support singleton(dimension);
+    support singleton = context.make();
     for (const size_t index : indices)
-      singleton.set(index);
+      context.set(singleton, index);
     supports.add_interval(singleton, singleton);
+    context.release(std::move(singleton));
   }
+  context.release(std::move(ceiling));
 
   supports.commit_frontiers(1, dimension);
   size_t count = 0;
