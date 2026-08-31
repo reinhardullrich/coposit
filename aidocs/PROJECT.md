@@ -1,6 +1,6 @@
 # coposit Project Overview
 
-Last verified: 2026-08-24
+Last verified: 2026-08-31
 
 ## Purpose And Contract
 
@@ -9,6 +9,10 @@ symmetric matrices. Its parsers accept exact rational input and return the denom
 common positive denominator. Every maintained algorithm receives only the integer matrix. The solving core stores no rational
 matrices and makes no floating-point classification.
 
+`improved_nbc_x6` is the current incumbent and the reference model for future algorithm comparisons. Its identifier lives in
+`python/pycoposit/incumbent_model.txt`, which configures the C++, command-line, and Python public interfaces. Improved NBC-X3,
+Improved NBC-X2, and Improved NBC-B7 remain historical comparison models, not the default comparison target.
+
 Every model implements the link-time contract
 `coposit::model::solve(const matrix_integer&, copositivity_mode)` from `cpp/include/coposit/model.hpp`. A completed call returns the
 Boolean for the selected predicate. A timeout, node limit, parse failure, or execution failure remains unresolved and is never
@@ -16,8 +20,8 @@ reported as `false`.
 
 The eight literature baselines, `adaptive_sponsel_copomatrix`, `dense_bitset_dickinson`, all CBDD Dickinson
 variants, `ceiling_pruned_dickinson`, `layered_singular_lift_dickinson`, `breadth_first_singular_lift_dickinson`, `sat_dickinson`,
-`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_b1`, `sat_b2`, `sat_b3`, `sat_b4`, `sat_b5`, `nbc_b6`, `nbc_b7`, `improved_nbc_b7`, `improved_nbc_b8`, `improved_nbc_b9`, `improved_nbc_g2`, `sat_c1`, `sat_c2`,
-`sat_c3`, `sat_c4`, `f1`, `f2`, `g1`, `sat_a1`, `sat_a2`, `sat_a3`, `sat_a4`, `sat_a5`, `sat_halfspace_lp_dickinson`, `sat_halfspace_milp_dickinson`,
+`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_b1`, `sat_b2`, `sat_b3`, `sat_b4`, `sat_b5`, `nbc_b6`, `nbc_b7`, `improved_nbc_b7`, `improved_nbc_x2`, `improved_nbc_x3`, `improved_nbc_x4`, `improved_nbc_x5`, `improved_nbc_x6`, `improved_nbc_x7`, `improved_nbc_x8`, `interval_supports_g3`, `minimal_sat_g4`, `cadical_x1`, `improved_nbc_b8`, `improved_nbc_b9`, `improved_nbc_g2`, `sat_c1`, `sat_c2`,
+`sat_c3`, `sat_c4`, `f1`, `f2`, `g1`, `milp_1`, `sat_a1`, `sat_a2`, `sat_a3`, `sat_a4`, `sat_a5`, `sat_halfspace_lp_dickinson`, `sat_halfspace_milp_dickinson`,
 `sat_halfspace_rays_lookahead_dickinson`,
 `sat_halfspace_rays_wide_dickinson`, `cbdd_halfspace_dickinson`,
 `kernel_cone_dickinson`, `affine_companion_dickinson`,
@@ -28,6 +32,8 @@ Ceiling-Pruned Dickinson, Kernel-Cone Dickinson, Layered Singular-Lift Dickinson
 SAT-Halfspace-Rays Dickinson, SAT-Halfspace-LP Dickinson, SAT-Halfspace-MILP Dickinson,
 SAT-B1, SAT-A1, SAT-A2, SAT-A3, SAT-A5,
 SAT-B2, SAT-B3, NBC-B7, Improved NBC-B7, Improved NBC-B8, Improved NBC-B9, Improved NBC-G2,
+Interval-Supports-G3,
+CaDiCaL-X1,
 SAT-C3, SAT-C4, F1, F2, G1,
 SAT-Halfspace-Rays Lookahead Dickinson, SAT-Halfspace-Rays Wide Dickinson,
 Wide-Certificate SAT Dickinson,
@@ -38,7 +44,7 @@ Other coposit-created models reject CP and combined mode explicitly.
 
 - `cpp/` — CMake project, experiment launcher, native Python boundary, shared tests, and model-independent headers.
 - `cpp/include/coposit/` — exact integers and matrices, parsers, packed supports, exact factorization, preprocessing, timeout state,
-  open-node limit, and the model call contract.
+  open-node limit, the bounded numerical MILP proposal solver, and the model call contract.
 - `models/hadeler-based/<model>/` — maintained Hadeler-, Dickinson-, and FracESSA-derived models; the local `README.md` groups them.
 - `models/zzz-old-do-not-use/<model>/` — preserved superseded or inapplicable models excluded from builds and benchmarks.
 - `models/baselines/<model>/` — other literature or source baselines.
@@ -75,9 +81,28 @@ The parser result also records whether FracESSA's short compact circular form su
 upper-triangular inputs set this flag to false. The metadata is retained for clients such as FracESSA and ignored by coposit's
 scale-invariant solving core.
 
-## Experiment Interfaces And Processing Pipeline
+## Public And Research Interfaces
 
-The C++ experiment launcher requires an explicit model. Combined-capable models default to `both`; other models require a mode:
+The public interfaces are `coposit::check()` in C++, `pycoposit.check()` in Python, and `coposit` without `--model`. They use the
+incumbent and default to complete preprocessing. They accept a selected CP or SCP predicate, which stops as soon as that answer is known,
+or `both`, which performs the model's combined traversal until both answers are known.
+
+The full research build keeps explicit model selection and every maintained baseline and experiment. Setting
+`COPOSIT_BUILD_EXPERIMENTS=OFF` builds only the incumbent companion and `coposit::incumbent`; Python wheels use this release-only
+configuration.
+
+## Release
+
+Releases are manual GitHub Actions runs from `main`. Calendar versioning is defined in `cpp/CMakeLists.txt`; successful workflow runs
+create the tag and GitHub release, attach five portable CLI packages, and publish CPython 3.11–3.14 wheels plus the Python source
+distribution to PyPI. Failed builds create no tag or release. Each CLI package contains the public launcher and its adjacent
+incumbent companion because the launcher deliberately does not link model code.
+
+The complete release procedure is in `aidocs/RELEASING.md`.
+
+## Experiment Processing Pipeline
+
+An explicit model selects the researcher interface. Combined-capable models default to `both`; other models require a mode:
 
 ```bash
 cpp/build/coposit --model adaptive_sponsel_copomatrix --mode strict '2#1,0,1'
@@ -85,11 +110,11 @@ cpp/build/coposit --model dickinson_2019 --mode non-strict matrix.mtx
 cpp/build/coposit --model dickinson_2019 --mode both --diagnostics --timeout 30 matrix.mtx
 ```
 
-`coposit --model MODEL [--mode strict|non-strict|both]` is the sole low-level model interface. It exposes every baseline and experiment,
+`coposit [--model MODEL] [--mode strict|non-strict|both]` is the sole process interface. Its full build exposes every baseline and experiment,
 diagnostics reporting, and one `--preprocessing on|off` switch
 for the complete fixed pipeline. Its inventory is all eight literature baselines plus `adaptive_sponsel_copomatrix` and the
-parameterized `wide_certificate_cbdd_dickinson` experiment. There are no
-`fast`, `safe`, or implicit model aliases. The launcher dispatches to internal companions that each link exactly one model. There is
+parameterized `wide_certificate_cbdd_dickinson` experiment. Omitting `--model` selects the incumbent; this is not a heuristic alias.
+The launcher dispatches to internal companions that each link exactly one model. There is
 no C++ model registry, runtime factory, inheritance hierarchy, or executable containing several solvers. Python modules follow the
 same one-model rule and retain all maintained experimental variants.
 
@@ -193,6 +218,8 @@ All eight baselines support individually selected CP and SCP.
 
 - `adaptive_sponsel_copomatrix` supports both individually selected predicates. Its authoritative
   description is [`ALGORITHM.md`](../models/experiments/adaptive_sponsel_copomatrix/ALGORITHM.md).
+- `milp_1` classifies both predicates with exact MILPs. Its authoritative description is
+  [`ALGORITHM.md`](../models/experiments/milp_1/ALGORITHM.md).
 
 ### Hadeler-based and other coposit-created experiments
 
@@ -233,6 +260,16 @@ Their canonical source directories and compact lineage inventory are under
 | `nbc_b6` | SAT-B3's ascending upward-curvature and Halfspace-Rays path, using NBC MiniSat All to enumerate one full cardinality before compacting and activating its certificates; [`ALGORITHM.md`](../models/hadeler-based/nbc_b6/ALGORITHM.md). |
 | `nbc_b7` | SAT-B3's alternating low/high traversal and exact downward pruning with a persistent NBC MiniSat All Boolean backend; [`ALGORITHM.md`](../models/hadeler-based/nbc_b7/ALGORITHM.md). |
 | `improved_nbc_b7` | NBC-B7 with a separately maintained, genuinely resumable Improved NBC backend and permanent root-inconsistency detection; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_b7/ALGORITHM.md). |
+| `improved_nbc_x2` | Improved NBC-B7 plus an exact greedy reduction of the Dickinson lower endpoint that never shrinks, and may enlarge, the optimized upper endpoint; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_x2/ALGORITHM.md). |
+| `improved_nbc_x3` | Improved NBC-X2 plus a targeted LP proposal that preserves the Rays upper endpoint, exact reconstruction, and exact selection only when the final X2-shrunk interval strictly dominates the ordinary X2 interval; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_x3/ALGORITHM.md). |
+| `improved_nbc_x4` | Improved NBC-X3 with the ordinary exact shrink performed first, so a maximal ordinary interval skips the LP and any later LP candidate is compared directly with the retained shrunk baseline; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_x4/ALGORITHM.md). |
+| `improved_nbc_x5` | Improved NBC-X3 with a cheap necessary bound that skips a target LP when its selected outside row cannot become nonnegative anywhere in the lower-bounded right-hand-side simplex; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_x5/ALGORITHM.md). |
+| `improved_nbc_x6` | Current incumbent: Improved NBC-X3 with successful targeted LP upper-endpoint enlargements repeated before shrinking the lower endpoint once; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_x6/ALGORITHM.md). |
+| `improved_nbc_x7` | Improved NBC-X6 with at most two exactly successful LP targets compared per continuation round, retaining the stronger endpoint before continuing; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_x7/ALGORITHM.md). |
+| `improved_nbc_x8` | Improved NBC-X6 with curvature-first pruning and a complete local maximum-halfspace MILP whenever the ordinary all-ones Dickinson endpoint is not full; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_x8/ALGORITHM.md). |
+| `interval_supports_g3` | Improved NBC-B7's mathematics and alternating frontiers with the direct exact interval-support generator replacing Improved NBC; [`ALGORITHM.md`](../models/hadeler-based/interval_supports_g3/ALGORITHM.md). |
+| `minimal_sat_g4` | Improved NBC-B7's mathematics and alternating frontiers with a minimal non-learning DPLL engine using unit and exact-cardinality propagation; [`ALGORITHM.md`](../models/hadeler-based/minimal_sat_g4/ALGORITHM.md). |
+| `cadical_x1` | Arbitrary uncovered CaDiCaL seeds expanded into one Schur-guided maximal-chain pass, with deferred exact curvature closures and Dickinson intervals; [`ALGORITHM.md`](../models/hadeler-based/cadical_x1/ALGORITHM.md). |
 | `improved_nbc_b8` | Improved NBC-B7 without its high frontier or downward pruning: ascending exact upward-curvature and Halfspace-Rays Dickinson pruning only; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_b8/ALGORITHM.md). |
 | `improved_nbc_b9` | Improved NBC-B7 plus bounded, reproducibly jittered KKT walks that add only exactly verified no-hiding curvature closures; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_b9/ALGORITHM.md). |
 | `improved_nbc_g2` | Improved NBC-B7 plus a bounded closed-cone right-hand-side extension after Halfspace-Rays, with exact reconstruction and verification; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_g2/ALGORITHM.md). |
@@ -275,13 +312,13 @@ branching, pruning, and termination policy.
 
 ## Python And Reference Runs
 
-The Python analysis package keeps three layers:
+The Python package exposes `check()` for a one-matrix incumbent decision and keeps three explicit-model researcher layers:
 
 - `compute_matrix()` — one native call;
 - `run()` — sequential execution; and
 - `run_multiprocessing()` — bounded process execution yielding completion-ordered results.
 
-Every call requires an explicit model identifier. Omitting the mode selects combined classification for every Dickinson-, Hadeler-,
+Every researcher call requires an explicit model identifier. Omitting the mode selects combined classification for every Dickinson-, Hadeler-,
 or FracESSA-based model; a model without that capability requires an explicit predicate. The analysis API accepts
 the preprocessing selections. `Matrix(matrix, matrix_id=None)` puts the required matrix text or direct relative/absolute file
 path first; the optional ID is only a result-correlation label for corpus and batch work. Relative paths use the process working

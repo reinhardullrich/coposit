@@ -6,10 +6,13 @@ grouping and remain unchanged.
 
 Each model owns its implementation, focused test, and authoritative `ALGORITHM.md`.
 
+`improved_nbc_x6` is the current public incumbent. The other directories remain independently selectable research models in a full
+build.
+
 | Lineage | Models |
 |---|---|
 | Literature roots and direct support traversal | `hadeler_1983`, `dickinson_2019`, `dense_bitset_dickinson`, `interval_recursive_dickinson`, `support_pruned_dickinson`, `nullity_support_pruned_dickinson`, `rhs_dickinson` |
-| Boolean-lattice representations | `bdd_dickinson`, `zdd_dickinson`, `cbdd_dickinson`, `cbdd_halfspace_dickinson`, `upper_endpoint_cbdd_dickinson`, `cbdd_dickinson_improved_1`, `wide_certificate_cbdd_dickinson`, `multithreaded_cbdd_dickinson`, `czdd_dickinson`, `sat_dickinson`, `sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_b1`, `sat_b2`, `sat_b3`, `clasp_b3`, `bdd_b3`, `sat_b4`, `sat_b5`, `nbc_b6`, `nbc_b7`, `improved_nbc_b7`, `improved_nbc_b8`, `improved_nbc_b9`, `improved_nbc_g2`, `sat_c1`, `sat_c2`, `sat_c4`, `sat_a1`, `sat_a2`, `sat_a3`, `sat_a4`, `sat_a5`, `sat_halfspace_lp_dickinson`, `sat_halfspace_milp_dickinson`, `sat_halfspace_rays_lookahead_dickinson`, `sat_halfspace_rays_wide_dickinson`, `wide_certificate_sat_dickinson`, `xxx`, `xxx_two`, `clingo_dickinson`, `clingo_halfspace_dickinson` |
+| Boolean-lattice representations | `bdd_dickinson`, `zdd_dickinson`, `cbdd_dickinson`, `cbdd_halfspace_dickinson`, `upper_endpoint_cbdd_dickinson`, `cbdd_dickinson_improved_1`, `wide_certificate_cbdd_dickinson`, `multithreaded_cbdd_dickinson`, `czdd_dickinson`, `sat_dickinson`, `sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_b1`, `sat_b2`, `sat_b3`, `clasp_b3`, `bdd_b3`, `sat_b4`, `sat_b5`, `nbc_b6`, `nbc_b7`, `improved_nbc_b7`, `improved_nbc_x2`, `improved_nbc_x3`, `improved_nbc_x4`, `improved_nbc_x5`, `improved_nbc_x6`, `improved_nbc_x7`, `improved_nbc_x8`, `interval_supports_g3`, `minimal_sat_g4`, `cadical_x1`, `improved_nbc_b8`, `improved_nbc_b9`, `improved_nbc_g2`, `sat_c1`, `sat_c2`, `sat_c4`, `sat_a1`, `sat_a2`, `sat_a3`, `sat_a4`, `sat_a5`, `sat_halfspace_lp_dickinson`, `sat_halfspace_milp_dickinson`, `sat_halfspace_rays_lookahead_dickinson`, `sat_halfspace_rays_wide_dickinson`, `wide_certificate_sat_dickinson`, `xxx`, `xxx_two`, `clingo_dickinson`, `clingo_halfspace_dickinson` |
 | Ceiling and singular-support searches | `ceiling_pruned_dickinson`, `sat_c3`, `f1`, `f2`, `g1`, `kernel_cone_dickinson`, `affine_companion_dickinson`, `layered_singular_lift_dickinson`, `breadth_first_singular_lift_dickinson` |
 | Frank–Wolfe proposals before Dickinson | `frank_wolfe_dickinson`, `one_step_frank_wolfe_dickinson`, `pairwise_frank_wolfe_dickinson`, `support_polished_frank_wolfe_dickinson` |
 | FracESSA and Zischg descendants | `fracessa`, `zischg_hadeler`, `zischg_dickinson`, `zischg_fracessa` |

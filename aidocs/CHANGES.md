@@ -2,6 +2,237 @@
 
 This append-only file records meaningful decisions, results, and evidence that are not clear from Git. Do not log routine edits here.
 
+## 2026-08-31 — FracESSA-style release pipeline
+
+- Added calendar versioning and a manually dispatched `main`-only GitHub release workflow following FracESSA's release structure.
+- The workflow builds five portable CLI packages, CPython 3.11–3.14 wheels, and one public-incumbent source distribution, creates
+  the version tag and GitHub release only after all builds pass, and publishes Python distributions through PyPI trusted publishing.
+- Coposit's CLI asset remains an archive rather than one executable because the hard-timeout launcher and its one-model incumbent
+  companion must stay adjacent. Each platform build verifies the embedded version and a known exact CP/SCP boundary classification.
+- The complete 129-test Release suite passed. The incumbent-only CLI archive and a wheel rebuilt from the source distribution both
+  returned the expected exact CP/SCP boundary classification.
+
+## 2026-08-31 — X6 becomes the public incumbent interface
+
+- Added one incumbent setting, `python/pycoposit/incumbent_model.txt`, and set it to `improved_nbc_x6`.
+- Added `coposit::check()` and `pycoposit.check()` as the public exact one-matrix interfaces. The CLI now uses the incumbent when
+  `--model` is omitted; explicit model selection remains the researcher interface.
+- Added `COPOSIT_BUILD_EXPERIMENTS=OFF` for incumbent-only release builds. Full standalone development builds still include every
+  baseline and experiment.
+- The complete 128-test Release suite passed. An external `add_subdirectory` C++ consumer and a Python wheel rebuilt from the
+  incumbent-only source distribution both returned the expected CP/SCP boundary classification.
+
+## 2026-08-28 — Improved NBC-X8 stops after the root relaxation
+
+- X8 no longer runs local branch-and-bound. At each residual nonsingular support it solves only the root LP relaxation of the same
+  weighted maximum-halfspace formulation, reconstructs the proposed right-hand side at scale $10^9$, and accepts it only when exact
+  arithmetic proves a better Dickinson interval than the all-ones incumbent. Fractional membership variables are not rounded or
+  branched upon. The copied but unreachable X6 ray and targeted-LP implementation was removed from X8.
+- The complete 127-test Release suite passed. All 46 diagnostics-enabled Smoke Set matrices matched their known combined CP/SCP
+  classifications with complete preprocessing, and both corpus databases passed their integrity checks.
+
+## 2026-08-28 — Improved NBC-X8 optimizes complete local Dickinson width numerically
+
+- Added `improved_nbc_x8` as an isolated X6 experiment. After curvature and the exact all-ones ceiling shortcut, a residual
+  nonsingular support solves one numerical branch-and-bound MILP over the closed right-hand-side simplex
+  $b\geq0$, $\mathbf1^Tb=1$. There is no preceding Halfspace--Rays stage and no local time or node cap; the global cooperative
+  timeout remains authoritative.
+- The MILP uses weighted halfspaces to maximize Dickinson width $D=|U|-|L|$, breaking a tie by larger $|U|$. Outside product
+  inequalities increase $|U|`; the paired inequalities $u_i\geq0$ and $-u_i\geq0$ count an additional gain exactly at $u_i=0$.
+  Allowing $b_i=0$ is valid under Dickinson's certificate conditions and includes the boundary points excluded by the earlier
+  positive-floor probe.
+- Every numerical point is reconstructed at scale $10^9$ and its interval is verified with exact integer arithmetic. A focused
+  boundary regression reaches $b=(1,0)$, shrinks $L$, and reaches the ceiling; randomized two-dimensional tests verify the weighted
+  MILP objective against direct enumeration. Numerical optimality is not used as an exact proof.
+- Branch-and-bound now terminates globally as soon as its incumbent reaches the absolute lexicographic ceiling
+  $(D,|U|)=(n-1,n)$. A focused regression verifies the same optimum with fewer visited nodes.
+- The complete 126-test Release suite passed. All 46 diagnostics-enabled Smoke Set matrices matched their known combined CP/SCP
+  classifications with complete preprocessing, and both corpus databases passed their integrity checks.
+
+## 2026-08-28 — Full MILP probes improve both traced X6 intervals
+
+- Solved the positive-right-hand-side maximum-$|U|$ MILP once with SciPy/HiGHS for the two previously traced supports. HiGHS
+  reported zero MIP gap for both numerical solves. Reconstructing each active MILP vertex from the exact rational equations produced
+  valid exact Dickinson certificates with the same objective values.
+- For Peng matrix 16433 at $I=\{4,6,8,10,11,22,24,31,32,34,35\}$, X6 has $(|L|,|U|,D)=(11,33,22)$; the MILP certificate has
+  $(11,34,23)$ and $U=[35]\setminus\{19\}$. For BPQY matrix 13387 at $I=\{27,35,36,43,44\}$, X6 has $(5,37,32)$; the MILP
+  certificate has $(5,40,35)$ and $U=[45]\setminus\{1,15,16,25,39\}$. Exact verification proves that these certificates exist;
+  numerical zero-gap MILP status is not an exact proof that no still wider certificate exists.
+
+## 2026-08-28 — X6 selects the widest verified interval regardless of its construction
+
+- Corrected X6's final interval selection so every competing exact candidate is ranked first by width $D=|U|-|L|$ and then by
+  $|U|$, regardless of whether it came from Rays or the targeted LP. The ray shortlist now uses the same primary score; its former
+  gain/loss heuristic only breaks exact score ties. A focused regression covers the observed case in which the LP interval
+  $(|L|,|U|,D)=(11,33,22)$ must beat the Rays interval $(9,29,20)$.
+- Repeated the six-matrix BPQY Quick and five-matrix Peng panel in combined mode with complete preprocessing, diagnostics, a
+  180-second cutoff, solver CPUs 8 and 9, and dispatcher CPU 3. The corrected binary preserved all ten completed classifications
+  and the matrix-16433 timeout. Against the stored pre-fix run, every completed case was faster: the paired median changed by
+  -7.50% and total completed runtime by -7.25%. This non-interleaved cross-time comparison is encouraging but does not by itself
+  isolate the code change from machine-load variation.
+
+## 2026-08-28 — Improved NBC-X7 compares two exact LP targets per round
+
+- Added `improved_nbc_x7` as an isolated X6 experiment. In each targeted-LP continuation round, the first exact improvement is
+  retained provisionally; X7 scans until a second exact improvement or target exhaustion and keeps the candidate with larger
+  $|U|$, breaking a tie by larger $|U|-|L|$. Floating-point LP points remain proposals and every accepted candidate is verified
+  exactly.
+- A focused fixed-matrix regression proves that X7 examines two exact candidates and selects the stronger later one. The complete
+  123-test Release suite passed, all 46 diagnostics-enabled Smoke Set classifications matched known truth, and corpus integrity is
+  `ok`.
+- A controlled 180-second comparison used the same six BPQY Quick and four completed Peng matrices for X6 and X7, with dispatcher
+  CPU 3 and solver CPUs 4 through 9. Matrix 16433 was excluded at Reinhard's request because it repeatedly times out. All ten
+  classifications matched. BPQY produced identical support and certificate counts. Across the four Peng matrices, X7 visited 461
+  fewer supports in total. Across all ten pairs its runtime changed by -0.57% at the paired median and -1.21% in total, too small for
+  a promotion from one run. X6 remains the incumbent.
+
+## 2026-08-28 — X6 uses one $10^9$ LP reconstruction
+
+- Replaced the dyadic reconstruction with one fixed $10^9$ reconstruction after the then-available hard-panel run suggested that
+  larger dyadic coefficients slowed the complete solver. That timing evidence was later discarded because unrelated concurrent load
+  made its cross-time comparison unreliable. The earlier 11,036-point probe found the same Dickinson intervals from $10^9$,
+  $10^{12}$, $10^{15}$, and dyadic reconstruction at every point, while $10^6$ was insufficient. The smallest empirically adequate
+  scale keeps every coefficient within 30 bits and avoids both arbitrary-precision coefficients and the old four-scale loop.
+- The complete 122-test Release suite passed, and all 46 diagnostics-enabled Smoke Set matrices matched their known combined CP/SCP
+  classifications with complete preprocessing.
+- Discarded the first cross-time timing comparison with the original four-scale binary because unrelated concurrent machine load made
+  the runs incomparable. Its identical completed classifications and event histories remain a correctness check, but its reported
+  runtime difference and timeout throughput are not performance evidence.
+- Repeated the fixed-$10^9$ versus four-scale comparison with both policies rebuilt against the same shared code, alternating their
+  order, and restricting the dispatcher and sole solver to CPUs 8 and 9. The ten completed pairs had identical classifications,
+  certificate distributions, and chronological event histories. Fixed $10^9$ changed the paired median by -0.07% and total time by
+  -0.14%, which is no material difference. On the shared 180-second timeout, fixed $10^9$ visited 124,186 supports versus 125,365
+  for four scales. This experiment demonstrates neither a meaningful speed gain nor loss from using one scale.
+- Repeated the comparison between fixed $10^9$ and exact dyadic reconstruction with both binaries built against the same shared code,
+  two solver workers on CPUs 8 and 9, and the dispatcher on CPU 3. The ten completed pairs again had identical classifications,
+  certificate distributions, and chronological event histories. Dyadic reconstruction changed the paired median by -0.41% and total
+  time by -0.31%, which is also no material difference. On the shared 180-second timeout, the fixed history was an exact prefix of the
+  dyadic history; dyadic processed only 85 additional supports. Reconstruction choice therefore does not explain the earlier timing
+  differences. Fixed $10^9$ remains the simpler representation with smaller exact coefficients.
+
+## 2026-08-28 — X6 uses one exact dyadic LP reconstruction
+
+- Compared exact dyadic reconstruction with X6's four decimal scales at 11,036 actual targeted-LP proposal points from BPQY matrices
+  13173, 13226, 13318, and 13377 and Peng matrices 16393 and 16433. The probe used the same normalized binary64 coordinates for both
+  reconstructions and changed no model decisions.
+- Both methods produced exactly the same Dickinson interval at every point. There was no decimal-only success, dyadic-only success,
+  different score, or different endpoint set. Scale $10^6$ worked at 705 points; $10^9$, $10^{12}$, $10^{15}$, and the dyadic
+  reconstruction all worked at every point. The current selection used $10^6$ 705 times and $10^9$ 10,331 times; the two finer
+  decimal scales never improved the result.
+- The instrumented median reconstruction cost was about 15.4 microseconds for the complete decimal ladder and 6.3 microseconds for
+  one dyadic reconstruction. X6 now uses that single exact dyadic reconstruction and removes the four-scale candidate loop. The LP
+  remains numerical and non-authoritative; all accepted witnesses, endpoint signs, and pruning decisions are still checked exactly.
+- The complete 122-test Release suite passed. All 46 diagnostics-enabled Smoke Set matrices matched their known combined CP/SCP
+  classifications with complete preprocessing, and both the corpus and diagnostics databases passed their integrity checks.
+- A paired 180-second comparison against the stored pre-change X6 binary used the same six BPQY Quick and five Peng matrices. The ten
+  completed pairs had identical classifications, certificate distributions, and complete chronological event histories. Dyadic X6
+  was nevertheless 2.98% slower by the paired median and 6.17% slower by total completed work; the BPQY and Peng paired medians were
+  +2.98% and +7.55%. Matrix 16433 timed out in both runs, with dyadic X6 visiting 127,145 supports instead of 129,950. The larger
+  dyadic coefficients therefore appeared to outweigh the cheaper single reconstruction in the exact arithmetic that followed.
+  This performance conclusion was later discarded because the runs occurred under different, uncontrolled concurrent machine load;
+  the identical exact outcomes remain valid evidence. The controlled same-code repeat recorded above supersedes its timing result and
+  found no material difference between dyadic and fixed-$10^9$ reconstruction.
+
+## 2026-08-27 — Improved NBC-X6 repeats targeted LP enlargement before shrinking
+
+- Added `improved_nbc_x6` as an isolated X3 experiment. Each exactly verified targeted-LP improvement becomes the starting point
+  for another LP round that preserves the enlarged upper endpoint. The lower endpoint is shrunk only after this chain stops.
+- Every successful round adds an upper index, so the chain is finite. The final LP interval still replaces the ordinary X3 interval
+  only after exact containment proves strict dominance; floating-point LP output remains proposal-only.
+- The focused test exercises two successive exact LP improvements. The full 122-test Release suite and all 46 combined-mode Smoke
+  classifications passed, with diagnostics enabled and no known-truth mismatch.
+- Against the matching current X3 binary, X6 preserved 436 completions and 33 timeouts on the five-second Core-and-Stress panel;
+  the paired median changed by +0.32%. It preserved all six BPQY Quick completions with a -3.15% paired median, and preserved four
+  completions plus the matrix-16433 timeout on the five-matrix Peng panel with a -0.29% paired median. X6 reduced visited supports
+  by 0.11% and 0.79% at the respective hard-panel medians, but gained no completion in these preliminary panels.
+- The expanded three-minute campaign covered the same 263 BPQY matrices through order 40 and 240 Peng matrices through order 35 as
+  the stored X3 run. X6 completed 437 of 503 matrices versus 435 for X3 and 429 for B7. It gained BPQY matrix 13254 and Peng matrix
+  16416 over X3, lost none, and matched every common classification. Across the 435 common X3/X6 completions, X6 was 1.33% slower
+  by the matrix-paired median. Reinhard promoted X6 to the project incumbent because the two additional hard completions outweigh
+  that small median cost.
+- Moved the invariant outside-row LP coefficient preparation out of X6's continuation loop: after the ray basis is finalized, one
+  exact-to-binary64 conversion is now reused by every round for the same support. A focused multi-round regression verifies one
+  preparation; the complete 122-test Release suite, all 46 combined-mode Smoke classifications, and corpus integrity check passed.
+
+## 2026-08-27 — X3 matches P7's five-second BPQY completion count
+
+- Ran the current `improved_nbc_x3` binary over all 404 preprocessing-unresolved BPQY benchmark matrices in combined mode, with
+  complete preprocessing, diagnostics, a five-second cutoff, and solver CPUs 7 through 9. X3 completed 263 matrices (65.10%) and
+  timed out on 141, with no mismatch against known truth values.
+- The headline count is identical to the stored `improved_nbc_b7` campaign, but the sets differ at two cutoff-boundary cases: X3
+  completed order-35 matrix 13224 while P7 timed out, and P7 completed order-45 matrix 13394 while X3 timed out. The other 262
+  completions and 140 timeouts agree. Across the 262 common completions, X3 was 0.12% faster by the paired median.
+
+## 2026-08-27 — Improved NBC-X5 does not beat the X3 incumbent
+
+- Added `improved_nbc_x5` as an isolated X3 experiment. Before constructing a targeted LP, X5 computes a necessary upper bound and
+  skips the LP when the selected outside row cannot become nonnegative anywhere in the lower-bounded right-hand-side simplex.
+- On the six BPQY Quick matrices, X5 preserved all completions and certificate distributions but was 3.41% slower by the paired
+  median. On the five Peng matrices, both models completed the same four cases and timed out on matrix 16433; the paired median over
+  the four completions changed by +0.01%. Across all ten common completions, X5 was 2.16% slower by the paired median.
+- The preliminary bound costs more than the avoided LP solves save on these hard panels. `improved_nbc_x3` therefore remains the
+  incumbent and the reference model for future comparisons.
+
+## 2026-08-27 — Improved NBC-X3 uses a reduced equivalent LP
+
+- Reduced X3's targeted LP directly in the incumbent model. The useful margin is now one nonnegative variable instead of
+  $t=t^+-t^-$, and the last simplex coordinate is eliminated through $y_k=1-\sum_{i<k}y_i$.
+- The target order, mathematical feasible points with nonnegative margin, exact reconstruction, lower-endpoint shrinking, and exact
+  acceptance rule are unchanged. The floating-point pivot path may differ. Each LP now has two fewer variables and one fewer
+  constraint; the private simplex engine itself is unchanged.
+
+## 2026-08-27 — Improved NBC-X4 shrinks before its optional LP
+
+- Added `improved_nbc_x4` as an isolated X3 experiment. It shrinks the ordinary Halfspace–Rays interval first and skips the targeted
+  LP when that exact shrink already gives the maximum possible interval. Otherwise it runs the unchanged X3 LP from the original
+  Rays state and compares the final shrunk candidate with the retained shrunk baseline.
+- A focused regression verifies the LP skip, while the existing exact LP-improvement case still exercises and accepts the LP branch.
+  The complete 120-test Release suite passed, database integrity is `ok`, and a one-second diagnostics-enabled Smoke Set run classified
+  all 46 matrices correctly in combined mode with complete preprocessing and no timeout.
+- Against the matching X3 rows, X4 regressed on every requested panel. At five seconds it completed 427 of 469 Core-and-Stress
+  matrices versus X3's 436, losing nine completions and gaining none; its paired-median time increased by 4.67% over the 427 common
+  completions. At 180 seconds both models completed all six BPQY Quick matrices, but X4's paired median increased by 28.97%. Both
+  completed four of five Peng matrices with matrix 16433 timing out, while X4's paired median increased by 46.76%. Every common
+  completion had the same certificate joint distribution and classification. The reordered work therefore saved no observed search
+  on these panels and increased runtime.
+
+## 2026-08-27 — Improved NBC-X3 adds an exactly guarded targeted LP
+
+- Added `improved_nbc_x3` as an isolated X2 experiment. After exact Halfspace-Rays, it asks a small numerical LP for the first
+  positive right-hand side that preserves every current upper index and adds one chosen missing index.
+- Every LP point is reconstructed and checked with exact integers. X2 lower-endpoint shrinking is applied independently to the Rays
+  and LP branches; X3 inserts the LP interval only when exact set containment proves that it strictly contains the ordinary X2
+  interval. Otherwise the ordinary exact X2 interval is retained.
+- Added a focused six-by-six regression in which the LP proposal survives exact reconstruction and final containment. X2 remains
+  the incumbent until comparative benchmark evidence supports promotion.
+- The complete 119-test Release suite passed. A one-second, diagnostics-enabled Smoke Set run classified all 46 matrices correctly
+  in combined mode with complete preprocessing and no timeout.
+- Promoted X3 to the project incumbent after the requested comparison. It preserved X2's 436 completions and 33 timeouts on the
+  five-second Core-and-Stress panel, completed all six BPQY Quick cases with an 8.48% paired-median time reduction, and preserved
+  four completions plus one timeout on the five-instance Peng panel with a 4.98% paired-median reduction over the completed pairs.
+  The matching seven-worker Core-and-Stress run was 2.71% slower by the paired median; Reinhard accepted that broad-panel cost in
+  exchange for the targeted hard-panel improvements.
+- A pinned-core support-level microbenchmark sampled 928 nonsingular supports from 300 Core-and-Stress matrices, all six BPQY Quick
+  matrices, and all five Peng-panel matrices. Against the exact traditional $B^{-1}\mathbf1$ interval, full X3 increased mean
+  interval width by 1.41% on Core, 19.33% on BPQY Quick, and 32.40% on Peng. It enlarged 13.1%, 66.7%, and 66.7% of the sampled
+  supports, respectively, and never reduced the width. The corresponding total interval-construction time increased from 18.367 ms
+  to 174.120 ms over all 928 supports; the hard-panel gains therefore come from substantially larger certificates rather than a
+  cheaper per-support calculation.
+
+## 2026-08-27 — Improved NBC-X2 becomes the incumbent
+
+- Promoted `improved_nbc_x2` to the project incumbent. Future models and optimizations are compared with X2 rather than Improved
+  NBC-B7 unless a historical B7 comparison is explicitly requested.
+- On the common five-second Core-and-Stress rows, X2 preserved B7's 436 completions and was 1.58% faster by the median paired time.
+  It completed all six BPQY Quick matrices with a 10.49% median reduction against the stored complete B7 campaign and was 22.73%
+  faster by the paired median on the four completed matrices in the five-instance Peng panel.
+- Relaxed X2's exact lower-endpoint shrink from requiring an identical upper endpoint to requiring that no old upper index is lost;
+  newly nonnegative products now enlarge the certificate for no additional matrix arithmetic. Against the preceding X2 binary, the
+  five-second Core-and-Stress panel retained 436 completions and changed certificates on eight unresolved circular cases, the six
+  BPQY Quick searches were identical, and all five Peng searches changed. Paired median times changed by +0.72%, +0.08%, and +3.74%,
+  respectively. The rule is locally stronger and demonstrably reduces visited supports on several unresolved inputs, but altered
+  traversal can still expose a less favorable later search path.
+
 ## 2026-08-26 — Dual-frontier model Four walks from Dickinson upper endpoints
 
 - Added `dual_frontier_nbc_four` as an isolated copy of model Three. Each deterministic NBC seed follows the normal exact Improved

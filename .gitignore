@@ -10,3 +10,5 @@ __pycache__/
 /research/
 /tmp/
 /.local-tmp/
+/.vcpkg-cache/
+/dist/

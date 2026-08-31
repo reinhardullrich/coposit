@@ -4,6 +4,8 @@ This file routes to every other Markdown document under `aidocs/` without duplic
 
 ## Current
 
+- `RELEASING.md` — **current** — calendar versioning, manual GitHub release procedure, portable CLI packages, Python wheels,
+  source distribution, and PyPI publication.
 - `BENCHMARK_SETS.md` — **current** — composition, guarded selection rules, overlap, and SQL access for the six corpus benchmark
   flags, including the complete and quick BPQY panels.
 - `PROJECT.md` — **current** — concise maintained structure, experiment contract, processing pipeline, model inventory, interfaces,

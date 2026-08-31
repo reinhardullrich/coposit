@@ -8,6 +8,7 @@ from .core import compute_matrix
 from .types import (
     Algorithm,
     CopositivityMode,
+    INCUMBENT_MODEL,
     Matrix,
     Preprocessing,
     _resolve_mode,
@@ -15,6 +16,19 @@ from .types import (
     _validate_algorithm,
     _validate_preprocessing,
 )
+
+
+def check(
+    matrix: Matrix | str,
+    mode: CopositivityMode = "both",
+) -> dict:
+    """Check one matrix with the current incumbent model."""
+
+    if isinstance(matrix, str):
+        matrix = Matrix(matrix)
+    elif not isinstance(matrix, Matrix):
+        raise TypeError("matrix must be a Matrix or str")
+    return compute_matrix(INCUMBENT_MODEL, matrix, mode)
 
 
 def _run_matrices(

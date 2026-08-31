@@ -35,7 +35,7 @@ the right; totals above one million use scientific notation. Horizontal captions
 the current matrix dimension substituted into `C(n, k)`.
 
 The renderer determines the reached low and high frontiers from the recorded events; it has no fixed cardinality cutoff. Every layer
-containing at most one million supports is enumerated exactly. Larger layers are represented by
+containing at most 100,000 supports is enumerated exactly. Larger layers are represented by
 deterministic samples in image-pixel bins. This changes generation cost, not the JPEG dimensions. Every analyzed source support is a
 uniform small dot: black when exact arithmetic checked it, and gray when only the floating-point high-frontier filter checked it. If
 both checks reached the same support, black takes precedence.

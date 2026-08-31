@@ -14,11 +14,13 @@ from pycoposit import (
     ALGORITHMS,
     COMBINED_CLASSIFICATION_ALGORITHMS,
     COPOSITIVITY_MODES,
+    INCUMBENT_MODEL,
     PREPROCESSING_MODES,
     MPConfig,
     Matrix,
     StatusCode,
     compute_matrix,
+    check,
     run,
     run_multiprocessing,
 )
@@ -61,6 +63,25 @@ def initialize_runner_database(connection: sqlite3.Connection, root: Path) -> No
 
 
 class WrapperTests(unittest.TestCase):
+    def test_public_incumbent_interface(self):
+        self.assertEqual(INCUMBENT_MODEL, "improved_nbc_x6")
+        boundary = check("2#1,-1,1")
+        self.assertEqual(boundary["algorithm"], INCUMBENT_MODEL)
+        self.assertEqual(boundary["mode"], "both")
+        self.assertEqual((boundary["is_copositive"], boundary["is_strictly_copositive"]), (True, False))
+
+        copositive = check(Matrix("2#1,-1,1"), "copositive")
+        self.assertEqual((copositive["is_copositive"], copositive["is_strictly_copositive"]), (True, None))
+        strict = check("2#1,-1,1", "strictly_copositive")
+        self.assertEqual((strict["is_copositive"], strict["is_strictly_copositive"]), (None, False))
+        with self.assertRaises(TypeError):
+            check(1)
+
+        direct = subprocess.run(
+            [str(coposit_path()), "--mode", "both", "2#1,-1,1"], capture_output=True, text=True, check=True
+        )
+        self.assertEqual(direct.stdout, "copositive=true\nstrictly_copositive=false\n")
+
     def test_corpus_and_diagnostics_schemas_are_separate(self):
         root = Path(__file__).resolve().parents[2]
         with closing(sqlite3.connect(":memory:")) as corpus:
@@ -143,6 +164,16 @@ class WrapperTests(unittest.TestCase):
             or algorithm == "nbc_b6"
             or algorithm == "nbc_b7"
             or algorithm == "improved_nbc_b7"
+            or algorithm == "improved_nbc_x2"
+            or algorithm == "improved_nbc_x3"
+            or algorithm == "improved_nbc_x4"
+            or algorithm == "improved_nbc_x5"
+            or algorithm == "improved_nbc_x6"
+            or algorithm == "improved_nbc_x7"
+            or algorithm == "improved_nbc_x8"
+            or algorithm == "interval_supports_g3"
+            or algorithm == "minimal_sat_g4"
+            or algorithm == "cadical_x1"
             or algorithm == "dual_frontier_nbc"
             or algorithm == "dual_frontier_nbc_two"
             or algorithm == "dual_frontier_nbc_three"
@@ -157,6 +188,7 @@ class WrapperTests(unittest.TestCase):
             or algorithm == "f1"
             or algorithm == "f2"
             or algorithm == "g1"
+            or algorithm == "milp_1"
             or algorithm == "sat_a1"
             or algorithm == "sat_a2"
             or algorithm == "sat_a3"

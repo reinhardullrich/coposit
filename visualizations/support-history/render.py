@@ -599,7 +599,7 @@ def main() -> None:
     parser.add_argument("--results-database", type=Path, default=DEFAULT_RESULTS_DATABASE)
     parser.add_argument("--corpus-database", type=Path, default=DEFAULT_CORPUS_DATABASE)
     parser.add_argument("--coposit", type=Path, default=DEFAULT_COPOSIT)
-    parser.add_argument("--exact-limit", type=int, default=1_000_000, help="largest layer enumerated exactly")
+    parser.add_argument("--exact-limit", type=int, default=100_000, help="largest layer enumerated exactly")
     parser.add_argument("--samples-per-pixel", type=int, default=5)
     parser.add_argument("--annotate-existing-dimension", type=int, metavar="N", help="add an estimated summary to an existing JPEG without rerunning a model")
     parser.add_argument("--self-test", action="store_true")

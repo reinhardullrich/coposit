@@ -1,0 +1,321 @@
+name: Release
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-version:
+    name: Validate release version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: version
+        name: Validate release version
+        shell: bash
+        env:
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        run: |
+          if [[ "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]]; then
+            echo "Run releases from $DEFAULT_BRANCH, not $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+          version="$(sed -n 's/^[[:space:]]*VERSION[[:space:]]\+\([0-9][0-9.]*\)[[:space:]]*$/\1/p' cpp/CMakeLists.txt)"
+          if [[ -z "$version" ]]; then
+            echo "Missing CMake project version" >&2
+            exit 1
+          fi
+          tag="v$version"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null 2>&1; then
+            echo "Release tag $tag already exists" >&2
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+
+  cli-unix:
+    name: CLI / ${{ matrix.display }}
+    needs: validate-version
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            platform: linux-intel-amd-64bit
+            display: "Linux: Intel/AMD 64-bit"
+            triplet: x64-linux-release
+            container: quay.io/pypa/manylinux_2_28_x86_64@sha256:a61875a2f84cab7df8de222ff12cabc08ff86eb4ad402ac90ba7bdaed9600cca
+          - runner: ubuntu-24.04-arm
+            platform: linux-arm64
+            display: "Linux: ARM64"
+            triplet: arm64-linux-release
+            container: quay.io/pypa/manylinux_2_28_aarch64@sha256:162c81dfd3efc710732a571717d3c916a6945ebf279e879ddee3243af96fe46f
+          - runner: macos-15-intel
+            platform: macos-intel-64bit
+            display: "macOS: Intel 64-bit"
+            triplet: x64-osx-release
+            container: ""
+          - runner: macos-14
+            platform: macos-apple-silicon-arm64
+            display: "macOS: Apple Silicon (ARM64)"
+            triplet: arm64-osx-release
+            container: ""
+    steps:
+      - uses: actions/checkout@v6
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v5
+        with:
+          path: .vcpkg-cache
+          key: vcpkg-2026.07.29-${{ matrix.triplet }}-${{ hashFiles('.github/triplets/*.cmake') }}
+      - name: Build Linux package in the glibc 2.28 environment
+        if: startsWith(matrix.platform, 'linux-')
+        shell: bash
+        run: |
+          docker run --rm \
+            -v "$GITHUB_WORKSPACE:/project" \
+            -w /project \
+            "${{ matrix.container }}" \
+            bash .github/scripts/package-cli.sh \
+              "${{ needs.validate-version.outputs.version }}" \
+              "${{ matrix.platform }}" \
+              "${{ matrix.triplet }}" \
+              /opt/vcpkg
+      - name: Build macOS package
+        if: startsWith(matrix.platform, 'macos-')
+        shell: bash
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+        run: |
+          .github/scripts/package-cli.sh \
+            "${{ needs.validate-version.outputs.version }}" \
+            "${{ matrix.platform }}" \
+            "${{ matrix.triplet }}" \
+            "$RUNNER_TEMP/vcpkg"
+      - name: Upload CLI package
+        uses: actions/upload-artifact@v7
+        with:
+          name: cli-${{ matrix.platform }}
+          path: dist/coposit-*.tar.gz
+          if-no-files-found: error
+
+  cli-windows:
+    name: "CLI / Windows: Intel/AMD 64-bit"
+    needs: validate-version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v5
+        with:
+          path: .vcpkg-cache
+          key: vcpkg-2026.07.29-x64-windows-static-release-${{ hashFiles('.github/triplets/*.cmake') }}
+          save-always: true
+      - name: Build Windows package
+        shell: pwsh
+        run: |
+          .github/scripts/package-cli.ps1 `
+            -Version "${{ needs.validate-version.outputs.version }}" `
+            -Platform "windows-intel-amd-64bit" `
+            -Triplet "x64-windows-static-release" `
+            -VcpkgRoot "C:/coposit-vcpkg-2026.07.29"
+      - name: Upload CLI package
+        uses: actions/upload-artifact@v7
+        with:
+          name: cli-windows-intel-amd-64bit
+          path: dist/coposit-*.zip
+          if-no-files-found: error
+
+  wheels-linux:
+    name: Wheels / linux-${{ matrix.arch }}
+    needs: [validate-version, cli-unix]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            arch: x86_64
+            triplet: x64-linux-release
+          - runner: ubuntu-24.04-arm
+            arch: aarch64
+            triplet: arm64-linux-release
+    steps:
+      - uses: actions/checkout@v6
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v5
+        with:
+          path: .vcpkg-cache
+          key: vcpkg-2026.07.29-${{ matrix.triplet }}-${{ hashFiles('.github/triplets/*.cmake') }}
+      - name: Build and test wheels
+        uses: pypa/cibuildwheel@v4.1.1
+        env:
+          CIBW_ARCHS_LINUX: ${{ matrix.arch }}
+          CIBW_BEFORE_ALL_LINUX: >-
+            bash {package}/.github/scripts/install-vcpkg.sh
+            ${{ matrix.triplet }} /opt/vcpkg
+          CIBW_CONFIG_SETTINGS_LINUX: >-
+            cmake.define.CMAKE_TOOLCHAIN_FILE=/opt/vcpkg/scripts/buildsystems/vcpkg.cmake
+            cmake.define.VCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+            cmake.define.VCPKG_OVERLAY_TRIPLETS={package}/.github/triplets
+      - name: Upload wheels
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-linux-${{ matrix.arch }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  wheels-macos:
+    name: Wheels / macos-${{ matrix.arch }}
+    needs: [validate-version, cli-unix]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            arch: x86_64
+            triplet: x64-osx-release
+          - runner: macos-14
+            arch: arm64
+            triplet: arm64-osx-release
+    steps:
+      - uses: actions/checkout@v6
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v5
+        with:
+          path: .vcpkg-cache
+          key: vcpkg-2026.07.29-${{ matrix.triplet }}-${{ hashFiles('.github/triplets/*.cmake') }}
+      - name: Install native dependencies
+        shell: bash
+        run: .github/scripts/install-vcpkg.sh "${{ matrix.triplet }}" "$RUNNER_TEMP/vcpkg"
+      - name: Build and test wheels
+        uses: pypa/cibuildwheel@v4.1.1
+        env:
+          MACOSX_DEPLOYMENT_TARGET: "11.0"
+          CIBW_ARCHS_MACOS: ${{ matrix.arch }}
+          CIBW_CONFIG_SETTINGS_MACOS: >-
+            cmake.define.CMAKE_TOOLCHAIN_FILE=${{ runner.temp }}/vcpkg/scripts/buildsystems/vcpkg.cmake
+            cmake.define.VCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+            cmake.define.VCPKG_OVERLAY_TRIPLETS={package}/.github/triplets
+      - name: Upload wheels
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-macos-${{ matrix.arch }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  wheels-windows:
+    name: Wheels / windows-x86_64
+    needs: [validate-version, cli-windows]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Restore vcpkg binary cache
+        uses: actions/cache@v5
+        with:
+          path: .vcpkg-cache
+          key: vcpkg-2026.07.29-x64-windows-static-release-${{ hashFiles('.github/triplets/*.cmake') }}
+      - name: Install native dependencies
+        shell: pwsh
+        run: >-
+          .github/scripts/install-vcpkg.ps1
+          -Triplet "x64-windows-static-release"
+          -VcpkgRoot "C:/coposit-vcpkg-2026.07.29"
+      - name: Build and test wheels
+        uses: pypa/cibuildwheel@v4.1.1
+        env:
+          CIBW_ARCHS_WINDOWS: AMD64
+          CIBW_CONFIG_SETTINGS_WINDOWS: >-
+            cmake.define.CMAKE_TOOLCHAIN_FILE=C:/coposit-vcpkg-2026.07.29/scripts/buildsystems/vcpkg.cmake
+            cmake.define.VCPKG_TARGET_TRIPLET=x64-windows-static-release
+            cmake.define.VCPKG_OVERLAY_TRIPLETS={package}/.github/triplets
+      - name: Upload wheels
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-windows-x86_64
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+
+  sdist:
+    name: Python source distribution
+    needs: validate-version
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+      - name: Build source distribution
+        run: |
+          python -m pip install --upgrade build
+          python -m build --sdist --outdir dist
+      - name: Upload source distribution
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+
+  publish-pypi:
+    name: Publish pycoposit to PyPI
+    needs: [github-release, wheels-linux, wheels-macos, wheels-windows, sdist]
+    runs-on: ubuntu-latest
+    environment: pypi
+    permissions:
+      id-token: write
+    steps:
+      - name: Download Python distributions
+        uses: actions/download-artifact@v8
+        with:
+          pattern: python-*
+          path: dist
+          merge-multiple: true
+      - name: Publish with PyPI trusted publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: Publish GitHub release
+    needs: [validate-version, cli-unix, cli-windows, wheels-linux, wheels-macos, wheels-windows, sdist]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download standalone CLI packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: cli-*
+          path: dist
+          merge-multiple: true
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ needs.validate-version.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          body: |
+            Download and extract the package for your platform. It contains the public `coposit` launcher, its incumbent companion, the license, and third-party notices. Linux and macOS users must run `chmod +x coposit coposit-improved_nbc_x6` once.
+
+            - **macOS: Apple Silicon (ARM64):** `coposit-${{ needs.validate-version.outputs.version }}-macos-apple-silicon-arm64.tar.gz`
+            - **macOS: Intel 64-bit:** `coposit-${{ needs.validate-version.outputs.version }}-macos-intel-64bit.tar.gz`
+            - **Linux: Intel/AMD 64-bit:** `coposit-${{ needs.validate-version.outputs.version }}-linux-intel-amd-64bit.tar.gz`
+            - **Linux: ARM64:** `coposit-${{ needs.validate-version.outputs.version }}-linux-arm64.tar.gz`
+            - **Windows: Intel/AMD 64-bit:** `coposit-${{ needs.validate-version.outputs.version }}-windows-intel-amd-64bit.zip`
+
+            Keep `coposit` and `coposit-improved_nbc_x6` in the same directory. The companion is an internal implementation detail; invoke `coposit`.
+
+            **License:** [GPL-3.0-or-later](https://github.com/${{ github.repository }}/blob/${{ needs.validate-version.outputs.tag }}/LICENSE)
+
+            **Source:** Clone the tagged repository with `git clone --branch ${{ needs.validate-version.outputs.tag }} https://github.com/${{ github.repository }}.git`.
+
+            **Third-party licenses and sources:** [THIRD_PARTY_NOTICES.md](https://github.com/${{ github.repository }}/blob/${{ needs.validate-version.outputs.tag }}/THIRD_PARTY_NOTICES.md)
+          files: |
+            dist/coposit-*.tar.gz
+            dist/coposit-*.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true

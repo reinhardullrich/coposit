@@ -1,0 +1,460 @@
+# Improved NBC-X5
+
+Classification: coposit-created exact CP/SCP experiment. Improved NBC-X5 alternates between low and high cardinalities. The low frontier uses
+face curvature first and falls back to an exact Halfspace-Rays Dickinson certificate when curvature alone cannot prune upward. The
+optimized certificate is offered to a targeted continuous LP that tries to add one missing upper index without losing an existing
+one. Before constructing that LP, X5 skips a target whose row cannot become nonnegative anywhere in the permitted right-hand-side
+simplex. A numerical LP point is only a proposal. X5 reconstructs and checks it with exact integers, applies X2 lower-endpoint shrinking
+to both branches, and keeps the LP branch only when its final exact interval strictly contains the ordinary X2 interval. The high
+frontier is an opportunistic floating-point positive-semidefiniteness scan; only candidates for downward pruning are verified exactly.
+
+Public mode boundary: `copositive` and `strictly_copositive` select one predicate. `both` classifies both predicates in one traversal
+and is the analysis-interface default.
+
+## Idea In Plain Language
+
+Every point of the standard simplex lies in the relative interior of exactly one face, identified by the indices of its positive
+coordinates. A quadratic function on the simplex has a global minimizer. Among all global minimizers, choose one whose support is as
+small as possible. On that support the quadratic form must be strictly convex along the face: otherwise a flat or descending tangent
+direction reaches the boundary without increasing the value and produces a minimizer with smaller support.
+
+Improved NBC-X5 uses that observation as a search certificate.
+
+- If a face is not strictly convex, neither that support nor any superset can be the support of the chosen minimal-support global
+  minimizer. The model removes the whole upward closure.
+- If the principal matrix is positive definite, or if it is singular positive semidefinite and its all-ones system is consistent,
+  every nonzero nonnegative vector supported inside that face has positive quadratic value. The model removes the whole downward
+  closure.
+- If a low-frontier face is strictly convex, the retained factorization is reused to build and optimize a Dickinson interval. This
+  replaces the former exact-support block. X5 next asks a small LP whether a different positive right-hand side could retain the
+  current upper endpoint and add one chosen missing index. A proposed vector is reconstructed exactly. Finally, X2 tries to delete
+  used coordinates from both the original and proposed vectors. Only an exact final interval containing the original one is used.
+- A high-frontier face is first tested by a floating-point $LDL^T$ filter. A positive-semidefinite candidate is factorized exactly.
+  It contributes a downward closure only when exact arithmetic proves positive definiteness, or proves positive semidefiniteness
+  together with consistency of $Bx=\mathbf1$. A rejected candidate is skipped only by the high scan and remains available to the
+  exact low-frontier proof.
+
+The remaining supports are represented by a resumable coposit derivative of NBC MiniSat All. Two cardinality frontiers start at $1$ and $n$. The model alternates one
+open low support and one open high support, exactly as SAT-B3 does. Every new certificate enters both live NBC searches immediately,
+so a downward certificate found at the high frontier can remove low candidates before the low cardinality is exhausted. The same
+certificate is also retained outside NBC for compaction when either frontier finishes a cardinality.
+
+Once the high frontier meets the low frontier, the exact low traversal continues alone until the proof is complete. The processing
+order has the form
+
+$$
+\text{one from low},\ \text{one from high},\ \text{one from low},\ \text{one from high},\ldots.
+$$
+
+No cardinality is materialized as a list. Each frontier stores only a stack of disjoint unexplored prefix cubes. After Improved NBC returns a
+model, those cubes advance past it, so the next query cannot return the same support. In particular, the model never inserts an
+exact-support clause merely to request another support.
+
+Unlike the original NBC wrapper retained by `nbc_b7`, Improved NBC is explicitly resumable. A callback may stop after one model and
+the next call safely continues with another prefix. The solver removes call-local assumptions and enumeration scratch state before
+returning while retaining permanent clauses and logically valid learned clauses. A conflict in the permanent formula is latched as
+global exhaustion; a conflict caused only by the current cardinality or prefix assumptions is not.
+
+Pruning is directional. A low-frontier support either contributes an upward curvature closure or a Dickinson interval. A
+high-frontier support contributes an exactly proved downward strict-copositivity closure or a high-scan-only rejection. It never pays for a
+Halfspace-Rays search. A support rejected by the high scan remains available to the low frontier and its exact Dickinson fallback.
+Floating point therefore changes only which exact downward checks are attempted; it cannot remove a support from the proof or cause
+the traversal to finish.
+
+## Name, Sources, And Classification
+
+The identifier is `improved_nbc_x5`. It is an experiment derived from `improved_nbc_x3`.
+
+- **Improved NBC** names the separately owned resumable derivative of NBC MiniSat All.
+- **X5** names X3 plus a necessary upper bound that can reject an unreachable LP target before constructing the tableau.
+
+The model is an independent copy of [`improved_nbc_x3`](../improved_nbc_x3/ALGORITHM.md). It preserves X3's traversal, curvature
+tests, Halfspace-Rays machinery, targeted LP, exact reconstruction, lower shrinking, Boolean clauses, and interval compaction. Its
+only change is the necessary target bound before each LP. `improved_nbc_x3` remains unchanged as the direct comparison model.
+The dense simplex code is a private reduced copy of the implementation in
+[`sat_halfspace_milp_dickinson`](../sat_halfspace_milp_dickinson/ALGORITHM.md); X5 uses no MILP variables or branch-and-bound.
+Dickinson intervals come from Peter J. C.
+Dickinson, “A New Certificate for Copositivity,” *Linear Algebra and its Applications* 569 (2019), 15–37, DOI
+[`10.1016/j.laa.2018.12.025`](https://doi.org/10.1016/j.laa.2018.12.025), especially Theorem 4.6 and Algorithms 1–2.
+
+The existence of a global minimizer in the relative interior of a strictly convex face is Theorem 1 of Andrea Scozzari and Fabio
+Tardella, “A clique algorithm for standard quadratic programming,” *Discrete Applied Mathematics* 156 (2008), 2439–2448, DOI
+[`10.1016/j.dam.2007.09.020`](https://doi.org/10.1016/j.dam.2007.09.020). The inertia tests are standard consequences of inertia
+additivity for equality-constrained quadratic forms; see T. S. Han and H. Fujiwara, “An inertia theorem for projected matrices and
+its application to constrained optimization,” *Linear Algebra and its Applications* 72 (1985), 47–58, DOI
+[`10.1016/0024-3795(85)90141-7`](https://doi.org/10.1016/0024-3795(85)90141-7).
+
+Using these curvature facts as permanent Boolean clauses, alternating individual low and high supports, and using the search as a complete exact
+CP/SCP classifier are coposit experiments rather than algorithms from those papers. The Boolean engine derives from Takahisa Toda's
+NBC MiniSat All 1.0.2, itself based on MiniSat-C 1.14.1. The copied derivative is maintained under
+`cpp/third_party/improved_nbc_minisat_all/`; the C++ wrapper asks it for one model in one unexplored prefix cube at a time.
+Certificates affect both live frontiers immediately and remain recorded outside Improved NBC for later compaction.
+
+## Face Geometry
+
+Let $A\in\mathbb{R}^{n\times n}$ be symmetric. A nonempty index set $I\subseteq[n]$ identifies a simplex face. Write $B=A_I$ for
+the corresponding principal matrix. The tangent space of that face is
+
+$$
+\mathcal T_I=\{v\in\mathbb{R}^{|I|}:\mathbf 1^Tv=0\}.
+$$
+
+The quadratic form is strictly convex on the face exactly when
+
+$$
+v^TBv>0\qquad\text{for every nonzero }v\in\mathcal T_I.
+$$
+
+Equivalently, if the columns of $Z$ span $\mathcal T_I$, then $Z^TBZ$ is positive definite. The implementation does not construct
+$Z$. It obtains the answer from one exact fraction-free $LDL^T$ factorization of $B$.
+
+### Nonsingular principal matrix
+
+Suppose $B$ is nonsingular and define
+
+$$
+\delta=\mathbf 1^TB^{-1}\mathbf 1.
+$$
+
+The reduced Hessian on $\mathcal T_I$ is positive definite exactly when either
+
+1. $B$ is positive definite; or
+2. $B$ has exactly one negative eigenvalue and $\delta<0$.
+
+The first case gives a downward certificate when the support was proposed by the high floating-point filter and the exact
+factorization confirms it. On the low frontier it proceeds to the Dickinson construction instead. In the second case, Improved NBC-X5 solves
+$Bx=\mathbf 1$ using the existing factorization. The sign of $\delta$ is the sign of the sum of the integer numerators of $x$ because
+their common denominator is positive.
+
+If $x\leq0$, then $y=-x\geq0$ and
+
+$$
+y^TBy=\mathbf 1^Tx=\delta<0.
+$$
+
+After embedding $y$ in the full space by adding zeros, this is an exact non-copositivity witness. This branch is normally reached by
+the low frontier. It can also be reached when the floating high filter produces a false positive and exact verification rejects
+positive definiteness. On the low frontier, the same exact solution becomes the starting vector for Halfspace-Rays optimization and
+a Dickinson interval.
+
+### Singular principal matrix
+
+The reduced Hessian is positive definite exactly when all three conditions hold:
+
+1. $B$ is positive semidefinite;
+2. $B$ has nullity one; and
+3. a nonzero kernel vector $z$ satisfies $\mathbf 1^Tz\neq0$.
+
+If these conditions fail, the upward curvature exclusion applies on the low frontier. On the high frontier, a likely
+positive-semidefinite singular support proceeds to exact verification. If the all-ones system is inconsistent, no downward clause is
+installed and the support remains available to the low frontier. If the low-frontier conditions hold and either $z\geq0$ or
+$-z\geq0$, the embedded kernel vector is an exact copositive zero. It disproves strict copositivity but not ordinary copositivity. On
+the low frontier, the kernel ray is oriented toward the larger Dickinson upper set and stored as an interval.
+
+## Low-Frontier Dickinson Fallback
+
+When low-frontier curvature does not already remove the upward closure, Improved NBC-X5 reuses the retained exact factorization. For a
+nonsingular principal matrix it begins with the exact solution of
+
+$$
+B x=\mathbf1.
+$$
+
+For a singular principal matrix it uses the recovered kernel ray. The local vector is embedded in $\mathbb R^n$ by inserting zeros
+outside $I$. For an embedded vector $u$, define
+
+$$
+L(u)=\operatorname{supp}(u),\qquad
+U(u)=\{j\in[n]:(Au)_j\geq0\}.
+$$
+
+Dickinson's theorem certifies every support $J$ satisfying
+
+$$
+L(u)\subseteq J\subseteq U(u).
+$$
+
+For a nonsingular $B$, the same factorization also solves all coordinate right-hand sides. Improved NBC-X5 performs the inherited exact
+breakpoint sweeps along those directions, preferring larger $|U|$ and then larger width $|U|-|L|$. It retains a bounded shortlist of
+coordinate rays and tests at most two complementary combined rays after a coordinate-wise stall. Every accepted candidate is
+represented with exact integers; no floating-point comparison enters this inherited Rays stage or its certificate.
+
+### Targeted LP upper-endpoint proposal
+
+Let $u_R$ be the exact vector returned by Halfspace-Rays, and write $U_R=U(u_R)$. The factorization already provides the exact
+inverse directions of $B=A_I$. For any positive right-hand side $b\in\mathbb R^{|I|}$, define
+
+$$
+u_I(b)=B^{-1}b,
+\qquad
+g_r^T=A_{r,I}B^{-1}.
+$$
+
+Then $(Au(b))_r=g_r^Tb$. Thus changing $b$ moves through the arrangement of halfspaces that determines the Dickinson upper endpoint.
+For one outside target $j\notin U_R$, X5 numerically solves
+
+$$
+\begin{aligned}
+\max_{b,t}\quad & t,\\
+\text{subject to}\quad
+&g_r^Tb\ge t && r\in (U_R\setminus I)\cup\{j\},\\
+&b_i\ge\varepsilon && i\in I,\\
+&\mathbf1^Tb=1,
+\end{aligned}
+$$
+
+where $t\in\mathbb R$ is the common safety margin and
+
+$$
+\varepsilon=\min\left(10^{-7},\frac{1}{2|I|}\right).
+$$
+
+Before constructing the LP for target $j$, X5 observes that the largest possible target value over this lower-bounded simplex is
+
+$$
+M_j=\varepsilon\sum_{i\in I}g_{j,i}+(1-|I|\varepsilon)\max_{i\in I}g_{j,i}.
+$$
+
+Indeed, the fixed lower bounds contribute the first term, and all remaining mass is best placed on a largest coefficient. If
+$M_j<0$, no admissible right-hand side can make target $j$ nonnegative, so solving its LP cannot produce a useful proposal. The
+implementation evaluates this formula on the same positively scaled binary64 row used by the LP and skips only below the LP's
+negative-margin tolerance. This numerical screen can only forgo an optional proposal; it never installs a certificate or changes
+the complete exact branch.
+
+The implementation parameterizes $b_i=\varepsilon+(1-|I|\varepsilon)y_i$ with $y\ge0$ and $\mathbf1^Ty=1$. Since only proposals
+with $t\ge0$ are useful, $t$ is one nonnegative variable rather than the difference of two nonnegative variables. X5 also eliminates
+the last simplex coordinate by writing
+
+$$
+y_{|I|}=1-\sum_{i<|I|}y_i,
+\qquad
+\sum_{i<|I|}y_i\le1.
+$$
+
+The numerical LP therefore has $|I|$ nonnegative variables: $|I|-1$ free simplex coordinates and $t$. On the nonnegative-margin
+region that X5 can accept, this is equivalent to the unreduced formulation, but with two fewer variables and one fewer constraint.
+Targets are tried in increasing index order, and the first exactly verified improvement stops the scan. The LP does not maximize
+$|U|$ and does not claim optimality over all right-hand sides. Other missing indices may nevertheless become nonnegative at the same
+point.
+
+The LP is deliberately non-authoritative. If its floating solution has a nonnegative numerical margin, X5 rounds the relative
+coordinates at four fixed scales and recomputes $u=B^{-1}b$ and $Au$ with exact integers. A reconstruction is retained only if every
+old upper index and the selected target are exactly nonnegative. Numerical infeasibility or failed reconstruction merely forgoes
+this optional enlargement; the complete exact X2 branch is unchanged. If the dense tableau would exceed 8,388,608 cells, X5 also
+skips this optional stage and uses X2.
+
+If an exactly reconstructed candidate satisfies $u_I\le0$, then $y=-u_I\ge0$ and $By=-b$. Because $b>0$ and $y\ne0$,
+$y^TBy=-y^Tb<0$; this is an exact non-copositivity witness and ends the run immediately.
+
+Intuitively, Halfspace-Rays explores a few promising lines. The targeted LP may move anywhere in the positive right-hand-side
+simplex, but asks only the cheap question: can one more wall be crossed without stepping back across any wall already won?
+
+### Nonshrinking-upper lower-endpoint shrink
+
+Let $u$ be the optimized embedded vector and let $U=U(u)$. For each nonzero coordinate $u_i$, X2 tests the simpler vector
+
+$$
+u'=u-u_i e_i,
+$$
+
+which sets that coordinate to zero without changing any other coefficient. Its product is updated exactly by
+
+$$
+Au'=Au-u_i A e_i.
+$$
+
+The deletion is accepted exactly when $u'$ still has a positive coordinate and every old upper index remains valid:
+
+$$
+(Au)_j\geq0\quad\Longrightarrow\quad(Au')_j\geq0
+\qquad\text{for every }j\in[n].
+$$
+
+Thus $U(u)\subseteq U(u')$, while the lower endpoint loses $i$. Consequently
+
+$$
+[L(u),U(u)]\subsetneq[L(u'),U(u')].
+$$
+
+After an accepted deletion, the scan restarts because removing one coordinate may make another deletion possible. The result is
+inclusion-minimal under these direct one-coordinate deletions in the fixed index order. It is not claimed to have globally minimum
+cardinality: the shrink deliberately avoids a subset search. Every attempted and accepted deletion uses exact integers.
+
+Intuitively, Halfspace-Rays first decides how high the certificate reaches. X2 then asks whether some baggage at its lower end can
+simply be dropped without pulling that ceiling inward. An outward ceiling move is free extra pruning. Every successful deletion at
+least doubles the interval size.
+
+X5 applies that same shrink independently to the Rays vector and to an exactly verified LP vector. Let their final intervals be
+$[L_X,U_X]$ and $[L_P,U_P]$. The LP branch replaces the X2 branch only if exact signs prove
+
+$$
+L_P\subseteq L_X,
+\qquad
+U_X\subseteq U_P,
+$$
+
+with at least one strict inclusion. This final comparison matters because an LP point with a larger upper endpoint could otherwise
+carry a worse lower endpoint after shrinking. X5 inserts only one interval, never two nearly overlapping alternatives.
+
+The Boolean clause for the interval is
+
+$$
+\left(\bigvee_{i\in L(u)}\neg s_i\right)
+\lor
+\left(\bigvee_{j\notin U(u)}s_j\right)
+\lor c_{|U(u)|+1}.
+$$
+
+The last literal retires the clause automatically at cardinalities above $|U(u)|$, where no support can lie inside the interval.
+
+## NBC Clauses
+
+Each original index has a Boolean variable $s_i$, true exactly when that index belongs to the selected support. A Batcher bitonic
+sorting network supplies exact-cardinality assumptions for any requested layer.
+
+### Upward closure
+
+If the reduced Hessian on $I$ is not positive definite, NBC receives
+
+$$
+\bigvee_{i\in I}\neg s_i.
+$$
+
+This removes $I$ and every support containing it. The rule is sound because strict convexity is inherited by subfaces: if a larger
+face containing $I$ were strictly convex, its restriction to $\mathcal T_I$ would also be strictly convex.
+
+Before traversal, the model applies the same rule to every pair. For $I=\{i,j\}$, strict face convexity is the single exact test
+
+$$
+A_{ii}+A_{jj}-2A_{ij}>0.
+$$
+
+Every failing pair immediately contributes $\neg s_i\lor\neg s_j$.
+
+### Downward closure
+
+If $B=A_I$ is positive definite, every principal submatrix indexed by a nonempty subset of $I$ is positive definite. NBC therefore
+receives
+
+$$
+\bigvee_{j\notin I}s_j.
+$$
+
+This removes $I$ and every nonempty subset of $I$. For $I=[n]$ the clause is empty, so no support remains and the proof is complete.
+
+Improved NBC-X5 retains SAT-B3's singular case. Suppose
+
+$$
+B\succeq0
+\qquad\text{and}\qquad
+Bx=\mathbf1
+$$
+
+is consistent, meaning that at least one solution $x$ exists. For every $z\in\ker B$,
+
+$$
+\mathbf1^Tz=x^TBz=0.
+$$
+
+A nonzero nonnegative vector has a positive coordinate sum, so no such vector can lie in $\ker B$. Positive semidefiniteness then
+gives $y^TBy>0$ for every nonzero $y\geq0$. Thus $B$ is strictly copositive, every principal submatrix inside $I$ is strictly
+copositive, and the same downward clause is valid. This is an elementary consequence of
+$\operatorname{range}(B)=\ker(B)^\perp$ for symmetric matrices.
+
+Strict convexity only on the simplex face is still not enough for this downward rule. The implementation requires either positive
+definiteness of the entire principal matrix or the exact singular positive-semidefinite consistency certificate above.
+
+### Floating high-frontier filter
+
+Before the first high query, the complete integer matrix is converted once to a symmetric binary64 matrix using one common
+power-of-two scale. Every high support then copies only its floating principal submatrix and runs an unpivoted $LDL^T$
+positive-semidefiniteness filter. Its pivot margin is relative to the selected submatrix size and largest magnitude, so an unrelated
+large entry elsewhere cannot suppress a useful candidate. A comfortably negative pivot rejects the candidate. A near-zero pivot is
+accepted only when the remaining residual column is also near zero, as positive semidefiniteness requires. Acceptance is not a
+certificate: the integer principal matrix is then copied and factorized exactly before any downward clause is installed.
+
+A floating rejection must not remove a support from the mathematical proof because rounding can reject an exactly
+positive-semidefinite matrix. The high frontier's prefix cursor advances past that support without storing a rejection clause. The
+independent exact low frontier can still reach the same support later.
+
+## Live Certificates And Boundary Compaction
+
+Every exact upward, downward, or Dickinson certificate is added immediately to both live NBC solvers and copied into a pending
+vector. Immediate insertion preserves SAT-B3's cross-frontier pruning. When either frontier exhausts its current cardinality, the
+pending and previously active families are compacted:
+
+1. intervals that cannot intersect any later exact low cardinality are discarded;
+2. an interval contained in another interval is discarded;
+3. if all upward children of a smaller root are covered and that root's cardinality has already been checked exactly, those children
+   are replaced by the root's single full-upward closure.
+
+Partial overlap alone is not enough to merge two intervals: their union need not itself be one certified interval. After compaction,
+both live Improved NBC instances are rebuilt from the sorting network and retained certificates. Their external prefix stacks remain intact,
+so rebuilding cannot repeat an already returned support. This rebuild is what actually removes superseded clauses; NBC's internal
+learned-clause cleanup does not understand interval containment.
+
+For one frontier and cardinality, a prefix cube fixes the first $p$ Boolean support variables and leaves the rest free. If Improved NBC returns
+a model $x$ from that cube, the remaining cube is partitioned by the first index at which another model differs from $x$. These
+disjoint child cubes cover every other assignment exactly once. The stack therefore acts as a resumable iterator without adding a
+blocking clause for $x$. Intuitively, it remembers where the search has not looked rather than recording every place already seen.
+
+## Complete Decision Flow
+
+1. Build the reusable exact-cardinality sorting-network clauses and install every failed pair-curvature certificate.
+2. Start a low frontier at cardinality $1$ and a high frontier at cardinality $n$.
+3. Ask the low frontier for one open support. Copy and exactly factor its principal matrix. Install an upward closure immediately
+   when strict face convexity fails. Otherwise reuse that
+   factorization to construct and optimize one Halfspace-Rays Dickinson interval, unless an exact witness decides the problem. For
+   a nonsingular certificate with a missing outside upper index, reject any individually unreachable target by the necessary bound,
+   then run the remaining targeted LPs and exactly reconstruct the first accepted
+   proposal. Apply X2 lower shrinking to both the Rays and proposed vectors. Insert the proposed interval only if exact containment
+   proves that it strictly contains the Rays interval; otherwise insert the ordinary X2 interval.
+4. If the frontiers have not met, ask the high frontier for one open support. Run the floating $LDL^T$ filter first. A floating
+   rejection stores nothing. A positive-semidefinite candidate is checked exactly and contributes an immediate downward closure
+   only after exact positive definiteness, or exact positive semidefiniteness plus consistency of
+   $Bx=\mathbf1$.
+5. Alternate steps 3 and 4. When either frontier exhausts a cardinality, compact the retained certificate family, rebuild the live
+   solvers, and advance that frontier. A floatingly rejected high support remains available to the exact low frontier.
+6. If an exact nonnegative negative-value witness is found, return not copositive immediately.
+7. If an exact nonnegative kernel vector is found, record not strictly copositive and continue ordinary CP classification when
+   required.
+8. Continue the exact low traversal through cardinality $n$. If no witness exists and no support remains, return copositive; return
+    strictly copositive unless an exact zero was found.
+
+The proof search is finite because the prefix cubes return every open support in a fixed cardinality at most once, and the exact low
+traversal eventually reaches every cardinality. Certificates can only remove still-unexplored cubes or parts of them.
+
+## Exact Representation And Diagnostics
+
+All proof-producing matrix entries, factorization state, right-hand-side directions, breakpoint comparisons, reconstructed LP
+coefficients, products, interval-containment checks, inertia signs, kernel vectors, and witnesses use arbitrary-precision integers.
+Binary64 is used only for the high-frontier filter, the necessary target bound, and the targeted LP proposal. A floating rejection
+is not stored and cannot affect the exact X2 branch or final classification.
+
+Runtime diagnostics report the current low or high cardinality, selected and processed supports, retained NBC exclusions, and the
+joint singular-cardinality/nullity distribution. Source diagnostics distinguish low- and high-selected visits and record floating
+high rejections, pair-upward, support-upward, Dickinson, and downward certificates. When diagnostics capture is enabled, the model
+also retains these events chronologically using the shared support-history contract: exact certificate regions remain compact, and
+high-frontier supports without certificates retain their support plus whether floating-point and exact arithmetic inspected them.
+
+## Known Difficult Inputs
+
+Improved NBC-X5 still omits Dickinson intervals on the high frontier. It is difficult when many large principal matrices fail the floating
+positive-semidefiniteness filter: the high scan can cheaply reject many supports, but those supports still require later exact
+low-frontier proof. Near-semidefinite indefinite supports can also pass the floating filter and pay for an exact factorization that
+produces no downward clause. The low Halfspace-Rays fallback can prune sideways and upward, but it may be expensive when many exact
+directions are swept before finding only a narrow interval.
+
+The nonshrinking-upper shrink is intentionally local. It cannot discover a smaller lower endpoint that requires changing several
+vector coordinates together before the original upper endpoint is restored. It may therefore leave avoidable lower coordinates in place;
+finding the global minimum would reintroduce the optimization cost this experiment is designed to avoid.
+
+The targeted LP tries one missing upper index at a time and stops after the first exact improvement. It can miss a larger interval
+that requires losing an old upper index temporarily, or a different target ordering. Dense LP work can also outweigh its coverage
+gain when Halfspace-Rays already found a strong certificate. Near-boundary numerical proposals often fail exact reconstruction; in
+that case X5 pays the LP cost and deliberately inserts the unchanged X2 certificate.
+
+Support alternation can expose many large floating principal factorizations before enough small-cardinality exclusions have
+accumulated. When certificates are weak, the prefix iterator also asks NBC to solve many separate unexplored cubes. Boundary
+compaction limits the durable clause family, but it cannot reduce the number of genuinely open supports. Improved NBC avoids one blocker per
+visited support while still applying every proof certificate immediately.

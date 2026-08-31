@@ -5,7 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import IntEnum
 import os
-from typing import Literal
+from pathlib import Path
+from typing import Literal, cast
 
 Algorithm = Literal[
     "dutour_2018",
@@ -46,6 +47,16 @@ Algorithm = Literal[
     "nbc_b6",
     "nbc_b7",
     "improved_nbc_b7",
+    "improved_nbc_x2",
+    "improved_nbc_x3",
+    "improved_nbc_x4",
+    "improved_nbc_x5",
+    "improved_nbc_x6",
+    "improved_nbc_x7",
+    "improved_nbc_x8",
+    "interval_supports_g3",
+    "minimal_sat_g4",
+    "cadical_x1",
     "dual_frontier_nbc",
     "dual_frontier_nbc_two",
     "dual_frontier_nbc_three",
@@ -60,6 +71,7 @@ Algorithm = Literal[
     "f1",
     "f2",
     "g1",
+    "milp_1",
     "sat_a1",
     "sat_a2",
     "sat_a3",
@@ -129,6 +141,16 @@ COMBINED_CLASSIFICATION_ALGORITHMS: tuple[Algorithm, ...] = (
     "nbc_b6",
     "nbc_b7",
     "improved_nbc_b7",
+    "improved_nbc_x2",
+    "improved_nbc_x3",
+    "improved_nbc_x4",
+    "improved_nbc_x5",
+    "improved_nbc_x6",
+    "improved_nbc_x7",
+    "improved_nbc_x8",
+    "interval_supports_g3",
+    "minimal_sat_g4",
+    "cadical_x1",
     "dual_frontier_nbc",
     "dual_frontier_nbc_two",
     "dual_frontier_nbc_three",
@@ -143,6 +165,7 @@ COMBINED_CLASSIFICATION_ALGORITHMS: tuple[Algorithm, ...] = (
     "f1",
     "f2",
     "g1",
+    "milp_1",
     "sat_a1",
     "sat_a2",
     "sat_a3",
@@ -209,6 +232,16 @@ ALGORITHMS: tuple[Algorithm, ...] = (
     "nbc_b6",
     "nbc_b7",
     "improved_nbc_b7",
+    "improved_nbc_x2",
+    "improved_nbc_x3",
+    "improved_nbc_x4",
+    "improved_nbc_x5",
+    "improved_nbc_x6",
+    "improved_nbc_x7",
+    "improved_nbc_x8",
+    "interval_supports_g3",
+    "minimal_sat_g4",
+    "cadical_x1",
     "dual_frontier_nbc",
     "dual_frontier_nbc_two",
     "dual_frontier_nbc_three",
@@ -223,6 +256,7 @@ ALGORITHMS: tuple[Algorithm, ...] = (
     "f1",
     "f2",
     "g1",
+    "milp_1",
     "sat_a1",
     "sat_a2",
     "sat_a3",
@@ -253,6 +287,10 @@ ALGORITHMS: tuple[Algorithm, ...] = (
     "zischg_dickinson",
     "zischg_fracessa",
 )
+
+INCUMBENT_MODEL = cast(Algorithm, Path(__file__).with_name("incumbent_model.txt").read_text(encoding="utf-8").strip())
+if INCUMBENT_MODEL not in ALGORITHMS:
+    raise RuntimeError(f"incumbent model is not registered: {INCUMBENT_MODEL}")
 
 PARAMETERIZED_ALGORITHMS: tuple[Algorithm, ...] = (
     "sat_halfspace_rays_wide_dickinson",

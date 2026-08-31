@@ -1,4 +1,5 @@
 #include <coposit/fraction_free_ldlt.hpp>
+#include <coposit/milp_solver.hpp>
 #include <coposit/model.hpp>
 #include <coposit/diagnostics.hpp>
 #include <coposit/support.hpp>
@@ -7,7 +8,6 @@
 #include <cadical.hpp>
 
 #include "source_diagnostics.hpp"
-#include "tiny_maximum_halfspaces.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -378,7 +378,7 @@ private:
         }
 
         const double positive_floor = std::min(1e-7, 0.5 / static_cast<double>(support_dimension));
-        detail::tiny_maximum_halfspaces optimizer(
+        maximum_halfspaces_milp_solver optimizer(
             scaled_rows, positive_floor, current_upper_size_ - support_dimension, 10000,
             std::chrono::steady_clock::now() + std::chrono::milliseconds(20));
         auto result = optimizer.solve();

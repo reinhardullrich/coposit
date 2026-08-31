@@ -1,12 +1,20 @@
 cmake_minimum_required(VERSION 3.18)
 
-project(coposit LANGUAGES C CXX)
+project(coposit
+    VERSION 2026.8.31.1
+    DESCRIPTION "Exact copositivity and strict-copositivity checker"
+    LANGUAGES C CXX
+)
 
 include(FetchContent)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+
+if(MSVC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 if(CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
     set(COPOSIT_STANDALONE_DEFAULT ON)
@@ -17,9 +25,25 @@ endif()
 option(COPOSIT_BUILD_APPS "Build the command-line applications" ${COPOSIT_STANDALONE_DEFAULT})
 option(COPOSIT_BUILD_PYTHON "Install and test the Python coposit adapter" ${COPOSIT_STANDALONE_DEFAULT})
 option(COPOSIT_BUILD_TESTS "Build the coposit test suite" ${COPOSIT_STANDALONE_DEFAULT})
+option(COPOSIT_BUILD_EXPERIMENTS "Build every research model instead of only the incumbent" ${COPOSIT_STANDALONE_DEFAULT})
+
+file(STRINGS "${CMAKE_CURRENT_SOURCE_DIR}/../python/pycoposit/incumbent_model.txt" COPOSIT_INCUMBENT_MODELS LIMIT_COUNT 2)
+list(LENGTH COPOSIT_INCUMBENT_MODELS COPOSIT_INCUMBENT_MODEL_COUNT)
+if(NOT COPOSIT_INCUMBENT_MODEL_COUNT EQUAL 1)
+    message(FATAL_ERROR "python/pycoposit/incumbent_model.txt must contain exactly one model identifier")
+endif()
+list(GET COPOSIT_INCUMBENT_MODELS 0 COPOSIT_INCUMBENT_MODEL)
+if(NOT COPOSIT_INCUMBENT_MODEL MATCHES "^[a-z0-9_]+$")
+    message(FATAL_ERROR "Invalid incumbent model identifier: ${COPOSIT_INCUMBENT_MODEL}")
+endif()
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/generated/coposit")
+configure_file(include/coposit/incumbent.hpp.in generated/coposit/incumbent.hpp @ONLY)
 
 if(COPOSIT_BUILD_TESTS)
     include(CTest)
+endif()
+if(COPOSIT_BUILD_TESTS AND BUILD_TESTING AND NOT COPOSIT_BUILD_EXPERIMENTS)
+    message(FATAL_ERROR "COPOSIT_BUILD_TESTS requires COPOSIT_BUILD_EXPERIMENTS=ON")
 endif()
 
 if(COPOSIT_BUILD_APPS OR COPOSIT_BUILD_PYTHON OR COPOSIT_BUILD_TESTS)
@@ -41,7 +65,7 @@ find_library(FLINT_LIBRARY NAMES flint REQUIRED)
 find_library(MPFR_LIBRARY NAMES mpfr REQUIRED)
 find_library(GMP_LIBRARY NAMES gmp REQUIRED)
 
-if(COPOSIT_BUILD_APPS OR COPOSIT_BUILD_PYTHON OR (COPOSIT_BUILD_TESTS AND BUILD_TESTING))
+if(COPOSIT_BUILD_EXPERIMENTS AND (COPOSIT_BUILD_APPS OR COPOSIT_BUILD_PYTHON OR (COPOSIT_BUILD_TESTS AND BUILD_TESTING)))
     FetchContent_Declare(cadical
         GIT_REPOSITORY https://github.com/arminbiere/cadical.git
         GIT_TAG rel-2.2.1
@@ -87,12 +111,25 @@ add_library(coposit_core STATIC heuristic_kkt_search.cpp)
 target_compile_definitions(coposit_core PUBLIC COPOSIT_ENABLE_TIMEOUTS=1)
 target_include_directories(coposit_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
     ${FLINT_INCLUDE_DIR}
 )
 target_link_libraries(coposit_core PUBLIC ${FLINT_LIBRARY} ${MPFR_LIBRARY} ${GMP_LIBRARY})
 add_library(coposit::core ALIAS coposit_core)
 
-if(COPOSIT_BUILD_APPS OR (COPOSIT_BUILD_TESTS AND BUILD_TESTING))
+if(COPOSIT_BUILD_EXPERIMENTS)
+    add_library(coposit_fractional_milp STATIC fractional_milp.cpp)
+    target_link_libraries(coposit_fractional_milp PUBLIC coposit_core)
+    add_library(coposit::fractional_milp ALIAS coposit_fractional_milp)
+
+    add_library(coposit_interval_supports STATIC interval_supports.cpp)
+    target_link_libraries(coposit_interval_supports PUBLIC coposit_core)
+
+    add_library(coposit_minimal_sat STATIC minimal_sat.cpp)
+    target_link_libraries(coposit_minimal_sat PUBLIC coposit_core)
+endif()
+
+if(COPOSIT_BUILD_EXPERIMENTS AND (COPOSIT_BUILD_APPS OR (COPOSIT_BUILD_TESTS AND BUILD_TESTING)))
     add_library(coposit_nbc_minisat_all STATIC third_party/nbc_minisat_all/solver.c)
     set_target_properties(coposit_nbc_minisat_all PROPERTIES POSITION_INDEPENDENT_CODE ON C_STANDARD 99 C_STANDARD_REQUIRED ON)
     target_compile_definitions(coposit_nbc_minisat_all PRIVATE BJ DLEVEL)
@@ -102,19 +139,33 @@ if(COPOSIT_BUILD_APPS OR (COPOSIT_BUILD_TESTS AND BUILD_TESTING))
     set_target_properties(coposit_nbc_upward_supports PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(coposit_nbc_upward_supports PUBLIC coposit_core PRIVATE coposit_nbc_minisat_all)
 
-    add_library(coposit_improved_nbc_minisat_all STATIC third_party/improved_nbc_minisat_all/solver.c)
-    set_target_properties(coposit_improved_nbc_minisat_all PROPERTIES POSITION_INDEPENDENT_CODE ON C_STANDARD 99 C_STANDARD_REQUIRED ON)
-    target_compile_definitions(coposit_improved_nbc_minisat_all PRIVATE BJ DLEVEL)
-    target_include_directories(coposit_improved_nbc_minisat_all PRIVATE third_party/improved_nbc_minisat_all)
-
-    add_library(coposit_improved_nbc_upward_supports STATIC improved_nbc_upward_supports.cpp)
-    set_target_properties(coposit_improved_nbc_upward_supports PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(coposit_improved_nbc_upward_supports PUBLIC coposit_core PRIVATE coposit_improved_nbc_minisat_all)
 endif()
+
+add_library(coposit_improved_nbc_minisat_all STATIC third_party/improved_nbc_minisat_all/solver.c)
+set_target_properties(coposit_improved_nbc_minisat_all PROPERTIES POSITION_INDEPENDENT_CODE ON C_STANDARD 99 C_STANDARD_REQUIRED ON)
+target_compile_definitions(coposit_improved_nbc_minisat_all PRIVATE BJ DLEVEL)
+target_include_directories(coposit_improved_nbc_minisat_all PRIVATE third_party/improved_nbc_minisat_all)
+
+add_library(coposit_improved_nbc_upward_supports STATIC improved_nbc_upward_supports.cpp)
+set_target_properties(coposit_improved_nbc_upward_supports PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_link_libraries(coposit_improved_nbc_upward_supports PUBLIC coposit_core PRIVATE coposit_improved_nbc_minisat_all)
+
+if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../models/hadeler-based/${COPOSIT_INCUMBENT_MODEL}/solver.cpp")
+    message(FATAL_ERROR "Incumbent model source not found: ${COPOSIT_INCUMBENT_MODEL}")
+endif()
+add_library(coposit_incumbent STATIC coposit.cpp ../models/hadeler-based/${COPOSIT_INCUMBENT_MODEL}/solver.cpp)
+target_compile_definitions(coposit_incumbent PRIVATE COPOSIT_ENABLE_TIMEOUTS=1)
+target_link_libraries(coposit_incumbent PUBLIC coposit_core PRIVATE coposit_improved_nbc_upward_supports)
+add_library(coposit::incumbent ALIAS coposit_incumbent)
 
 if(COPOSIT_BUILD_APPS)
     add_executable(coposit coposit_main.cpp)
+    target_compile_definitions(coposit PRIVATE COPOSIT_VERSION="${PROJECT_VERSION}")
+    target_include_directories(coposit PRIVATE include "${CMAKE_CURRENT_BINARY_DIR}/generated")
     target_link_libraries(coposit PRIVATE Threads::Threads)
+    if(COPOSIT_BUILD_EXPERIMENTS)
+        target_compile_definitions(coposit PRIVATE COPOSIT_BUILD_EXPERIMENTS=1)
+    endif()
 endif()
 
 set(COPOSIT_COMBINED_CLASSIFICATION_MODELS
@@ -124,7 +175,7 @@ set(COPOSIT_COMBINED_CLASSIFICATION_MODELS
     multithreaded_cbdd_dickinson ceiling_pruned_dickinson kernel_cone_dickinson affine_companion_dickinson
     layered_singular_lift_dickinson
     breadth_first_singular_lift_dickinson
-    czdd_dickinson sat_dickinson sat_halfspace_dickinson sat_halfspace_rays_dickinson sat_b1 sat_b2 sat_b3 clasp_b3 bdd_b3 sat_b4 sat_b5 nbc_b6 nbc_b7 improved_nbc_b7 dual_frontier_nbc dual_frontier_nbc_two dual_frontier_nbc_three dual_frontier_nbc_four improved_nbc_b8 improved_nbc_b9 improved_nbc_g2 sat_c1 sat_c2 sat_c3 sat_c4 f1 f2 g1 sat_a1 sat_a2 sat_a3 sat_a4 sat_a5
+    czdd_dickinson sat_dickinson sat_halfspace_dickinson sat_halfspace_rays_dickinson sat_b1 sat_b2 sat_b3 clasp_b3 bdd_b3 sat_b4 sat_b5 nbc_b6 nbc_b7 improved_nbc_b7 improved_nbc_x2 improved_nbc_x3 improved_nbc_x4 improved_nbc_x5 improved_nbc_x6 improved_nbc_x7 improved_nbc_x8 interval_supports_g3 minimal_sat_g4 cadical_x1 dual_frontier_nbc dual_frontier_nbc_two dual_frontier_nbc_three dual_frontier_nbc_four improved_nbc_b8 improved_nbc_b9 improved_nbc_g2 sat_c1 sat_c2 sat_c3 sat_c4 f1 f2 g1 milp_1 sat_a1 sat_a2 sat_a3 sat_a4 sat_a5
     sat_halfspace_lp_dickinson
     sat_halfspace_milp_dickinson sat_halfspace_rays_lookahead_dickinson
     sat_halfspace_rays_wide_dickinson
@@ -173,6 +224,16 @@ set(COPOSIT_COPOSITIVE_MODELS
     nbc_b6
     nbc_b7
     improved_nbc_b7
+    improved_nbc_x2
+    improved_nbc_x3
+    improved_nbc_x4
+    improved_nbc_x5
+    improved_nbc_x6
+    improved_nbc_x7
+    improved_nbc_x8
+    interval_supports_g3
+    minimal_sat_g4
+    cadical_x1
     dual_frontier_nbc
     dual_frontier_nbc_two
     dual_frontier_nbc_three
@@ -187,6 +248,7 @@ set(COPOSIT_COPOSITIVE_MODELS
     f1
     f2
     g1
+    milp_1
     sat_a1
     sat_a2
     sat_a3
@@ -219,6 +281,9 @@ set(COPOSIT_COPOSITIVE_MODELS
 )
 set(COPOSIT_MODEL_TARGETS)
 function(add_coposit_model_interfaces model_name)
+    if(NOT COPOSIT_BUILD_EXPERIMENTS AND NOT model_name STREQUAL COPOSIT_INCUMBENT_MODEL)
+        return()
+    endif()
     set(model_directory experiments/${model_name})
     if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/../models/hadeler-based/${model_name}/solver.cpp")
         set(model_directory hadeler-based/${model_name})
@@ -263,6 +328,7 @@ function(add_coposit_model_interfaces model_name)
            OR model_name STREQUAL "sat_halfspace_rays_lookahead_dickinson"
            OR model_name STREQUAL "sat_halfspace_rays_wide_dickinson"
            OR model_name STREQUAL "wide_certificate_sat_dickinson"
+           OR model_name STREQUAL "cadical_x1"
            OR model_name STREQUAL "xxx"
            OR model_name STREQUAL "xxx_two")
             target_link_libraries(${model_target} PRIVATE coposit_cadical)
@@ -270,12 +336,25 @@ function(add_coposit_model_interfaces model_name)
             target_link_libraries(${model_target} PRIVATE libclasp)
         elseif(model_name STREQUAL "nbc_b6" OR model_name STREQUAL "nbc_b7")
             target_link_libraries(${model_target} PRIVATE coposit_nbc_upward_supports)
-        elseif(model_name STREQUAL "improved_nbc_b7" OR model_name STREQUAL "dual_frontier_nbc"
+        elseif(model_name STREQUAL "improved_nbc_b7" OR model_name STREQUAL "improved_nbc_x2"
+               OR model_name STREQUAL "improved_nbc_x3"
+               OR model_name STREQUAL "improved_nbc_x4"
+               OR model_name STREQUAL "improved_nbc_x5"
+               OR model_name STREQUAL "improved_nbc_x6"
+               OR model_name STREQUAL "improved_nbc_x7"
+               OR model_name STREQUAL "improved_nbc_x8"
+               OR model_name STREQUAL "dual_frontier_nbc"
                OR model_name STREQUAL "dual_frontier_nbc_two" OR model_name STREQUAL "dual_frontier_nbc_three"
                OR model_name STREQUAL "dual_frontier_nbc_four"
                OR model_name STREQUAL "improved_nbc_b8"
                OR model_name STREQUAL "improved_nbc_b9" OR model_name STREQUAL "improved_nbc_g2")
             target_link_libraries(${model_target} PRIVATE coposit_improved_nbc_upward_supports)
+        elseif(model_name STREQUAL "interval_supports_g3")
+            target_link_libraries(${model_target} PRIVATE coposit_interval_supports)
+        elseif(model_name STREQUAL "minimal_sat_g4")
+            target_link_libraries(${model_target} PRIVATE coposit_minimal_sat)
+        elseif(model_name STREQUAL "milp_1")
+            target_link_libraries(${model_target} PRIVATE coposit_fractional_milp)
         elseif(model_name STREQUAL "clingo_dickinson" OR model_name STREQUAL "clingo_halfspace_dickinson")
             target_link_libraries(${model_target} PRIVATE libclingo)
         endif()
@@ -323,6 +402,16 @@ add_coposit_model_interfaces(sat_b5)
 add_coposit_model_interfaces(nbc_b6)
 add_coposit_model_interfaces(nbc_b7)
 add_coposit_model_interfaces(improved_nbc_b7)
+add_coposit_model_interfaces(improved_nbc_x2)
+add_coposit_model_interfaces(improved_nbc_x3)
+add_coposit_model_interfaces(improved_nbc_x4)
+add_coposit_model_interfaces(improved_nbc_x5)
+add_coposit_model_interfaces(improved_nbc_x6)
+add_coposit_model_interfaces(improved_nbc_x7)
+add_coposit_model_interfaces(improved_nbc_x8)
+add_coposit_model_interfaces(interval_supports_g3)
+add_coposit_model_interfaces(minimal_sat_g4)
+add_coposit_model_interfaces(cadical_x1)
 add_coposit_model_interfaces(dual_frontier_nbc)
 add_coposit_model_interfaces(dual_frontier_nbc_two)
 add_coposit_model_interfaces(dual_frontier_nbc_three)
@@ -337,6 +426,7 @@ add_coposit_model_interfaces(sat_c4)
 add_coposit_model_interfaces(f1)
 add_coposit_model_interfaces(f2)
 add_coposit_model_interfaces(g1)
+add_coposit_model_interfaces(milp_1)
 add_coposit_model_interfaces(sat_a1)
 add_coposit_model_interfaces(sat_a2)
 add_coposit_model_interfaces(sat_a3)
@@ -367,7 +457,7 @@ add_coposit_model_interfaces(zischg_hadeler)
 add_coposit_model_interfaces(zischg_dickinson)
 add_coposit_model_interfaces(zischg_fracessa)
 
-if(COPOSIT_BUILD_APPS)
+if(COPOSIT_BUILD_APPS AND COPOSIT_BUILD_EXPERIMENTS)
     file(GLOB COPOSIT_MODEL_SOURCES CONFIGURE_DEPENDS
         "${CMAKE_CURRENT_SOURCE_DIR}/../models/baselines/*/solver.cpp"
         "${CMAKE_CURRENT_SOURCE_DIR}/../models/experiments/*/solver.cpp"
@@ -383,6 +473,7 @@ if(COPOSIT_BUILD_APPS)
 endif()
 if(COPOSIT_BUILD_PYTHON)
     install(TARGETS coposit ${COPOSIT_MODEL_TARGETS} RUNTIME DESTINATION pycoposit)
+    install(FILES ../python/pycoposit/incumbent_model.txt DESTINATION pycoposit)
 endif()
 
 if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
@@ -391,6 +482,10 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
         GIT_TAG v1.14.0
     )
     FetchContent_MakeAvailable(googletest)
+
+    add_executable(test_coposit tests/test_coposit.cpp)
+    target_link_libraries(test_coposit PRIVATE coposit_incumbent GTest::gtest_main)
+    add_test(NAME CopositPublicApiTests COMMAND test_coposit)
 
     add_executable(test_dutour_2018 ../models/baselines/dutour_2018/test_solver.cpp ../models/baselines/dutour_2018/solver.cpp)
     target_link_libraries(test_dutour_2018 PRIVATE coposit_core GTest::gtest_main)
@@ -662,6 +757,76 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
     target_compile_definitions(test_improved_nbc_b7 PRIVATE COPOSIT_IMPROVED_NBC_B7_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
     target_link_libraries(test_improved_nbc_b7 PRIVATE coposit_core coposit_improved_nbc_upward_supports GTest::gtest_main)
     add_test(NAME ImprovedNbcB7ModelTests COMMAND test_improved_nbc_b7)
+
+    add_executable(test_improved_nbc_x2
+        ../models/hadeler-based/improved_nbc_x2/test_solver.cpp
+        ../models/hadeler-based/improved_nbc_x2/solver.cpp)
+    target_compile_definitions(test_improved_nbc_x2 PRIVATE COPOSIT_IMPROVED_NBC_X2_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_improved_nbc_x2 PRIVATE coposit_core coposit_improved_nbc_upward_supports GTest::gtest_main)
+    add_test(NAME ImprovedNbcX2ModelTests COMMAND test_improved_nbc_x2)
+
+    add_executable(test_improved_nbc_x3
+        ../models/hadeler-based/improved_nbc_x3/test_solver.cpp
+        ../models/hadeler-based/improved_nbc_x3/solver.cpp)
+    target_compile_definitions(test_improved_nbc_x3 PRIVATE COPOSIT_IMPROVED_NBC_X3_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_improved_nbc_x3 PRIVATE coposit_core coposit_improved_nbc_upward_supports GTest::gtest_main)
+    add_test(NAME ImprovedNbcX3ModelTests COMMAND test_improved_nbc_x3)
+
+    add_executable(test_improved_nbc_x4
+        ../models/hadeler-based/improved_nbc_x4/test_solver.cpp
+        ../models/hadeler-based/improved_nbc_x4/solver.cpp)
+    target_compile_definitions(test_improved_nbc_x4 PRIVATE COPOSIT_IMPROVED_NBC_X4_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_improved_nbc_x4 PRIVATE coposit_core coposit_improved_nbc_upward_supports GTest::gtest_main)
+    add_test(NAME ImprovedNbcX4ModelTests COMMAND test_improved_nbc_x4)
+
+    add_executable(test_improved_nbc_x5
+        ../models/hadeler-based/improved_nbc_x5/test_solver.cpp
+        ../models/hadeler-based/improved_nbc_x5/solver.cpp)
+    target_compile_definitions(test_improved_nbc_x5 PRIVATE COPOSIT_IMPROVED_NBC_X5_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_improved_nbc_x5 PRIVATE coposit_core coposit_improved_nbc_upward_supports GTest::gtest_main)
+    add_test(NAME ImprovedNbcX5ModelTests COMMAND test_improved_nbc_x5)
+
+    add_executable(test_improved_nbc_x6
+        ../models/hadeler-based/improved_nbc_x6/test_solver.cpp
+        ../models/hadeler-based/improved_nbc_x6/solver.cpp)
+    target_compile_definitions(test_improved_nbc_x6 PRIVATE COPOSIT_IMPROVED_NBC_X6_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_improved_nbc_x6 PRIVATE coposit_core coposit_improved_nbc_upward_supports GTest::gtest_main)
+    add_test(NAME ImprovedNbcX6ModelTests COMMAND test_improved_nbc_x6)
+
+    add_executable(test_improved_nbc_x7
+        ../models/hadeler-based/improved_nbc_x7/test_solver.cpp
+        ../models/hadeler-based/improved_nbc_x7/solver.cpp)
+    target_compile_definitions(test_improved_nbc_x7 PRIVATE COPOSIT_IMPROVED_NBC_X7_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_improved_nbc_x7 PRIVATE coposit_core coposit_improved_nbc_upward_supports GTest::gtest_main)
+    add_test(NAME ImprovedNbcX7ModelTests COMMAND test_improved_nbc_x7)
+
+    add_executable(test_improved_nbc_x8
+        ../models/hadeler-based/improved_nbc_x8/test_solver.cpp
+        ../models/hadeler-based/improved_nbc_x8/solver.cpp)
+    target_compile_definitions(test_improved_nbc_x8 PRIVATE COPOSIT_IMPROVED_NBC_X8_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_improved_nbc_x8 PRIVATE coposit_core coposit_improved_nbc_upward_supports GTest::gtest_main)
+    add_test(NAME ImprovedNbcX8ModelTests COMMAND test_improved_nbc_x8)
+
+    add_executable(test_interval_supports_g3
+        ../models/hadeler-based/interval_supports_g3/test_solver.cpp
+        ../models/hadeler-based/interval_supports_g3/solver.cpp)
+    target_compile_definitions(test_interval_supports_g3 PRIVATE COPOSIT_INTERVAL_SUPPORTS_G3_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_interval_supports_g3 PRIVATE coposit_core coposit_interval_supports GTest::gtest_main)
+    add_test(NAME IntervalSupportsG3ModelTests COMMAND test_interval_supports_g3)
+
+    add_executable(test_minimal_sat_g4
+        ../models/hadeler-based/minimal_sat_g4/test_solver.cpp
+        ../models/hadeler-based/minimal_sat_g4/solver.cpp)
+    target_compile_definitions(test_minimal_sat_g4 PRIVATE COPOSIT_MINIMAL_SAT_G4_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_minimal_sat_g4 PRIVATE coposit_core coposit_minimal_sat GTest::gtest_main)
+    add_test(NAME MinimalSatG4ModelTests COMMAND test_minimal_sat_g4)
+
+    add_executable(test_cadical_x1
+        ../models/hadeler-based/cadical_x1/test_solver.cpp
+        ../models/hadeler-based/cadical_x1/solver.cpp)
+    target_compile_definitions(test_cadical_x1 PRIVATE COPOSIT_CADICAL_X1_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_cadical_x1 PRIVATE coposit_core coposit_cadical GTest::gtest_main)
+    add_test(NAME CadicalX1ModelTests COMMAND test_cadical_x1)
 
     add_executable(test_dual_frontier_nbc
         ../models/hadeler-based/dual_frontier_nbc/test_solver.cpp
@@ -999,6 +1164,30 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
     target_link_libraries(test_support PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME SupportTests COMMAND test_support)
 
+    add_executable(test_milp_solver tests/test_milp_solver.cpp)
+    target_compile_definitions(test_milp_solver PRIVATE COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_milp_solver PRIVATE coposit_core GTest::gtest_main)
+    add_test(NAME MilpSolverTests COMMAND test_milp_solver)
+
+    add_executable(test_fractional_milp tests/test_fractional_milp.cpp)
+    target_link_libraries(test_fractional_milp PRIVATE coposit_fractional_milp GTest::gtest_main)
+    add_test(NAME FractionalMilpTests COMMAND test_fractional_milp)
+
+    add_executable(test_milp_1
+        ../models/experiments/milp_1/test_solver.cpp
+        ../models/experiments/milp_1/solver.cpp)
+    target_compile_definitions(test_milp_1 PRIVATE COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_milp_1 PRIVATE coposit_fractional_milp GTest::gtest_main)
+    add_test(NAME Milp1ModelTests COMMAND test_milp_1)
+
+    add_executable(test_interval_supports tests/test_interval_supports.cpp)
+    target_link_libraries(test_interval_supports PRIVATE coposit_interval_supports GTest::gtest_main)
+    add_test(NAME IntervalSupportsTests COMMAND test_interval_supports)
+
+    add_executable(test_minimal_sat tests/test_minimal_sat.cpp)
+    target_link_libraries(test_minimal_sat PRIVATE coposit_minimal_sat GTest::gtest_main)
+    add_test(NAME MinimalSatTests COMMAND test_minimal_sat)
+
     add_executable(test_fraction_free_ldlt tests/test_fraction_free_ldlt.cpp)
     target_link_libraries(test_fraction_free_ldlt PRIVATE coposit_core GTest::gtest_main)
     add_test(NAME FractionFreeLdltTests COMMAND test_fraction_free_ldlt)
@@ -1071,8 +1260,11 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
     add_test(NAME CliUnsupportedCombinedModeTest COMMAND coposit --model bundfuss_2008 --mode both "1#1")
     set_tests_properties(CliUnsupportedCombinedModeTest PROPERTIES WILL_FAIL TRUE)
 
-    add_test(NAME CliMissingModelTest COMMAND coposit --mode strict "1#1")
-    set_tests_properties(CliMissingModelTest PROPERTIES WILL_FAIL TRUE)
+    add_test(NAME CliIncumbentDefaultTest COMMAND coposit --mode strict "1#1")
+    set_tests_properties(CliIncumbentDefaultTest PROPERTIES PASS_REGULAR_EXPRESSION "^true")
+
+    add_test(NAME CliVersionTest COMMAND coposit --version)
+    set_tests_properties(CliVersionTest PROPERTIES PASS_REGULAR_EXPRESSION "^${PROJECT_VERSION}")
 
     add_test(NAME CliDefaultCombinedModeTest COMMAND coposit --model dickinson_2019 "1#1")
     set_tests_properties(CliDefaultCombinedModeTest PROPERTIES

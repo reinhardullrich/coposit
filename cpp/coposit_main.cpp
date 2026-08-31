@@ -1,5 +1,7 @@
 #include "companion_launcher.hpp"
 
+#include <coposit/incumbent.hpp>
+
 #include <algorithm>
 #include <iostream>
 #include <iterator>
@@ -11,6 +13,7 @@
 namespace {
 
 constexpr const char *models[] = {
+#ifdef COPOSIT_BUILD_EXPERIMENTS
     "dutour_2018",
     "danninger_1990",
     "copomatrix_2011",
@@ -49,6 +52,16 @@ constexpr const char *models[] = {
     "nbc_b6",
     "nbc_b7",
     "improved_nbc_b7",
+    "improved_nbc_x2",
+    "improved_nbc_x3",
+    "improved_nbc_x4",
+    "improved_nbc_x5",
+    "improved_nbc_x6",
+    "improved_nbc_x7",
+    "improved_nbc_x8",
+    "interval_supports_g3",
+    "minimal_sat_g4",
+    "cadical_x1",
     "dual_frontier_nbc",
     "dual_frontier_nbc_two",
     "dual_frontier_nbc_three",
@@ -63,6 +76,7 @@ constexpr const char *models[] = {
     "f1",
     "f2",
     "g1",
+    "milp_1",
     "sat_a1",
     "sat_a2",
     "sat_a3",
@@ -92,20 +106,25 @@ constexpr const char *models[] = {
     "zischg_hadeler",
     "zischg_dickinson",
     "zischg_fracessa",
+#else
+    coposit::incumbent_model.data(),
+#endif
 };
 
 void print_usage(const char *program) {
   std::cout
       << "Usage: " << program
-      << " --model MODEL [--mode strict|non-strict|both] [OPTIONS] "
+      << " [--model MODEL] [--mode strict|non-strict|both] [OPTIONS] "
          "[MATRIX|FILE|-]\n"
          "Options:\n"
          "  --preprocessing on|off\n"
          "  --diagnostics\n"
          "  --model-parameter VALUE\n"
          "  --timeout SECONDS\n"
-         "The fixed preprocessing pipeline is on by default. Combined-capable "
-         "models default to mode both; other models require --mode.\n"
+         "  --version\n"
+         "Omitting --model selects the incumbent " << coposit::incumbent_model << ".\n"
+         "The fixed preprocessing pipeline is on by default. Combined-capable models default to mode both; other models require "
+         "--mode.\n"
          "Models:\n";
   for (const char *model : models)
     std::cout << "  " << model << '\n';
@@ -158,6 +177,10 @@ int main(int argc, char *argv[]) {
     print_usage(argv[0]);
     return 0;
   }
+  if (argc == 2 && std::string(argv[1]) == "--version") {
+    std::cout << COPOSIT_VERSION << '\n';
+    return 0;
+  }
 
   try {
     std::string model;
@@ -178,11 +201,12 @@ int main(int argc, char *argv[]) {
         timeout = coposit::cli::parse_timeout_seconds(argv[index]);
       }
     }
-    if (model.empty())
-      throw std::invalid_argument("--model is required");
+    const bool explicit_model = !model.empty();
+    if (!explicit_model)
+      model = std::string(coposit::incumbent_model);
     if (!known_model(model))
       throw std::invalid_argument("unknown model: " + model);
-    return launch(companion_path(argv[0], model), "coposit --model " + model,
+    return launch(companion_path(argv[0], model), explicit_model ? "coposit --model " + model : "coposit",
                   argc, argv, timeout);
   } catch (const std::exception &error) {
     std::cerr << argv[0] << ": " << error.what() << '\n';

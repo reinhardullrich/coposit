@@ -1,7 +1,12 @@
 # pycoposit Analysis Interface
 
-`pycoposit` is the analysis interface. It exposes explicit model and preprocessing selection through the same three-layer shape as
-PyFracESSA and has no `fast`, `safe`, or implicit model aliases:
+`pycoposit.check(matrix, mode="both")` is the public one-matrix interface. It uses the current incumbent from
+`incumbent_model.txt`; `mode="copositive"` or `"strictly_copositive"` stops after that predicate is known.
+
+Install the public package for Python 3.11 through 3.14 with `python -m pip install pycoposit`. Source-tree research use still
+requires the complete CMake build described in the repository `README.md`.
+
+The explicit-model researcher interface keeps the same three-layer shape as PyFracESSA:
 
 - `compute_matrix(algorithm, matrix, mode=None, preprocessing="both", diagnostics=False,
   collect_certificate_joint_distribution=False, model_parameter=None)` is the one-matrix `coposit` adapter;
@@ -12,7 +17,7 @@ PyFracESSA and has no `fast`, `safe`, or implicit model aliases:
 When `mode` is omitted, every Dickinson-, Hadeler-, and FracESSA-based model selects `both`; Danninger 1990 does the same. A model
 without one-pass combined classification requires an explicit `"copositive"` or `"strictly_copositive"` mode.
 
-Every call requires one of these algorithm identifiers:
+Every researcher call requires one of these algorithm identifiers:
 
 ```text
 dutour_2018
@@ -46,12 +51,23 @@ sat_halfspace_rays_dickinson
 sat_b1
 sat_b2
 sat_b3
+clasp_b3
 bdd_b3
 sat_b4
 sat_b5
 nbc_b6
 nbc_b7
 improved_nbc_b7
+improved_nbc_x2
+improved_nbc_x3
+improved_nbc_x4
+improved_nbc_x5
+improved_nbc_x6
+improved_nbc_x7
+improved_nbc_x8
+interval_supports_g3
+minimal_sat_g4
+cadical_x1
 dual_frontier_nbc
 dual_frontier_nbc_two
 dual_frontier_nbc_three
@@ -66,6 +82,7 @@ sat_c4
 f1
 f2
 g1
+milp_1
 sat_a1
 sat_a2
 sat_a3
@@ -97,7 +114,8 @@ zischg_dickinson
 zischg_fracessa
 ```
 
-Python invokes the same `coposit --model ...` command as C++ callers. That command selects an isolated one-model companion; Python
+Python invokes the same `coposit` command as C++ callers. The public function selects the incumbent; researcher calls pass
+`--model ...`. The command selects an isolated one-model companion; Python
 does not import a separate model-specific extension. Every Dickinson-, Hadeler-, and FracESSA-based model supports individually
 selected CP and SCP and classifies both predicates in one traversal. Danninger 1990 also has that capability.
 
@@ -163,7 +181,17 @@ PYTHONPATH=python python3 -m unittest discover -s python/tests -v
 The source-tree adapter finds `cpp/build/coposit`; an installed package keeps `coposit` and its isolated model companions beside
 `pycoposit`. Set `COPOSIT` to an explicit launcher path only when using another build tree.
 
-Sequential use accepts one `Matrix` or an iterable:
+Public use accepts compact matrix text, a matrix-file path, or a `Matrix`:
+
+```python
+from pycoposit import check
+
+classification = check("2#1,-1,1")
+assert classification["is_copositive"] is True
+assert classification["is_strictly_copositive"] is False
+```
+
+Researcher sequential use accepts one `Matrix` or an iterable:
 
 ```python
 from pycoposit import Matrix, run
@@ -232,7 +260,8 @@ fractions are available only in the compact FracESSA format.
 Every result contains `algorithm`, `mode`, optional `matrix_id`, integer `status`, `is_copositive`, `is_strictly_copositive`,
 `elapsed_ns`, and `error_message`. For `copositive` or `strictly_copositive`, only the selected field contains `True` or
 `False`; the other is `None`. `mode="both"` fills both fields after one traversal and is supported by every model listed in
-`COMBINED_CLASSIFICATION_ALGORITHMS`: all Dickinson-, Hadeler-, and FracESSA-based models plus Danninger 1990. Their only possible pairs are
+`COMBINED_CLASSIFICATION_ALGORITHMS`: all Dickinson-, Hadeler-, and FracESSA-based models, Danninger 1990, and the exact `milp_1`
+classifier. Their only possible pairs are
 `(False, False)`, `(True, False)`, and `(True, True)`. Other models return `EXEC_ERROR` for `both`. Both fields are `None` on any
 failure. The eight baselines, `adaptive_sponsel_copomatrix`, and every combined-capable family model support the two individually
 selected modes. Other coposit-created variants return `EXEC_ERROR` for `copositive` mode rather than silently applying strict rules. The

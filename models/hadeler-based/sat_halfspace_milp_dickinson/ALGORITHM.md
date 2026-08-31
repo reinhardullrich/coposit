@@ -102,9 +102,10 @@ $$
 \max\sum_{j\notin I} z_j.
 $$
 
-The rows are independently scaled by powers of two before conversion to `double`. The model-local solver uses dense two-phase
+The rows are independently scaled by powers of two before conversion to `double`. The shared coposit MILP solver uses dense two-phase
 simplex relaxations inside depth-first branch and bound. It branches only on fractional $z_j$, explores the satisfied branch first,
-and prunes a node when its relaxation cannot beat the exact all-ones incumbent. Each call is capped at 10,000 nodes and 20
+removes fixed binary variables from child relaxations, and prunes a node when its relaxation cannot beat the exact all-ones incumbent.
+Each call is capped at 10,000 nodes and 20
 milliseconds. The optional inverse/product workspace, scaled input, and each simplex tableau are also bounded; an oversized problem
 skips the MILP.
 

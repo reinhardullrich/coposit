@@ -14,8 +14,8 @@
 
 ## Worktrees And Source Material
 
-1. Work in the main worktree at `/home/reinhard/projects/coposit` unless Reinhard explicitly approves another worktree first.
-2. `/home/reinhard/projects/fracessa` and everything under it are permanently read-only for this project. Never create, modify,
+1. Work in this repository's main worktree unless the user explicitly approves another worktree first.
+2. The sibling `../fracessa` repository and everything under it are permanently read-only for this project. Never create, modify,
    move, or delete anything there.
 3. Copy needed source material into coposit.
 4. Do not copy generated builds, binaries, object files, caches, or nested Git metadata.
@@ -29,6 +29,8 @@
 3. Optimize for exact arbitrary-precision work on many small matrices without imposing a false small-dimension limit.
 4. Keep non-strict-copositivity results, strict-copositivity results, and unresolved resource limits distinct. Never turn a timeout
    or resource exhaustion into `false`.
+5. `improved_nbc_x6` is the current incumbent. Compare every new model and optimization against it, not against `improved_nbc_x3`,
+   `improved_nbc_x2`, or `improved_nbc_b7`, unless the user explicitly requests a historical comparison.
 
 ## Extraction Boundary
 
@@ -45,7 +47,7 @@
    corpus migration.
 6. Keep the maintained core integer-only. Do not add rational matrix storage; a later input wrapper may clear denominators before
    calling the core.
-7. Do not add connected-component decomposition until the base checker is established and Reinhard explicitly asks for that
+7. Do not add connected-component decomposition until the base checker is established and the user explicitly asks for that
    optimization.
 8. Do not publish a full-file checksum for the mutable maintained database. Checksums remain appropriate for the immutable source
    snapshot and model binaries stored with result rows.
@@ -58,7 +60,7 @@
    Each model directory owns its complete algorithm implementation, including copied cone, Danninger, or hybrid code it changes or
    interweaves.
 2. Create a new model by copying the closest existing model and changing that copy independently. Duplication between models is deliberate
-   isolation, not Ponytail cleanup debt; share it only when Reinhard explicitly decides that it is stable project-wide infrastructure.
+   isolation, not Ponytail cleanup debt; share it only when the user explicitly decides that it is stable project-wide infrastructure.
 3. Shared code under `cpp/include/coposit/` is limited to genuinely model-independent infrastructure such as exact integer and
    matrix storage, packed support storage, reusable exact factorization, input parsing, and the minimal model call contract.
 4. The maximal-Z-matrix check belongs only to shared preprocessing. Model implementations must not repeat it or expose a model-local
@@ -68,14 +70,12 @@
    `coposit::model::classify(const matrix_integer&)`, supports `both` as one traversal, and defaults to `both` when an analysis or
    reference-run interface omits the mode. Do not implement that classification as two hidden predicate runs. Other models require
    an explicit mode unless they independently implement combined classification. `adaptive_sponsel_copomatrix` supports both
-   individually selected predicates but not combined classification. There is no public `fast`, `safe`, or implicit model-selection
-   interface during the experimentation phase.
-   `coposit --model MODEL --mode strict|non-strict|both` is the sole low-level model-execution interface and owns the single
-   complete-preprocessing on/off control. Its inventory includes every literature baseline and every experiment. Python must invoke
-   models through `coposit`; it must not import, link, or expose a separate model-specific native execution path. Every internal
-   companion links exactly one model and the launcher links none. Do not add method aliases, public model-named
-   executables, C++ runtime factories, registries, inheritance, or executables that link model implementations together until
-   Reinhard explicitly promotes a public interface.
+   individually selected predicates but not combined classification. The public C++ `coposit::check`, Python `check`, and CLI call
+   without `--model` use the one incumbent named by `python/pycoposit/incumbent_model.txt`. Explicit `--model MODEL` selection is the
+   researcher interface and retains the complete-preprocessing on/off control; its full build inventory includes every literature
+   baseline and experiment. Python invokes models through `coposit`; it does not import or expose a second model-specific native path.
+   Every internal companion links exactly one model and the launcher links none. Do not add public model-named executables, C++ runtime
+   factories, registries, inheritance, or executables that link several model implementations together.
 6. Name a faithful historical or external baseline `<first-author>_<year>`, using one surname in the identifier, for example
    `dutour_2018`. Give every such model a local `ALGORITHM.md` that identifies the exact paper or source revision.
 7. A baseline must preserve the source model's mathematical tests, split choice and construction, traversal, pruning, and termination
@@ -103,7 +103,8 @@
 
 1. Keep the maintained package under `python/pycoposit/` with the thin `core.py`, sequential `single.py`, and bounded process runner
    `mp.py` split. `core.py` adapts Python objects to `coposit`; it does not load model-specific extension modules.
-2. Require an explicit maintained model identifier in `compute_matrix()`, `run()`, and `run_multiprocessing()`.
+2. Keep `compute_matrix()`, `run()`, and `run_multiprocessing()` explicit-model researcher interfaces. The separate public `check()`
+   function uses the incumbent model.
 3. Keep multiprocessing completion-ordered and bound submitted-but-not-yielded work by both the worker prefetch window and result
    queue capacity. Never report a worker crash, timeout, or resource limit as a negative classification.
 4. Use `python/run_results.py` for timed corpus reference runs. Keep model IDs lowercase, hash the exact model companion used, keep
@@ -116,7 +117,7 @@
    its early-exit cost; label it as a predicate run and never count it as a fully solved matrix run.
 6. Call all optional runtime activity reporting and stored telemetry **diagnostics**, never progress. The C++ flag is `--diagnostics`,
    the Python argument is `diagnostics=True`, and test-only baseline event recording is source diagnostics.
-7. Until Reinhard explicitly changes this policy, enable and persist diagnostics for every benchmark, comparison, corpus, reference,
+7. Until the user explicitly changes this policy, enable and persist diagnostics for every benchmark, comparison, corpus, reference,
    and diagnostic run. `python/run_results.py` does this automatically; do not bypass it with an alternate benchmark path that omits
    diagnostics.
 8. Keep runtime-tunable variants as one model when their implementations differ only by a scalar parameter. Python forwards the

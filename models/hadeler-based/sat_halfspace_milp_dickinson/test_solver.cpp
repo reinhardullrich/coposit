@@ -1,9 +1,9 @@
 #include <coposit/model.hpp>
 #include <coposit/diagnostics.hpp>
+#include <coposit/milp_solver.hpp>
 #include <coposit/timeout.hpp>
 
 #include "source_diagnostics.hpp"
-#include "tiny_maximum_halfspaces.hpp"
 
 #include <gtest/gtest.h>
 
@@ -76,7 +76,7 @@ TEST(SatHalfspaceMilpDickinsonTest, PreservesStrictDickinsonDecisions)
 TEST(SatHalfspaceMilpDickinsonTest, TinyMilpFindsTheBestPositiveSimplexPoint)
 {
     const std::vector<std::vector<double>> rows{{1.0, -1.0}, {-1.0, 1.0}, {1.0, 1.0}};
-    model::detail::tiny_maximum_halfspaces optimizer(
+    maximum_halfspaces_milp_solver optimizer(
         rows, 1e-7, 1, 10000, std::chrono::steady_clock::now() + std::chrono::seconds(1));
     const auto result = optimizer.solve();
     EXPECT_TRUE(result.optimal);

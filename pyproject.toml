@@ -4,13 +4,29 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "pycoposit"
-version = "0.1.0"
-description = "Exact strict-copositivity checks for symmetric integer matrices"
+dynamic = ["version"]
+description = "Exact copositivity and strict-copositivity checks for symmetric matrices"
 readme = "README.md"
 requires-python = ">=3.11"
 license = "GPL-3.0-or-later"
 license-files = ["LICENSE", "THIRD_PARTY_NOTICES.md"]
 authors = [{ name = "Reinhard Ullrich" }]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: C++",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.urls]
+Homepage = "https://github.com/reinhardullrich/coposit"
+Repository = "https://github.com/reinhardullrich/coposit"
+Issues = "https://github.com/reinhardullrich/coposit/issues"
 
 [tool.scikit-build]
 cmake.source-dir = "cpp"
@@ -25,15 +41,44 @@ sdist.include = [
     "THIRD_PARTY_NOTICES.md",
     "cpp/CMakeLists.txt",
     "cpp/include/**",
-    "models/**/solver.cpp",
+    "cpp/coposit.cpp",
+    "cpp/heuristic_kkt_search.cpp",
+    "cpp/improved_nbc_upward_supports.cpp",
+    "cpp/third_party/improved_nbc_minisat_all/**",
+    "models/hadeler-based/improved_nbc_x6/*.hpp",
+    "models/hadeler-based/improved_nbc_x6/ALGORITHM.md",
+    "models/hadeler-based/improved_nbc_x6/solver.cpp",
     "cpp/model_main.cpp",
     "cpp/coposit_main.cpp",
     "cpp/companion_launcher.hpp",
-    "python/run_results.py",
     "python/pycoposit/*.py",
+    "python/pycoposit/incumbent_model.txt",
 ]
 
 [tool.scikit-build.cmake.define]
 BUILD_TESTING = false
 COPOSIT_BUILD_PYTHON = true
 COPOSIT_BUILD_APPS = true
+COPOSIT_BUILD_EXPERIMENTS = false
+
+[[tool.dynamic-metadata]]
+provider = "scikit_build_core.metadata.regex"
+field = "version"
+input = "cpp/CMakeLists.txt"
+regex = '''(?s)project\(\s*coposit\s+VERSION\s+(?P<value>\d+\.\d+\.\d+\.\d+)'''
+
+[tool.cibuildwheel]
+build = "cp{311,312,313,314}-*"
+skip = ["*-musllinux_*", "cp3??t-*"]
+test-command = "python -c \"from pycoposit import check; r = check('2#1,-1,1'); assert (r['is_copositive'], r['is_strictly_copositive']) == (True, False)\""
+
+[tool.cibuildwheel.linux]
+archs = ["native"]
+manylinux-x86_64-image = "manylinux_2_28"
+manylinux-aarch64-image = "manylinux_2_28"
+
+[tool.cibuildwheel.macos]
+archs = ["native"]
+
+[tool.cibuildwheel.windows]
+archs = ["AMD64"]
