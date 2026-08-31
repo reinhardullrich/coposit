@@ -153,7 +153,7 @@ int launch(const std::string &program, const std::string &display_name,
            const std::optional<coposit::cli::timeout_duration> &timeout) {
   std::vector<std::string> arguments;
   arguments.reserve(static_cast<size_t>(argc));
-  arguments.push_back(display_name);
+  arguments.push_back(program);
   for (int index = 1; index < argc; ++index) {
     if (std::string(argv[index]) == "--model") {
       ++index;

@@ -36,7 +36,7 @@ $actualVersion = (& $launcher --version).Trim()
 if ($actualVersion -ne $Version) {
     throw "Release version $Version does not match binary version $actualVersion"
 }
-$classification = (& $launcher --mode both "2#1,-1,1") -join "`n"
+$classification = (& $launcher --model $incumbent --mode both "2#1,-1,1") -join "`n"
 if ($classification -ne "copositive=true`nstrictly_copositive=false") {
     throw "Release classification smoke test failed"
 }
