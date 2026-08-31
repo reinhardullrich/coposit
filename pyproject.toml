@@ -25,6 +25,7 @@ classifiers = [
 
 [project.urls]
 Homepage = "https://github.com/reinhardullrich/coposit"
+Documentation = "https://reinhardullrich.github.io/coposit/"
 Repository = "https://github.com/reinhardullrich/coposit"
 Issues = "https://github.com/reinhardullrich/coposit/issues"
 

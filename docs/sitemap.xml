@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url>
+    <loc>https://reinhardullrich.github.io/coposit/index.html</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://reinhardullrich.github.io/coposit/getting-started.html</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://reinhardullrich.github.io/coposit/algorithm.html</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://reinhardullrich.github.io/coposit/python-api.html</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+  <url>
+    <loc>https://reinhardullrich.github.io/coposit/cpp-api.html</loc>
+    <lastmod>2026-08-31</lastmod>
+  </url>
+</urlset>

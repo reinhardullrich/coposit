@@ -51,7 +51,7 @@ Other coposit-created models reject CP and combined mode explicitly.
 - `models/experiments/<model>/` — other coposit-created models and comparisons, including `adaptive_sponsel_copomatrix`.
 - `python/pycoposit/` — thin native adapter, sequential runner, and bounded multiprocessing runner.
 - `testdata/` — maintained SQLite corpus, schema, and exact external Matrix Market matrices.
-- `docs/` — human-facing explanations.
+- `docs/` — human-facing explanations and the Sphinx/Doxygen source for the public GitHub Pages site.
 - `aidocs/` — current agent documentation, routed by `aidocs/INDEX.md`.
 - `research/` — papers, literature notes, and source material.
 - `experiments/` — experiment implementations, raw results, and experiment-specific reports.
@@ -99,6 +99,12 @@ distribution to PyPI. Failed builds create no tag or release. Each CLI package c
 incumbent companion because the launcher deliberately does not link model code.
 
 The complete release procedure is in `aidocs/RELEASING.md`.
+
+## Public Documentation
+
+The public documentation is built from `docs/` and deployed by `.github/workflows/pages.yml` to
+`https://reinhardullrich.github.io/coposit/`. Sphinx owns the five user pages, Breathe imports the generated C++ API from Doxygen,
+and Python autodoc imports the pure-Python wrapper. Generated `site/` and `docs/_build/` output is intentionally untracked.
 
 ## Experiment Processing Pipeline
 

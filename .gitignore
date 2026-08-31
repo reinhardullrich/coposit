@@ -13,3 +13,5 @@ __pycache__/
 /.local-tmp/
 /.vcpkg-cache/
 /dist/
+/docs/_build/
+/site/

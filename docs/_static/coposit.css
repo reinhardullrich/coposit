@@ -1,0 +1,273 @@
+:root {
+  --coposit-red: #a61b16;
+  --coposit-red-dark: #7f1511;
+  --coposit-ink: #1f2022;
+  --coposit-muted: #5f6267;
+  --coposit-paper: #fbfbfa;
+  --coposit-rule: #dedad8;
+  --coposit-rule-strong: #c9bfbc;
+  --coposit-panel: #ffffff;
+  --coposit-signature: #f8efed;
+}
+
+html {
+  scrollbar-gutter: stable;
+}
+
+body {
+  color: var(--coposit-ink);
+  background: var(--coposit-paper);
+  font-family: "Source Sans 3", "Segoe UI", sans-serif;
+}
+
+div.document {
+  width: min(1180px, 94vw);
+}
+
+div.body {
+  max-width: 820px;
+  line-height: 1.6;
+}
+
+div.body h1,
+div.body h2,
+div.body h3 {
+  color: var(--coposit-ink);
+  font-family: Georgia, "Times New Roman", serif;
+  font-weight: 500;
+}
+
+div.body h1 {
+  padding-bottom: 0.35em;
+  border-bottom: 1px solid var(--coposit-rule);
+}
+
+div.body h2 {
+  margin-top: 1.8em;
+}
+
+div.body a,
+div.sphinxsidebar a {
+  color: var(--coposit-red);
+}
+
+div.body img.align-center {
+  margin-top: 1.5rem;
+  margin-bottom: 2rem;
+  border: 1px solid var(--coposit-rule);
+  border-radius: 0.35rem;
+}
+
+div.body .project-actions {
+  margin: -0.5rem 0 2.5rem;
+}
+
+div.body .project-actions ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  justify-content: center;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+div.body .project-actions li {
+  margin: 0;
+}
+
+div.body .project-actions a {
+  display: inline-flex;
+  min-width: 13rem;
+  justify-content: center;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--coposit-red);
+  border-radius: 0.35rem;
+  color: #ffffff;
+  background: var(--coposit-red);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+div.body .project-actions a:hover,
+div.body .project-actions a:focus {
+  color: #ffffff;
+  background: var(--coposit-red-dark);
+}
+
+div.body table.docutils {
+  width: 100%;
+  border-color: var(--coposit-rule);
+}
+
+div.body table.docutils th {
+  background: #f4eeec;
+}
+
+div.body pre {
+  border: 1px solid var(--coposit-rule);
+  border-radius: 0.2rem;
+  box-shadow: none;
+}
+
+div.body section > dl.py,
+div.body section > dl.cpp {
+  margin: 1.5rem 0 2rem;
+  overflow: hidden;
+  border: 1px solid var(--coposit-rule-strong);
+  border-radius: 0.35rem;
+  background: var(--coposit-panel);
+}
+
+div.body section > dl.py > dt.sig,
+div.body section > dl.cpp > dt.sig {
+  margin: 0;
+  padding: 0.7rem 0.85rem;
+  overflow-x: auto;
+  border: 0;
+  border-left: 4px solid var(--coposit-red);
+  background: var(--coposit-signature);
+}
+
+div.body section > dl.py > dd,
+div.body section > dl.cpp > dd {
+  margin: 0;
+  padding: 0.9rem 1rem 1rem;
+}
+
+div.body dt.sig .sig-name {
+  font-weight: 700;
+}
+
+div.body dl.py > dd > dl.py,
+div.body .breathe-sectiondef > dl.cpp {
+  margin: 1rem 0;
+}
+
+div.body dl.py > dd > dl.py > dt.sig,
+div.body .breathe-sectiondef > dl.cpp > dt.sig {
+  padding: 0.45rem 0.65rem;
+  overflow-x: auto;
+  border-left: 3px solid var(--coposit-rule-strong);
+  background: #f8f7f6;
+}
+
+div.body dl.py > dd > dl.py > dd,
+div.body .breathe-sectiondef > dl.cpp > dd {
+  margin-left: 0.8rem;
+}
+
+div.body .breathe-sectiondef-title {
+  margin: 1.5rem 0 0.5rem;
+  color: var(--coposit-muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+div.sphinxsidebarwrapper {
+  color: var(--coposit-muted);
+}
+
+div.sphinxsidebarwrapper > div {
+  margin-top: 1.25rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--coposit-rule);
+}
+
+div.sphinxsidebar h3 {
+  margin: 0 0 0.45rem;
+  color: var(--coposit-ink);
+  font-size: 0.92rem;
+}
+
+div.sphinxsidebar ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+div.sphinxsidebar li {
+  margin: 0.25rem 0;
+}
+
+div.sphinxsidebar li li {
+  margin-left: 0.3rem;
+  padding-left: 0.7rem;
+  border-left: 1px solid var(--coposit-rule);
+}
+
+div.sphinxsidebar a,
+div.sphinxsidebar code {
+  overflow-wrap: break-word;
+  white-space: normal;
+}
+
+div.sphinxsidebar .pre {
+  white-space: normal;
+}
+
+div.sphinxsidebarwrapper > div > ul > li > ul > li > ul > li > ul {
+  display: none;
+}
+
+@media (min-width: 941px) {
+  div.bodywrapper {
+    margin-left: 300px;
+  }
+
+  div.sphinxsidebar {
+    width: 300px;
+  }
+}
+
+div.sphinxsidebar {
+  top: 1rem;
+  max-height: calc(100vh - 2rem);
+  overflow-y: auto;
+  scrollbar-gutter: stable;
+}
+
+@media (max-width: 940px) {
+  div.document {
+    width: auto;
+  }
+
+  div.body {
+    max-width: none;
+  }
+
+  div.sphinxsidebar {
+    position: static;
+    max-height: none;
+    overflow-y: visible;
+    color: #f7f7f5;
+    background: var(--coposit-ink);
+  }
+
+  div.sphinxsidebar h1,
+  div.sphinxsidebar h2,
+  div.sphinxsidebar h3,
+  div.sphinxsidebar h4,
+  div.sphinxsidebar p {
+    color: #f7f7f5;
+  }
+
+  div.sphinxsidebar a {
+    color: #ff8178;
+  }
+
+  div.body table.docutils,
+  div.body dt.sig,
+  div.body mjx-container[display="true"] {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  div.body .project-actions li,
+  div.body .project-actions a {
+    width: 100%;
+  }
+}

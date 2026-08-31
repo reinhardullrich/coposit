@@ -2,6 +2,14 @@
 
 This append-only file records meaningful decisions, results, and evidence that are not clear from Git. Do not log routine edits here.
 
+## 2026-08-31 — Public documentation website
+
+- Added the public Sphinx documentation at `https://reinhardullrich.github.io/coposit/`, following FracESSA's small Alabaster,
+  Doxygen, and Breathe structure. The five pages cover installation and inputs, the incumbent algorithm, and the Python and C++ APIs.
+- GitHub Pages builds the site from source on `main`; generated HTML and Doxygen XML remain untracked. The site includes a Google
+  verification tag, `robots.txt`, and `sitemap.xml` for search discovery.
+- The local Doxygen and warning-as-error Sphinx build passed, and the rendered desktop and narrow layouts were reviewed in a browser.
+
 ## 2026-08-31 — FracESSA-style release pipeline
 
 - Added calendar versioning and a manually dispatched `main`-only GitHub release workflow following FracESSA's release structure.

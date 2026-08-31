@@ -201,6 +201,7 @@ See [the research CLI documentation](docs/ANALYSIS_CLI.md) for model availabilit
 
 ## Further Documentation
 
+- [Public documentation website](https://reinhardullrich.github.io/coposit/)
 - [Python API and batch processing](python/README.md)
 - [Research command-line interface](docs/ANALYSIS_CLI.md)
 - [Diagnostics](docs/DIAGNOSTICS_REPORTING.md)
