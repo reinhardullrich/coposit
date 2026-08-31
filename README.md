@@ -7,10 +7,10 @@
 coposit decides whether a symmetric matrix is copositive, strictly copositive, or both. It uses exact arithmetic for every final
 decision.
 
-For a symmetric matrix $A$:
+For a real symmetric matrix $A \in \mathbb{R}^{n \times n}$:
 
-- **copositive (CP)** means $x^T A x \geq 0$ for every vector $x \geq 0$;
-- **strictly copositive (SCP)** means $x^T A x > 0$ for every nonzero vector $x \geq 0$.
+- **copositive (CP)** means $x^\top A x \geq 0$ for every $x \in \mathbb{R}^n$ with $x \geq 0$ componentwise;
+- **strictly copositive (SCP)** means $x^\top A x > 0$ for every nonzero $x \in \mathbb{R}^n$ with $x \geq 0$ componentwise.
 
 Strict copositivity is the stronger property. A matrix can therefore be copositive without being strictly copositive.
 
@@ -47,9 +47,10 @@ python -m pip install pycoposit
 
 The compact input below represents
 
-$$
-A=\begin{pmatrix}1&-1\\-1&1\end{pmatrix}.
-$$
+```text
+A = [[ 1, -1],
+     [-1,  1]]
+```
 
 Run both checks:
 
@@ -64,7 +65,7 @@ copositive=true
 strictly_copositive=false
 ```
 
-Thus $x^T A x$ is never negative when $x \geq 0$, but it is zero for at least one nonzero nonnegative vector.
+Thus $x^\top A x$ is never negative when $x \geq 0$, but it is zero for at least one nonzero nonnegative vector.
 
 To ask only one question:
 
