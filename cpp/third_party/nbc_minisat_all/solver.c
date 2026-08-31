@@ -89,9 +89,9 @@ static inline void  clause_setactivity(clause* c, float a) { *((float*)&c->lits[
 //=================================================================================================
 // Encode literals in clause pointers:
 
-clause* clause_from_lit (lit l)     { return (clause*)((unsigned long)l + (unsigned long)l + 1);  }
-bool    clause_is_lit   (clause* c) { return ((unsigned long)c & 1);                              }
-lit     clause_read_lit (clause* c) { return (lit)((unsigned long)c >> 1);                        }
+clause* clause_from_lit (lit l)     { return (clause*)((uintptr_t)l + (uintptr_t)l + 1);  }
+bool    clause_is_lit   (clause* c) { return ((uintptr_t)c & 1);                         }
+lit     clause_read_lit (clause* c) { return (lit)((uintptr_t)c >> 1);                   }
 
 //=================================================================================================
 // Simple helpers:
@@ -400,7 +400,7 @@ static clause* clause_new(solver* s, lit* begin, lit* end, int learnt)
     size           = end - begin;
     c              = (clause*)malloc(sizeof(clause) + sizeof(lit) * size + learnt * sizeof(float));
     c->size_learnt = (size << 1) | learnt;
-    assert(((unsigned long)c & 1) == 0);
+    assert(((uintptr_t)c & 1) == 0);
 
     for (i = 0; i < size; i++)
         c->lits[i] = begin[i];
