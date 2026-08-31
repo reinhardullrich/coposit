@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.png" width="600" alt="coposit logo" />
+  <img src="logo.png?v=2" width="600" alt="coposit logo" />
 </p>
 
 # coposit
