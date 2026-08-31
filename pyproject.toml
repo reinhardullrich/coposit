@@ -33,6 +33,7 @@ Issues = "https://github.com/reinhardullrich/coposit/issues"
 cmake.source-dir = "cpp"
 cmake.build-type = "Release"
 wheel.packages = ["python/pycoposit"]
+wheel.exclude = ["pycoposit/incumbent_model.txt"]
 sdist.inclusion-mode = "manual"
 sdist.exclude = ["**"]
 sdist.include = [

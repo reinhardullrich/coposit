@@ -2,8 +2,8 @@ Algorithm Overview
 ##################
 
 coposit converts copositivity into exact minimization over the simplex, then covers the relevant faces with certificates instead of
-testing every nonnegative vector. The public incumbent, ``improved_nbc_x6``, combines exact preprocessing, curvature pruning,
-Dickinson intervals, and a fixed-cardinality Boolean support search.
+testing every nonnegative vector. The production algorithm combines exact preprocessing, curvature pruning, Dickinson intervals,
+and a fixed-cardinality Boolean support search. Its internal model identifier is deliberately not part of the public interface.
 
 From the orthant to the simplex
 *******************************
@@ -36,7 +36,7 @@ denominator preserves the signs needed for both classifications. The complete pr
 tests, searches for exact negative witnesses, and splits the graph of negative off-diagonal entries into independent connected
 components when possible.
 
-If preprocessing decides a component, the search stops there. Otherwise the incumbent receives an exact unresolved principal
+If preprocessing decides a component, the search stops there. Otherwise the production solver receives an exact unresolved principal
 matrix. Every final answer and every pruning certificate remains exact.
 
 **Intuition.** Cheap global structure is removed before the exponential support search begins, but no numerical approximation is
@@ -48,7 +48,7 @@ Supports and frontiers
 A nonempty support :math:`I\subseteq\{1,\ldots,n\}` identifies the simplex face on which exactly the coordinates in :math:`I` may
 be positive. In the worst case there are :math:`2^n-1` such supports.
 
-The incumbent alternates between two fixed-cardinality frontiers:
+The production solver alternates between two fixed-cardinality frontiers:
 
 * the **low frontier** visits small supports and seeks certificates that prune upward to supersets;
 * the **high frontier** visits large supports and seeks certificates that prune downward to subsets.
@@ -70,7 +70,7 @@ If the face is strictly convex, curvature alone does not give that upward closur
 construct a Dickinson interval :math:`[L,U]`: every support :math:`J` with :math:`L\subseteq J\subseteq U` is covered by one exact
 certificate.
 
-The incumbent enlarges that interval in three stages:
+The production solver enlarges that interval in three stages:
 
 1. a Halfspace-Rays search chooses a promising positive right-hand side;
 2. a targeted continuous linear program proposes one additional upper index at a time;
@@ -122,8 +122,7 @@ uses the standard quadratic-programming geometry developed, for example, by Andr
 algorithm for standard quadratic programming <https://doi.org/10.1016/j.dam.2007.09.020>`_, *Discrete Applied Mathematics* 156
 (2008), 2439--2448.
 
-The `authoritative Improved NBC-X6 algorithm document
-<https://github.com/reinhardullrich/coposit/blob/main/models/hadeler-based/improved_nbc_x6/ALGORITHM.md>`_ gives the exact formulas,
-certificate construction, traversal rules, representation details, and known difficult inputs. The separate `step-by-step Dickinson
-guide <https://github.com/reinhardullrich/coposit/blob/main/docs/DICKINSON_ALGORITHM_STEP_BY_STEP.md>`_ develops that certificate
-from first principles.
+The `step-by-step Dickinson guide
+<https://github.com/reinhardullrich/coposit/blob/main/docs/DICKINSON_ALGORITHM_STEP_BY_STEP.md>`_ develops that certificate from
+first principles. Model-specific algorithm documents remain available in the source tree for reproducible research, without making
+one experimental identifier part of the public API.

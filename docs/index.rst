@@ -45,8 +45,8 @@ Integer, fractional, finite-decimal, and scientific-notation inputs are converte
 work may nominate optional pruning opportunities, but it never establishes a classification or certificate. A timeout or resource
 limit remains unresolved; it is never reported as ``false``.
 
-The default public interfaces use ``improved_nbc_x6``, the current incumbent. The repository also retains literature baselines and
-experimental models for reproducible research.
+The public interfaces select the current production solver internally. Its identity is not part of the public contract and may
+change between releases. The repository also retains literature baselines and experimental models for reproducible research.
 
 Quick start
 ***********

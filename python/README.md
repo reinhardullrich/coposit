@@ -1,7 +1,7 @@
 # pycoposit Analysis Interface
 
-`pycoposit.check(matrix, mode="both")` is the public one-matrix interface. It uses the current incumbent from
-`incumbent_model.txt`; `mode="copositive"` or `"strictly_copositive"` stops after that predicate is known.
+`pycoposit.check(matrix, mode="both")` is the public one-matrix interface. It selects the production solver internally;
+`mode="copositive"` or `"strictly_copositive"` stops after that predicate is known.
 
 Install the public package for Python 3.11 through 3.14 with `python -m pip install pycoposit`. Source-tree research use still
 requires the complete CMake build described in the repository `README.md`.
@@ -114,7 +114,7 @@ zischg_dickinson
 zischg_fracessa
 ```
 
-Python invokes the same `coposit` command as C++ callers. The public function selects the incumbent; researcher calls pass
+Python invokes the same `coposit` command as C++ callers. The public function selects the production solver; researcher calls pass
 `--model ...`. The command selects an isolated one-model companion; Python
 does not import a separate model-specific extension. Every Dickinson-, Hadeler-, and FracESSA-based model supports individually
 selected CP and SCP and classifies both predicates in one traversal. Danninger 1990 also has that capability.

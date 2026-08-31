@@ -12,7 +12,6 @@ $packageName = "coposit-$Version-$Platform"
 $packageDir = Join-Path $repoRoot "dist/$packageName"
 $archive = Join-Path $repoRoot "dist/$packageName.zip"
 $tripletsDir = Join-Path $repoRoot ".github/triplets"
-$incumbent = (Get-Content (Join-Path $repoRoot "python/pycoposit/incumbent_model.txt") -Raw).Trim()
 
 & (Join-Path $PSScriptRoot "install-vcpkg.ps1") -Triplet $Triplet -VcpkgRoot $VcpkgRoot
 
@@ -31,12 +30,12 @@ cmake --build $buildDir --config Release -j 4
 if ($LASTEXITCODE -ne 0) { throw "CMake build failed" }
 
 $launcher = Join-Path $buildDir "Release/coposit.exe"
-$companion = Join-Path $buildDir "Release/coposit-$incumbent.exe"
+$companion = Join-Path $buildDir "Release/coposit-engine.exe"
 $actualVersion = (& $launcher --version).Trim()
 if ($actualVersion -ne $Version) {
     throw "Release version $Version does not match binary version $actualVersion"
 }
-$classification = (& $launcher --model $incumbent --mode both "2#1,-1,1") -join "`n"
+$classification = (& $launcher --mode both "2#1,-1,1") -join "`n"
 if ($classification -ne "copositive=true`nstrictly_copositive=false") {
     throw "Release classification smoke test failed"
 }

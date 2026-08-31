@@ -10,11 +10,11 @@ import sys
 import tempfile
 import unittest
 
+import pycoposit
 from pycoposit import (
     ALGORITHMS,
     COMBINED_CLASSIFICATION_ALGORITHMS,
     COPOSITIVITY_MODES,
-    INCUMBENT_MODEL,
     PREPROCESSING_MODES,
     MPConfig,
     Matrix,
@@ -64,9 +64,9 @@ def initialize_runner_database(connection: sqlite3.Connection, root: Path) -> No
 
 class WrapperTests(unittest.TestCase):
     def test_public_incumbent_interface(self):
-        self.assertEqual(INCUMBENT_MODEL, "improved_nbc_x6")
+        self.assertFalse(hasattr(pycoposit, "INCUMBENT_MODEL"))
         boundary = check("2#1,-1,1")
-        self.assertEqual(boundary["algorithm"], INCUMBENT_MODEL)
+        self.assertEqual(boundary["algorithm"], "coposit")
         self.assertEqual(boundary["mode"], "both")
         self.assertEqual((boundary["is_copositive"], boundary["is_strictly_copositive"]), (True, False))
 

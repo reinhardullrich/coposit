@@ -15,7 +15,6 @@ repo_root="$(cd -- "$script_dir/../.." && pwd)"
 build_dir="$repo_root/cpp/build-release-$platform"
 package_name="coposit-$version-$platform"
 package_dir="$repo_root/dist/$package_name"
-incumbent="$(tr -d '\r\n' < "$repo_root/python/pycoposit/incumbent_model.txt")"
 
 "$script_dir/install-vcpkg.sh" "$triplet" "$vcpkg_root"
 
@@ -37,7 +36,7 @@ cmake -B "$build_dir" -S "$repo_root/cpp" \
 cmake --build "$build_dir" --config Release -j 4
 
 launcher="$build_dir/coposit"
-companion="$build_dir/coposit-$incumbent"
+companion="$build_dir/coposit-engine"
 actual_version="$("$launcher" --version)"
 if [[ "$actual_version" != "$version" ]]; then
     echo "Release version $version does not match binary version $actual_version" >&2

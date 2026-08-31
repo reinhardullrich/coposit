@@ -298,15 +298,13 @@ jobs:
           tag_name: ${{ needs.validate-version.outputs.tag }}
           target_commitish: ${{ github.sha }}
           body: |
-            Download and extract the package for your platform. It contains the public `coposit` launcher, its incumbent companion, the license, and third-party notices. Linux and macOS users must run `chmod +x coposit coposit-improved_nbc_x6` once.
+            Download and extract the package for your platform. Run `coposit`; the other packaged files are private runtime dependencies, license information, and third-party notices.
 
             - **macOS: Apple Silicon (ARM64):** `coposit-${{ needs.validate-version.outputs.version }}-macos-apple-silicon-arm64.tar.gz`
             - **macOS: Intel 64-bit:** `coposit-${{ needs.validate-version.outputs.version }}-macos-intel-64bit.tar.gz`
             - **Linux: Intel/AMD 64-bit:** `coposit-${{ needs.validate-version.outputs.version }}-linux-intel-amd-64bit.tar.gz`
             - **Linux: ARM64:** `coposit-${{ needs.validate-version.outputs.version }}-linux-arm64.tar.gz`
             - **Windows: Intel/AMD 64-bit:** `coposit-${{ needs.validate-version.outputs.version }}-windows-intel-amd-64bit.zip`
-
-            Keep `coposit` and `coposit-improved_nbc_x6` in the same directory. The companion is an internal implementation detail; invoke `coposit`.
 
             **License:** [GPL-3.0-or-later](https://github.com/${{ github.repository }}/blob/${{ needs.validate-version.outputs.tag }}/LICENSE)
 

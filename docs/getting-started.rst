@@ -2,7 +2,7 @@ Getting Started
 ###############
 
 coposit accepts exact symmetric matrices through the command line, Python, or C++. Ordinary users do not select an algorithm: all
-three public interfaces use the current incumbent and the complete exact preprocessing pipeline.
+three public interfaces use the production solver and the complete exact preprocessing pipeline.
 
 Install
 *******
@@ -20,12 +20,8 @@ Command line
 ------------
 
 Download the package for Linux, macOS, or Windows from the `release page
-<https://github.com/reinhardullrich/coposit/releases>`_ and extract it. Keep the public launcher and its incumbent companion in the
-same directory. On Linux and macOS, make both executable once:
-
-.. code-block:: console
-
-   chmod +x coposit coposit-improved_nbc_x6
+<https://github.com/reinhardullrich/coposit/releases>`_ and extract it. Run ``coposit``; the other packaged files are private runtime
+dependencies and are not user interfaces.
 
 Windows examples use ``coposit.exe`` instead of ``./coposit``.
 
@@ -33,7 +29,7 @@ Build from source
 -----------------
 
 A source build requires CMake 3.18 or newer, C and C++17 compilers, Python 3.11 or newer, FLINT, MPFR, and GMP. This minimal build
-creates the public incumbent and command line without the retained research experiments:
+creates the production solver and command line without the retained research experiments:
 
 .. code-block:: console
 
@@ -171,7 +167,7 @@ The explicit-model research interface can process matrices sequentially or acros
        Matrix("2#1,0,1", matrix_id=2),
    ]
    results = run_multiprocessing(
-       "improved_nbc_x6",
+       "hadeler_1983",
        matrices,
        mp_config=MPConfig(workers=2),
        mode="both",

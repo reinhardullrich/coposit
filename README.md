@@ -14,24 +14,16 @@ For a real symmetric matrix $A \in \mathbb{R}^{n \times n}$:
 
 Strict copositivity is the stronger property. A matrix can therefore be copositive without being strictly copositive.
 
-The ordinary command-line, Python, and C++ interfaces use `improved_nbc_x6`, the current incumbent solver. The repository also keeps
-the literature baselines and experimental models used to develop and compare it.
+The ordinary command-line, Python, and C++ interfaces select the current production solver internally. Its identity is not part of
+the public interface and may change between releases. The repository also keeps literature baselines and experimental models for
+reproducible research.
 
 ## Install
 
 ### Command line
 
 Download the package for Linux, macOS, or Windows from [GitHub Releases](https://github.com/reinhardullrich/coposit/releases) and
-extract it. The package contains two executables:
-
-- `coposit`, the command users run;
-- `coposit-improved_nbc_x6`, the incumbent solver used internally.
-
-Keep the two files in the same directory. On Linux and macOS, make both executable once:
-
-```bash
-chmod +x coposit coposit-improved_nbc_x6
-```
+extract it. Run `coposit`; the other packaged files are private runtime dependencies and are not user interfaces.
 
 On Windows, run `coposit.exe` instead of `./coposit` in the examples below.
 
@@ -120,7 +112,7 @@ estimate of the remaining time.
 
 ## Python Interface
 
-`check()` runs the incumbent solver and checks both properties by default:
+`check()` runs the production solver and checks both properties by default:
 
 ```python
 from pycoposit import check
@@ -145,7 +137,7 @@ The result is a dictionary containing the requested answers and basic execution 
 
 Required: CMake 3.18 or newer, C and C++17 compilers, Python 3.11 or newer, FLINT, MPFR, and GMP.
 
-For the public incumbent and command line only:
+For the production solver and command line only:
 
 ```bash
 cmake -S cpp -B cpp/build-release -DCMAKE_BUILD_TYPE=Release \
@@ -168,11 +160,11 @@ The complete build also fetches the dependencies used only by particular researc
 
 ## C++ Interface
 
-Add `cpp/` as a CMake subdirectory, link `coposit::incumbent`, and include `<coposit/coposit.hpp>`:
+Add `cpp/` as a CMake subdirectory, link `coposit::coposit`, and include `<coposit/coposit.hpp>`:
 
 ```cmake
 add_subdirectory(path/to/coposit/cpp coposit-build)
-target_link_libraries(my_program PRIVATE coposit::incumbent)
+target_link_libraries(my_program PRIVATE coposit::coposit)
 ```
 
 ```cpp
@@ -187,9 +179,9 @@ The default checks both properties. Pass `coposit::copositivity_mode::copositive
 
 ## Research Models
 
-An ordinary user does not need to select a model. Omitting `--model` always chooses the incumbent.
+An ordinary user does not select a model. Production builds expose only `coposit`.
 
-A complete source build exposes the retained baselines and experiments through the explicit research interface:
+A complete source build exposes the retained baselines and experiments through the explicit `--model` research interface:
 
 ```bash
 cpp/build/coposit --model hadeler_1983 --mode both matrix.mtx

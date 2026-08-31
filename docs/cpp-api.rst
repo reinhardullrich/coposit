@@ -2,7 +2,7 @@ C++ API
 #######
 
 The public C++ interface is intentionally small: construct an exact integer matrix and call one synchronous function. The function
-uses the current incumbent and complete preprocessing pipeline.
+uses the production solver and complete preprocessing pipeline.
 
 Core types
 **********
@@ -31,12 +31,12 @@ converted into ``false``.
 Minimal native example
 **********************
 
-Add ``cpp/`` as a CMake subdirectory and link the incumbent target:
+Add ``cpp/`` as a CMake subdirectory and link the public target:
 
 .. code-block:: cmake
 
    add_subdirectory(path/to/coposit/cpp coposit-build)
-   target_link_libraries(my_program PRIVATE coposit::incumbent)
+   target_link_libraries(my_program PRIVATE coposit::coposit)
 
 Then construct a symmetric exact matrix:
 

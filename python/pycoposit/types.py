@@ -5,8 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import IntEnum
 import os
-from pathlib import Path
-from typing import Literal, cast
+from typing import Literal
 
 Algorithm = Literal[
     "dutour_2018",
@@ -287,10 +286,6 @@ ALGORITHMS: tuple[Algorithm, ...] = (
     "zischg_dickinson",
     "zischg_fracessa",
 )
-
-INCUMBENT_MODEL = cast(Algorithm, Path(__file__).with_name("incumbent_model.txt").read_text(encoding="utf-8").strip())
-if INCUMBENT_MODEL not in ALGORITHMS:
-    raise RuntimeError(f"incumbent model is not registered: {INCUMBENT_MODEL}")
 
 PARAMETERIZED_ALGORITHMS: tuple[Algorithm, ...] = (
     "sat_halfspace_rays_wide_dickinson",

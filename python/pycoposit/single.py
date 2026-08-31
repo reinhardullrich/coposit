@@ -4,11 +4,10 @@ from __future__ import annotations
 
 from collections.abc import Iterable, Iterator
 
-from .core import compute_matrix
+from .core import _compute_matrix, compute_matrix
 from .types import (
     Algorithm,
     CopositivityMode,
-    INCUMBENT_MODEL,
     Matrix,
     Preprocessing,
     _resolve_mode,
@@ -28,7 +27,7 @@ def check(
         matrix = Matrix(matrix)
     elif not isinstance(matrix, Matrix):
         raise TypeError("matrix must be a Matrix or str")
-    return compute_matrix(INCUMBENT_MODEL, matrix, mode)
+    return _compute_matrix(None, matrix, mode)
 
 
 def _run_matrices(

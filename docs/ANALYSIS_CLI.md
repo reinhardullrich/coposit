@@ -1,7 +1,8 @@
 # `coposit` Analysis Interface
 
-`coposit` is the command-line interface. Without `--model` it uses the current incumbent. An explicit model selects any built
-literature baseline or experiment. Python calls this same command; there is no separate native-extension model path.
+`coposit` is the command-line interface. Production builds select the current solver internally and do not accept `--model`. A
+complete source research build adds `--model` for selecting any built literature baseline or experiment. Python calls this same
+command; there is no separate native-extension model path.
 
 ## Basic Call
 
@@ -28,10 +29,10 @@ copositive=true
 strictly_copositive=false
 ```
 
-Omitting `--model` selects `improved_nbc_x6`, the incumbent recorded in `python/pycoposit/incumbent_model.txt`. Omitting `--mode`
-selects `both` for a model with one-pass combined classification. A model without that capability requires an explicit `strict` or
-`non-strict` mode and fails before reading the matrix if it is omitted. A selected predicate stops once it is known; `both` continues
-until both predicates are known.
+In a complete research build, omitting `--model` selects the current production solver without exposing its identity as part of the
+interface. Omitting `--mode` selects `both` for a model with one-pass combined classification. A model without that capability
+requires an explicit `strict` or `non-strict` mode and fails before reading the matrix if it is omitted. A selected predicate stops
+once it is known; `both` continues until both predicates are known.
 
 ## Preprocessing Controls
 
@@ -69,8 +70,8 @@ COPOMATRIX descendants are discarded, so their unchanged parent component is ret
 
 ## Model Capabilities
 
-`coposit --help` lists every currently built model. A full research build lists every baseline and experiment; an incumbent-only
-build lists only the incumbent. Every Dickinson-, Hadeler-, and FracESSA-based model plus
+`coposit --help` lists models only in a complete research build. That build lists every baseline and experiment. Production builds
+do not expose model selection. Every Dickinson-, Hadeler-, and FracESSA-based model plus
 Danninger 1990 implements `--mode both` as one combined traversal and defaults to it when `--mode` is omitted. Other models require
 an explicit implemented predicate mode. The parameterized wide-certificate models require an integer percentage from 0 through 100:
 
@@ -83,8 +84,8 @@ fallback or a second hidden run.
 
 ## Process Boundary
 
-`coposit` dispatches to an adjacent internal one-model companion so
-the selected algorithm remains independently linked; no executable links several solver implementations or uses a runtime solver
-registry. The internal companions are implementation details and are not the documented interface.
+`coposit` dispatches to an internal engine in a production build and to an isolated one-model companion in a complete research
+build. This keeps algorithms independently linked; no executable links several solver implementations or uses a runtime solver
+registry. The engine and research companions are implementation details, not user interfaces.
 When no timeout is requested, the launcher directly replaces itself with that companion. A timed call alone keeps the launcher as a
 small supervisor and starts one sleeping watchdog; therefore untimed analysis retains the previous execution cost.

@@ -7,7 +7,7 @@ dataclasses and every result is an ordinary dictionary.
 Public and research interfaces
 ******************************
 
-Use :func:`pycoposit.check` in an application. It selects the current incumbent and the complete preprocessing pipeline. The other
+Use :func:`pycoposit.check` in an application. It selects the production solver and the complete preprocessing pipeline. The other
 execution functions require an explicit model name and are intended for controlled research comparisons.
 
 .. autofunction:: pycoposit.check
@@ -24,7 +24,7 @@ Every execution result contains these fields:
    * - Field
      - Meaning
    * - ``algorithm``
-     - Model identifier used for the run.
+     - ``coposit`` for :func:`pycoposit.check`; the selected model identifier for an explicit research run.
    * - ``mode``
      - Requested classification: ``copositive``, ``strictly_copositive``, or ``both``.
    * - ``preprocessing``

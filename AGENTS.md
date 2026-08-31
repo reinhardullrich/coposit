@@ -71,11 +71,13 @@
    reference-run interface omits the mode. Do not implement that classification as two hidden predicate runs. Other models require
    an explicit mode unless they independently implement combined classification. `adaptive_sponsel_copomatrix` supports both
    individually selected predicates but not combined classification. The public C++ `coposit::check`, Python `check`, and CLI call
-   without `--model` use the one incumbent named by `python/pycoposit/incumbent_model.txt`. Explicit `--model MODEL` selection is the
-   researcher interface and retains the complete-preprocessing on/off control; its full build inventory includes every literature
-   baseline and experiment. Python invokes models through `coposit`; it does not import or expose a second model-specific native path.
-   Every internal companion links exactly one model and the launcher links none. Do not add public model-named executables, C++ runtime
-   factories, registries, inheritance, or executables that link several model implementations together.
+   without `--model` use the one incumbent named privately by `python/pycoposit/incumbent_model.txt`. Production builds expose only
+   `coposit`, reject `--model`, and package the incumbent under the generic private name `coposit-engine`; neither public help nor
+   public Python results expose the incumbent identifier. Explicit `--model MODEL` selection belongs only to the complete research
+   build and retains the complete-preprocessing on/off control; that build includes every literature baseline and experiment. Python
+   invokes models through `coposit`; it does not import or expose a second model-specific native path. Every internal companion links
+   exactly one model and the launcher links none. Do not add public model-named executables, C++ runtime factories, registries,
+   inheritance, or executables that link several model implementations together.
 6. Name a faithful historical or external baseline `<first-author>_<year>`, using one surname in the identifier, for example
    `dutour_2018`. Give every such model a local `ALGORITHM.md` that identifies the exact paper or source revision.
 7. A baseline must preserve the source model's mathematical tests, split choice and construction, traversal, pruning, and termination

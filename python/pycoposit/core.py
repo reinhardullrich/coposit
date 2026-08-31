@@ -23,6 +23,7 @@ from .types import (
     _resolve_mode,
     _resolve_model_parameter,
     _validate_algorithm,
+    _validate_mode,
     _validate_preprocessing,
 )
 
@@ -293,8 +294,8 @@ def _execute_coposit(
     return parsed
 
 
-def compute_matrix(
-    algorithm: Algorithm,
+def _compute_matrix(
+    algorithm: Algorithm | None,
     matrix: Matrix,
     mode: CopositivityMode | None = None,
     preprocessing: Preprocessing = "both",
@@ -306,25 +307,31 @@ def compute_matrix(
 ) -> dict:
     """Run one matrix through ``coposit``."""
 
-    _validate_algorithm(algorithm)
-    mode = _resolve_mode(algorithm, mode)
-    model_parameter = _resolve_model_parameter(algorithm, model_parameter)
+    if algorithm is None:
+        mode = "both" if mode is None else mode
+        _validate_mode(mode)
+        if model_parameter is not None:
+            raise ValueError("model_parameter requires an explicitly selected research model")
+    else:
+        _validate_algorithm(algorithm)
+        mode = _resolve_mode(algorithm, mode)
+        model_parameter = _resolve_model_parameter(algorithm, model_parameter)
     _validate_preprocessing(preprocessing)
     if type(diagnostics) is not bool:
         raise TypeError("diagnostics must be a bool")
     if type(collect_certificate_joint_distribution) is not bool:
         raise TypeError("collect_certificate_joint_distribution must be a bool")
 
-    command = [
-        str(coposit_path()),
-        "--model",
-        algorithm,
+    command = [str(coposit_path())]
+    if algorithm is not None:
+        command.extend(("--model", algorithm))
+    command.extend([
         "--mode",
         {"copositive": "non-strict", "strictly_copositive": "strict", "both": "both"}[mode],
         "--preprocessing",
         "on" if preprocessing == "both" else "off",
         "--machine",
-    ]
+    ])
     collect = collect_certificate_joint_distribution or diagnostics or _stream_diagnostics
     if collect:
         command.append("--collect-diagnostics")
@@ -341,10 +348,29 @@ def compute_matrix(
             command, standard_input, mirror_diagnostics=diagnostics, stream_diagnostics=_stream_diagnostics
         )
     return {
-        "algorithm": algorithm,
+        "algorithm": "coposit" if algorithm is None else algorithm,
         "mode": mode,
         "preprocessing": preprocessing,
         "model_parameter": model_parameter,
         "matrix_id": matrix.matrix_id,
         **native_result,
     }
+
+
+def compute_matrix(
+    algorithm: Algorithm,
+    matrix: Matrix,
+    mode: CopositivityMode | None = None,
+    preprocessing: Preprocessing = "both",
+    diagnostics: bool = False,
+    collect_certificate_joint_distribution: bool = False,
+    model_parameter: str | None = None,
+    *,
+    _stream_diagnostics: bool = False,
+) -> dict:
+    """Run one matrix through an explicitly selected research model."""
+
+    return _compute_matrix(
+        algorithm, matrix, mode, preprocessing, diagnostics, collect_certificate_joint_distribution, model_parameter,
+        _stream_diagnostics=_stream_diagnostics,
+    )

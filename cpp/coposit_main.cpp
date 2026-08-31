@@ -1,6 +1,8 @@
 #include "companion_launcher.hpp"
 
+#ifdef COPOSIT_BUILD_EXPERIMENTS
 #include <coposit/incumbent.hpp>
+#endif
 
 #include <algorithm>
 #include <iostream>
@@ -12,8 +14,8 @@
 
 namespace {
 
-constexpr const char *models[] = {
 #ifdef COPOSIT_BUILD_EXPERIMENTS
+constexpr const char *models[] = {
     "dutour_2018",
     "danninger_1990",
     "copomatrix_2011",
@@ -106,34 +108,42 @@ constexpr const char *models[] = {
     "zischg_hadeler",
     "zischg_dickinson",
     "zischg_fracessa",
-#else
-    coposit::incumbent_model.data(),
-#endif
 };
+#endif
 
 void print_usage(const char *program) {
-  std::cout
-      << "Usage: " << program
-      << " [--model MODEL] [--mode strict|non-strict|both] [OPTIONS] "
+  std::cout << "Usage: " << program;
+#ifdef COPOSIT_BUILD_EXPERIMENTS
+  std::cout << " [--model MODEL]";
+#endif
+  std::cout <<
+         " [--mode strict|non-strict|both] [OPTIONS] "
          "[MATRIX|FILE|-]\n"
          "Options:\n"
          "  --preprocessing on|off\n"
          "  --diagnostics\n"
+#ifdef COPOSIT_BUILD_EXPERIMENTS
          "  --model-parameter VALUE\n"
+#endif
          "  --timeout SECONDS\n"
          "  --version\n"
-         "Omitting --model selects the incumbent " << coposit::incumbent_model << ".\n"
-         "The fixed preprocessing pipeline is on by default. Combined-capable models default to mode both; other models require "
-         "--mode.\n"
-         "Models:\n";
+         "The fixed preprocessing pipeline is on by default. ";
+#ifdef COPOSIT_BUILD_EXPERIMENTS
+  std::cout << "Combined-capable models default to mode both; other models require --mode.\n"
+               "Omitting --model selects the current production solver.\nModels:\n";
   for (const char *model : models)
     std::cout << "  " << model << '\n';
+#else
+  std::cout << "The default mode is both.\n";
+#endif
 }
 
+#ifdef COPOSIT_BUILD_EXPERIMENTS
 bool known_model(const std::string &name) {
   return std::find(std::begin(models), std::end(models), name) !=
          std::end(models);
 }
+#endif
 
 std::string companion_path(const char *launcher, const std::string &model) {
   const std::string launcher_path = launcher;
@@ -188,11 +198,19 @@ int main(int argc, char *argv[]) {
     for (int index = 1; index < argc; ++index) {
       const std::string argument = argv[index];
       if (argument == "--model") {
+#ifndef COPOSIT_BUILD_EXPERIMENTS
+        throw std::invalid_argument("--model is available only in a complete research build");
+#else
         if (!model.empty())
           throw std::invalid_argument("--model may be given only once");
         if (++index == argc)
           throw std::invalid_argument("--model requires a value");
         model = argv[index];
+#endif
+      } else if (argument == "--model-parameter") {
+#ifndef COPOSIT_BUILD_EXPERIMENTS
+        throw std::invalid_argument("--model-parameter is available only in a complete research build");
+#endif
       } else if (argument == "--timeout") {
         if (timeout)
           throw std::invalid_argument("--timeout may be given only once");
@@ -201,6 +219,7 @@ int main(int argc, char *argv[]) {
         timeout = coposit::cli::parse_timeout_seconds(argv[index]);
       }
     }
+#ifdef COPOSIT_BUILD_EXPERIMENTS
     const bool explicit_model = !model.empty();
     if (!explicit_model)
       model = std::string(coposit::incumbent_model);
@@ -208,6 +227,9 @@ int main(int argc, char *argv[]) {
       throw std::invalid_argument("unknown model: " + model);
     return launch(companion_path(argv[0], model), explicit_model ? "coposit --model " + model : "coposit",
                   argc, argv, timeout);
+#else
+    return launch(companion_path(argv[0], "engine"), "coposit", argc, argv, timeout);
+#endif
   } catch (const std::exception &error) {
     std::cerr << argv[0] << ": " << error.what() << '\n';
     return 2;

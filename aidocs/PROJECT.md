@@ -9,9 +9,10 @@ symmetric matrices. Its parsers accept exact rational input and return the denom
 common positive denominator. Every maintained algorithm receives only the integer matrix. The solving core stores no rational
 matrices and makes no floating-point classification.
 
-`improved_nbc_x6` is the current incumbent and the reference model for future algorithm comparisons. Its identifier lives in
-`python/pycoposit/incumbent_model.txt`, which configures the C++, command-line, and Python public interfaces. Improved NBC-X3,
-Improved NBC-X2, and Improved NBC-B7 remain historical comparison models, not the default comparison target.
+`improved_nbc_x6` is the current incumbent and the reference model for future algorithm comparisons. Its private identifier lives in
+`python/pycoposit/incumbent_model.txt`, which configures the production implementation without exposing that identity through public
+help, filenames, or Python results. Improved NBC-X3, Improved NBC-X2, and Improved NBC-B7 remain historical comparison models, not
+the default comparison target.
 
 Every model implements the link-time contract
 `coposit::model::solve(const matrix_integer&, copositivity_mode)` from `cpp/include/coposit/model.hpp`. A completed call returns the
@@ -83,20 +84,21 @@ scale-invariant solving core.
 
 ## Public And Research Interfaces
 
-The public interfaces are `coposit::check()` in C++, `pycoposit.check()` in Python, and `coposit` without `--model`. They use the
-incumbent and default to complete preprocessing. They accept a selected CP or SCP predicate, which stops as soon as that answer is known,
-or `both`, which performs the model's combined traversal until both answers are known.
+The public interfaces are `coposit::check()` in C++, `pycoposit.check()` in Python, and the production `coposit` command. They select
+the incumbent internally and default to complete preprocessing. They accept a selected CP or SCP predicate, which stops as soon as
+that answer is known, or `both`, which performs the model's combined traversal until both answers are known. Production builds reject
+`--model`; the Python `check()` result names its algorithm simply as `coposit`.
 
 The full research build keeps explicit model selection and every maintained baseline and experiment. Setting
-`COPOSIT_BUILD_EXPERIMENTS=OFF` builds only the incumbent companion and `coposit::incumbent`; Python wheels use this release-only
-configuration.
+`COPOSIT_BUILD_EXPERIMENTS=OFF` builds only the generically named private `coposit-engine` and `coposit::coposit`; Python wheels use
+this release-only configuration. Complete research builds retain the model-named companions and explicit `--model` selection.
 
 ## Release
 
 Releases are manual GitHub Actions runs from `main`. Calendar versioning is defined in `cpp/CMakeLists.txt`; successful workflow runs
 create the tag and GitHub release, attach five portable CLI packages, and publish CPython 3.11–3.14 wheels plus the Python source
-distribution to PyPI. Failed builds create no tag or release. Each CLI package contains the public launcher and its adjacent
-incumbent companion because the launcher deliberately does not link model code.
+distribution to PyPI. Failed builds create no tag or release. Each CLI package contains the public launcher and its adjacent private
+`coposit-engine` because the launcher deliberately does not link model code.
 
 The complete release procedure is in `aidocs/RELEASING.md`.
 
@@ -116,10 +118,11 @@ cpp/build/coposit --model dickinson_2019 --mode non-strict matrix.mtx
 cpp/build/coposit --model dickinson_2019 --mode both --diagnostics --timeout 30 matrix.mtx
 ```
 
-`coposit [--model MODEL] [--mode strict|non-strict|both]` is the sole process interface. Its full build exposes every baseline and experiment,
-diagnostics reporting, and one `--preprocessing on|off` switch
+`coposit [--model MODEL] [--mode strict|non-strict|both]` is the complete research process interface. Its full build exposes every
+baseline and experiment, diagnostics reporting, and one `--preprocessing on|off` switch
 for the complete fixed pipeline. Its inventory is all eight literature baselines plus `adaptive_sponsel_copomatrix` and the
 parameterized `wide_certificate_cbdd_dickinson` experiment. Omitting `--model` selects the incumbent; this is not a heuristic alias.
+The production process interface omits and rejects `--model`.
 The launcher dispatches to internal companions that each link exactly one model. There is
 no C++ model registry, runtime factory, inheritance hierarchy, or executable containing several solvers. Python modules follow the
 same one-model rule and retain all maintained experimental variants.
@@ -453,7 +456,7 @@ explicitly exhaustive question.
 - CP, SCP, timeout, node limit, and execution failure are distinct outcomes.
 - Symmetry is enforced at the parser boundary rather than silently repaired.
 - The core remains integer-only; rational input is normalized once before it enters a model.
-- Each internal model companion links exactly one model; `coposit` and Python link none.
+- The private production engine and every research companion each link exactly one model; `coposit` and Python link none.
 - Baselines preserve their source mathematics; the first mathematical change creates a separately named copied model.
 - Model-local `ALGORITHM.md` files, not this overview, are authoritative for algorithm details.
 - Dickinson has not been memory-bound in the maintained workloads. Adaptive Sponsel–COPOMATRIX retains full dense pending siblings;

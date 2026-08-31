@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.18)
 
 project(coposit
-    VERSION 2026.8.31.1
+    VERSION 2026.9.1.1
     DESCRIPTION "Exact copositivity and strict-copositivity checker"
     LANGUAGES C CXX
 )
@@ -162,7 +162,7 @@ endif()
 add_library(coposit_incumbent STATIC coposit.cpp ../models/hadeler-based/${COPOSIT_INCUMBENT_MODEL}/solver.cpp)
 target_compile_definitions(coposit_incumbent PRIVATE COPOSIT_ENABLE_TIMEOUTS=1)
 target_link_libraries(coposit_incumbent PUBLIC coposit_core PRIVATE coposit_improved_nbc_upward_supports)
-add_library(coposit::incumbent ALIAS coposit_incumbent)
+add_library(coposit::coposit ALIAS coposit_incumbent)
 
 if(COPOSIT_BUILD_APPS)
     add_executable(coposit coposit_main.cpp)
@@ -301,7 +301,11 @@ function(add_coposit_model_interfaces model_name)
     if(COPOSIT_BUILD_APPS)
         set(model_target coposit_model_${model_name})
         add_executable(${model_target} model_main.cpp ../models/${model_directory}/solver.cpp)
-        set_target_properties(${model_target} PROPERTIES OUTPUT_NAME coposit-${model_name})
+        if(COPOSIT_BUILD_EXPERIMENTS)
+            set_target_properties(${model_target} PROPERTIES OUTPUT_NAME coposit-${model_name})
+        else()
+            set_target_properties(${model_target} PROPERTIES OUTPUT_NAME coposit-engine)
+        endif()
         if(model_name IN_LIST COPOSIT_COMBINED_CLASSIFICATION_MODELS)
             target_compile_definitions(${model_target} PRIVATE COPOSIT_HAS_COMBINED_CLASSIFICATION=1)
         endif()
@@ -479,7 +483,6 @@ if(COPOSIT_BUILD_APPS AND COPOSIT_BUILD_EXPERIMENTS)
 endif()
 if(COPOSIT_BUILD_PYTHON)
     install(TARGETS coposit ${COPOSIT_MODEL_TARGETS} RUNTIME DESTINATION pycoposit)
-    install(FILES ../python/pycoposit/incumbent_model.txt DESTINATION pycoposit)
 endif()
 
 if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
