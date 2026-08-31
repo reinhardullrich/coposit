@@ -36,13 +36,13 @@ copositivity_result check(const matrix_integer& matrix, copositivity_mode mode)
     case copositivity_mode::copositive: {
         constexpr model::copositivity_mode selected = model::copositivity_mode::copositive;
         const bool result = component_pipeline::check(
-            matrix, selected, preprocessing, [](const matrix_integer& part) { return model::solve(part, selected); });
+            matrix, selected, preprocessing, [selected](const matrix_integer& part) { return model::solve(part, selected); });
         return {result, std::nullopt};
     }
     case copositivity_mode::strictly_copositive: {
         constexpr model::copositivity_mode selected = model::copositivity_mode::strictly_copositive;
         const bool result = component_pipeline::check(
-            matrix, selected, preprocessing, [](const matrix_integer& part) { return model::solve(part, selected); });
+            matrix, selected, preprocessing, [selected](const matrix_integer& part) { return model::solve(part, selected); });
         return {std::nullopt, result};
     }
     }
