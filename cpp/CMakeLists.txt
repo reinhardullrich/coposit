@@ -64,6 +64,12 @@ find_path(FLINT_INCLUDE_DIR NAMES flint/flint.h REQUIRED)
 find_library(FLINT_LIBRARY NAMES flint REQUIRED)
 find_library(MPFR_LIBRARY NAMES mpfr REQUIRED)
 find_library(GMP_LIBRARY NAMES gmp REQUIRED)
+set(FLINT_LIBRARIES ${FLINT_LIBRARY})
+if(WIN32)
+    # vcpkg's static FLINT build uses winpthreads, whose symbols are not carried by a raw find_library result.
+    find_library(PTHREADS_LIBRARY NAMES pthreadVC3 pthreadVC2 pthread pthreads REQUIRED)
+    list(APPEND FLINT_LIBRARIES ${PTHREADS_LIBRARY})
+endif()
 
 if(COPOSIT_BUILD_EXPERIMENTS AND (COPOSIT_BUILD_APPS OR COPOSIT_BUILD_PYTHON OR (COPOSIT_BUILD_TESTS AND BUILD_TESTING)))
     FetchContent_Declare(cadical
@@ -114,7 +120,7 @@ target_include_directories(coposit_core PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/generated>
     ${FLINT_INCLUDE_DIR}
 )
-target_link_libraries(coposit_core PUBLIC ${FLINT_LIBRARY} ${MPFR_LIBRARY} ${GMP_LIBRARY})
+target_link_libraries(coposit_core PUBLIC ${FLINT_LIBRARIES} ${MPFR_LIBRARY} ${GMP_LIBRARY})
 add_library(coposit::core ALIAS coposit_core)
 
 if(COPOSIT_BUILD_EXPERIMENTS)
