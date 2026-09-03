@@ -171,6 +171,7 @@ class WrapperTests(unittest.TestCase):
             or algorithm == "improved_nbc_x6"
             or algorithm == "improved_nbc_x7"
             or algorithm == "improved_nbc_x8"
+            or algorithm == "improved_nbc_x9"
             or algorithm == "interval_supports_g3"
             or algorithm == "minimal_sat_g4"
             or algorithm == "cadical_x1"

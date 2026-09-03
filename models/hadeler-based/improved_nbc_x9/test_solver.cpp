@@ -21,37 +21,37 @@
 using namespace coposit;
 
 namespace coposit::model {
-size_t improved_nbc_x6_pair_upward_count_for_testing() noexcept;
-size_t improved_nbc_x6_support_upward_count_for_testing() noexcept;
-size_t improved_nbc_x6_downward_count_for_testing() noexcept;
-size_t improved_nbc_x6_high_float_rejection_count_for_testing() noexcept;
-size_t improved_nbc_x6_optimized_certificate_count_for_testing() noexcept;
-size_t improved_nbc_x6_targeted_lp_attempt_count_for_testing() noexcept;
-size_t improved_nbc_x6_targeted_lp_feasible_count_for_testing() noexcept;
-size_t improved_nbc_x6_targeted_lp_exact_candidate_count_for_testing() noexcept;
-size_t improved_nbc_x6_targeted_lp_accepted_count_for_testing() noexcept;
-size_t improved_nbc_x6_targeted_lp_prepare_count_for_testing() noexcept;
-bool improved_nbc_x6_prefers_ray_candidate_for_testing(
+size_t improved_nbc_x9_pair_upward_count_for_testing() noexcept;
+size_t improved_nbc_x9_support_upward_count_for_testing() noexcept;
+size_t improved_nbc_x9_downward_count_for_testing() noexcept;
+size_t improved_nbc_x9_high_float_rejection_count_for_testing() noexcept;
+size_t improved_nbc_x9_optimized_certificate_count_for_testing() noexcept;
+size_t improved_nbc_x9_targeted_lp_attempt_count_for_testing() noexcept;
+size_t improved_nbc_x9_targeted_lp_feasible_count_for_testing() noexcept;
+size_t improved_nbc_x9_targeted_lp_exact_candidate_count_for_testing() noexcept;
+size_t improved_nbc_x9_targeted_lp_accepted_count_for_testing() noexcept;
+size_t improved_nbc_x9_targeted_lp_prepare_count_for_testing() noexcept;
+bool improved_nbc_x9_prefers_ray_candidate_for_testing(
     size_t candidate_upper, size_t candidate_width, size_t candidate_gains,
     size_t candidate_losses, size_t current_upper, size_t current_width,
     size_t current_gains, size_t current_losses);
-bool improved_nbc_x6_floating_psd_candidate_for_testing(
+bool improved_nbc_x9_floating_psd_candidate_for_testing(
     const matrix_integer &matrix, const std::vector<size_t> &indices);
-bool improved_nbc_x6_check_support_for_testing(
+bool improved_nbc_x9_check_support_for_testing(
     const matrix_integer &matrix, const std::vector<size_t> &indices);
-bool improved_nbc_x6_certificate_for_testing(const matrix_integer &matrix,
+bool improved_nbc_x9_certificate_for_testing(const matrix_integer &matrix,
                                              const std::vector<size_t> &indices,
                                              support &lower, support &upper);
-bool improved_nbc_x6_certificate_and_vector_for_testing(
+bool improved_nbc_x9_certificate_and_vector_for_testing(
     const matrix_integer &matrix, const std::vector<size_t> &indices,
     support &lower, support &upper, matrix_integer &solution,
     std::vector<integer> &product);
-size_t improved_nbc_x6_uncovered_count(
+size_t improved_nbc_x9_uncovered_count(
     size_t dimension, size_t cardinality,
     const std::vector<std::vector<size_t>> &upward,
     const std::vector<std::vector<size_t>> &downward,
     const std::vector<std::vector<size_t>> &exact);
-size_t improved_nbc_x6_uncovered_count(
+size_t improved_nbc_x9_uncovered_count(
     size_t dimension, size_t cardinality,
     const std::vector<std::pair<uint64_t, uint64_t>> &intervals);
 } // namespace coposit::model
@@ -90,7 +90,7 @@ bool interval_covers(uint64_t mask, uint64_t lower, uint64_t upper) {
   return (lower & ~mask) == 0 && (mask & ~upper) == 0;
 }
 
-TEST(ImprovedNbcX6Test, ResumesOneModelCallsWithoutRepeatingSupports) {
+TEST(ImprovedNbcX9Test, ResumesOneModelCallsWithoutRepeatingSupports) {
   support_context context(5);
   improved_nbc_upward_supports supports(context);
   supports.start_cardinality(2);
@@ -107,7 +107,7 @@ TEST(ImprovedNbcX6Test, ResumesOneModelCallsWithoutRepeatingSupports) {
   EXPECT_EQ(count, 10U);
 }
 
-TEST(ImprovedNbcX6Test, LatchesCollectiveRootInconsistencyAcrossCalls) {
+TEST(ImprovedNbcX9Test, LatchesCollectiveRootInconsistencyAcrossCalls) {
   support_context context(3);
   improved_nbc_upward_supports supports(context);
   supports.add_interval(support_from_mask(context, 0b000),
@@ -124,7 +124,7 @@ TEST(ImprovedNbcX6Test, LatchesCollectiveRootInconsistencyAcrossCalls) {
   EXPECT_TRUE(supports.all_future_covered());
 }
 
-TEST(ImprovedNbcX6Test, ExhaustivelyMatchesSingleIntervalCoverage) {
+TEST(ImprovedNbcX9Test, ExhaustivelyMatchesSingleIntervalCoverage) {
   for (size_t dimension = 1; dimension <= 5; ++dimension) {
     const uint64_t end = uint64_t{1} << dimension;
     for (uint64_t lower = 0; lower < end; ++lower) {
@@ -157,7 +157,7 @@ TEST(ImprovedNbcX6Test, ExhaustivelyMatchesSingleIntervalCoverage) {
   }
 }
 
-TEST(ImprovedNbcX6Test, ExhaustivelyMatchesIntervalsAddedBetweenModelCalls) {
+TEST(ImprovedNbcX9Test, ExhaustivelyMatchesIntervalsAddedBetweenModelCalls) {
   constexpr size_t dimension = 3;
   constexpr uint64_t end = uint64_t{1} << dimension;
   for (uint64_t first_lower = 0; first_lower < end; ++first_lower) {
@@ -206,35 +206,35 @@ TEST(ImprovedNbcX6Test, ExhaustivelyMatchesIntervalsAddedBetweenModelCalls) {
   }
 }
 
-TEST(ImprovedNbcX6Test, AlternatesFromOneLowSupportToTheNextOpenHighSupport) {
-  improved_nbc_x6_diagnostics::clear();
+TEST(ImprovedNbcX9Test, AlternatesFromOneLowSupportToTheNextOpenHighSupport) {
+  improved_nbc_x9_diagnostics::clear();
   const auto classification =
       model::classify(symmetric_matrix(3, {2, 0, 0, 2, 0, 2}));
 
   EXPECT_TRUE(classification.is_copositive);
   EXPECT_TRUE(classification.is_strictly_copositive);
-  EXPECT_EQ(model::improved_nbc_x6_pair_upward_count_for_testing(), 0U);
-  EXPECT_EQ(model::improved_nbc_x6_support_upward_count_for_testing(), 0U);
-  EXPECT_EQ(model::improved_nbc_x6_downward_count_for_testing(), 1U);
+  EXPECT_EQ(model::improved_nbc_x9_pair_upward_count_for_testing(), 0U);
+  EXPECT_EQ(model::improved_nbc_x9_support_upward_count_for_testing(), 0U);
+  EXPECT_EQ(model::improved_nbc_x9_downward_count_for_testing(), 1U);
   const auto low =
-      std::find(improved_nbc_x6_diagnostics::events.begin(),
-                improved_nbc_x6_diagnostics::events.end(),
-                improved_nbc_x6_diagnostics::event{"process_low", 1});
-  ASSERT_NE(low, improved_nbc_x6_diagnostics::events.end());
+      std::find(improved_nbc_x9_diagnostics::events.begin(),
+                improved_nbc_x9_diagnostics::events.end(),
+                improved_nbc_x9_diagnostics::event{"process_low", 1});
+  ASSERT_NE(low, improved_nbc_x9_diagnostics::events.end());
   const auto high = std::find_if(
-      std::next(low), improved_nbc_x6_diagnostics::events.end(),
+      std::next(low), improved_nbc_x9_diagnostics::events.end(),
       [](const auto &event) {
         return event.name == "process_low" || event.name == "process_high";
       });
-  ASSERT_NE(high, improved_nbc_x6_diagnostics::events.end());
+  ASSERT_NE(high, improved_nbc_x9_diagnostics::events.end());
   EXPECT_EQ(high->name, "process_high");
-  EXPECT_NE(std::find(improved_nbc_x6_diagnostics::events.begin(),
-                      improved_nbc_x6_diagnostics::events.end(),
-                      improved_nbc_x6_diagnostics::event{"dickinson", 1}),
-            improved_nbc_x6_diagnostics::events.end());
+  EXPECT_NE(std::find(improved_nbc_x9_diagnostics::events.begin(),
+                      improved_nbc_x9_diagnostics::events.end(),
+                      improved_nbc_x9_diagnostics::event{"dickinson", 1}),
+            improved_nbc_x9_diagnostics::events.end());
 }
 
-TEST(ImprovedNbcX6Test, RecordsChronologicalCertificatesForTheRenderer) {
+TEST(ImprovedNbcX9Test, RecordsChronologicalCertificatesForTheRenderer) {
   std::ostringstream ignored_output;
   {
     diagnostics::reporter reporter(false, ignored_output, true, true);
@@ -246,10 +246,10 @@ TEST(ImprovedNbcX6Test, RecordsChronologicalCertificatesForTheRenderer) {
 
   const std::string history = diagnostics::detail::load_diagnostics();
   const size_t dickinson =
-      history.find("event=certificate sequence=1 model=improved_nbc_x6 n=3 "
+      history.find("event=certificate sequence=1 model=improved_nbc_x9 n=3 "
                    "frontier=low kind=dickinson source=[");
   const size_t downward =
-      history.find("event=certificate sequence=2 model=improved_nbc_x6 n=3 "
+      history.find("event=certificate sequence=2 model=improved_nbc_x9 n=3 "
                    "frontier=high kind=positive_definite source=[");
   ASSERT_NE(dickinson, std::string::npos) << history;
   ASSERT_NE(downward, std::string::npos) << history;
@@ -260,8 +260,8 @@ TEST(ImprovedNbcX6Test, RecordsChronologicalCertificatesForTheRenderer) {
             std::string::npos);
 }
 
-TEST(ImprovedNbcX6Test, UsesTheFloatingFilterBeforeExactHighFrontierWork) {
-  improved_nbc_x6_diagnostics::clear();
+TEST(ImprovedNbcX9Test, UsesTheFloatingFilterBeforeExactHighFrontierWork) {
+  improved_nbc_x9_diagnostics::clear();
   std::ostringstream ignored_output;
   {
     diagnostics::reporter reporter(false, ignored_output, true, true);
@@ -269,63 +269,63 @@ TEST(ImprovedNbcX6Test, UsesTheFloatingFilterBeforeExactHighFrontierWork) {
   }
 
   const auto high =
-      std::find(improved_nbc_x6_diagnostics::events.begin(),
-                improved_nbc_x6_diagnostics::events.end(),
-                improved_nbc_x6_diagnostics::event{"process_high", 3});
-  ASSERT_NE(high, improved_nbc_x6_diagnostics::events.end());
-  ASSERT_NE(std::next(high), improved_nbc_x6_diagnostics::events.end());
+      std::find(improved_nbc_x9_diagnostics::events.begin(),
+                improved_nbc_x9_diagnostics::events.end(),
+                improved_nbc_x9_diagnostics::event{"process_high", 3});
+  ASSERT_NE(high, improved_nbc_x9_diagnostics::events.end());
+  ASSERT_NE(std::next(high), improved_nbc_x9_diagnostics::events.end());
   EXPECT_EQ(*std::next(high),
-            (improved_nbc_x6_diagnostics::event{"high_float_reject", 3}));
-  EXPECT_GT(model::improved_nbc_x6_high_float_rejection_count_for_testing(),
+            (improved_nbc_x9_diagnostics::event{"high_float_reject", 3}));
+  EXPECT_GT(model::improved_nbc_x9_high_float_rejection_count_for_testing(),
             0U);
   EXPECT_NE(diagnostics::detail::load_diagnostics().find(
-                "model=improved_nbc_x6 n=3 frontier=high source=[1,2,3] "
+                "model=improved_nbc_x9 n=3 frontier=high source=[1,2,3] "
                 "floating_checked=yes exact_checked=no"),
             std::string::npos);
 }
 
-TEST(ImprovedNbcX6Test,
+TEST(ImprovedNbcX9Test,
      FloatingFilterOnlyProposesExactPositiveSemidefinitenessChecks) {
-  EXPECT_TRUE(model::improved_nbc_x6_floating_psd_candidate_for_testing(
+  EXPECT_TRUE(model::improved_nbc_x9_floating_psd_candidate_for_testing(
       symmetric_matrix(3, {2, 0, 0, 3, 0, 4}), {0, 1, 2}));
-  EXPECT_TRUE(model::improved_nbc_x6_floating_psd_candidate_for_testing(
+  EXPECT_TRUE(model::improved_nbc_x9_floating_psd_candidate_for_testing(
       symmetric_matrix(3, {5, -1, 2, 5, 2, 2}), {0, 1, 2}));
-  EXPECT_FALSE(model::improved_nbc_x6_floating_psd_candidate_for_testing(
+  EXPECT_FALSE(model::improved_nbc_x9_floating_psd_candidate_for_testing(
       symmetric_matrix(3, {1, 0, 0, -1, 0, 1}), {0, 1, 2}));
-  EXPECT_FALSE(model::improved_nbc_x6_floating_psd_candidate_for_testing(
+  EXPECT_FALSE(model::improved_nbc_x9_floating_psd_candidate_for_testing(
       symmetric_matrix(2, {0, 1, 0}), {0, 1}));
 }
 
-TEST(ImprovedNbcX6Test, FloatingFilterUsesTheSelectedSubmatrixScale) {
+TEST(ImprovedNbcX9Test, FloatingFilterUsesTheSelectedSubmatrixScale) {
   const matrix_integer matrix =
       symmetric_matrix(3, {1'000'000'000'000'000'000L, 0, 0, 1, 0, 1});
-  EXPECT_TRUE(model::improved_nbc_x6_floating_psd_candidate_for_testing(
+  EXPECT_TRUE(model::improved_nbc_x9_floating_psd_candidate_for_testing(
       matrix, {1, 2}));
 }
 
-TEST(ImprovedNbcX6Test,
+TEST(ImprovedNbcX9Test,
      UsesConsistentAllOnesSystemToPruneSingularPsdSupportDownward) {
-  improved_nbc_x6_diagnostics::clear();
+  improved_nbc_x9_diagnostics::clear();
   const auto classification =
       model::classify(symmetric_matrix(4, {3, -1, 1, 1, 3, 1, 1, 3, -1, 3}));
 
   EXPECT_TRUE(classification.is_copositive);
   EXPECT_TRUE(classification.is_strictly_copositive);
-  EXPECT_EQ(model::improved_nbc_x6_downward_count_for_testing(), 1U);
-  EXPECT_NE(std::find(improved_nbc_x6_diagnostics::events.begin(),
-                      improved_nbc_x6_diagnostics::events.end(),
-                      improved_nbc_x6_diagnostics::event{"downward", 4}),
-            improved_nbc_x6_diagnostics::events.end());
+  EXPECT_EQ(model::improved_nbc_x9_downward_count_for_testing(), 1U);
+  EXPECT_NE(std::find(improved_nbc_x9_diagnostics::events.begin(),
+                      improved_nbc_x9_diagnostics::events.end(),
+                      improved_nbc_x9_diagnostics::event{"downward", 4}),
+            improved_nbc_x9_diagnostics::events.end());
 }
 
-TEST(ImprovedNbcX6Test, BuildsAnExactDickinsonIntervalOnTheLowPath) {
+TEST(ImprovedNbcX9Test, BuildsAnExactDickinsonIntervalOnTheLowPath) {
   matrix_integer identity;
   identity.set_identity(3);
   support_context context(3);
   support lower = context.make();
   support upper = context.make();
 
-  EXPECT_TRUE(model::improved_nbc_x6_certificate_for_testing(identity, {0},
+  EXPECT_TRUE(model::improved_nbc_x9_certificate_for_testing(identity, {0},
                                                              lower, upper));
   EXPECT_TRUE(context.contains(lower, 0));
   EXPECT_FALSE(context.contains(lower, 1));
@@ -335,7 +335,7 @@ TEST(ImprovedNbcX6Test, BuildsAnExactDickinsonIntervalOnTheLowPath) {
   EXPECT_TRUE(context.contains(upper, 2));
 }
 
-TEST(ImprovedNbcX6Test, ExposesTheExactVectorBehindATestingCertificate) {
+TEST(ImprovedNbcX9Test, ExposesTheExactVectorBehindATestingCertificate) {
   matrix_integer identity;
   identity.set_identity(3);
   support_context context(3);
@@ -344,7 +344,7 @@ TEST(ImprovedNbcX6Test, ExposesTheExactVectorBehindATestingCertificate) {
   matrix_integer solution;
   std::vector<integer> product;
 
-  ASSERT_TRUE(model::improved_nbc_x6_certificate_and_vector_for_testing(
+  ASSERT_TRUE(model::improved_nbc_x9_certificate_and_vector_for_testing(
       identity, {0}, lower, upper, solution, product));
   ASSERT_EQ(solution.rows(), 1U);
   ASSERT_EQ(product.size(), 3U);
@@ -354,7 +354,26 @@ TEST(ImprovedNbcX6Test, ExposesTheExactVectorBehindATestingCertificate) {
   EXPECT_EQ(product[2].sign(), 0);
 }
 
-TEST(ImprovedNbcX6Test, RetainsTheExactHalfspaceRayOptimization) {
+TEST(ImprovedNbcX9Test, SelectsAnExactlyVerifiedSpectralHalfspaceInterval) {
+  const matrix_integer matrix =
+      symmetric_matrix(6, {8, 2, 6,  0, -5, -3, 9, 5, -1, -2, -2,
+                           7, 3, -1, 2, 7,  5,  7, 7, -1, 8});
+  support_context context(6);
+  support lower = context.make();
+  support upper = context.make();
+  improved_nbc_x9_diagnostics::clear();
+
+  ASSERT_TRUE(model::improved_nbc_x9_certificate_for_testing(matrix, {0, 1, 2},
+                                                             lower, upper));
+  EXPECT_NE(std::find_if(improved_nbc_x9_diagnostics::interval_events.begin(),
+                         improved_nbc_x9_diagnostics::interval_events.end(),
+                         [](const auto &event) {
+                           return event.stage == "selected_spectral_halfspace";
+                         }),
+            improved_nbc_x9_diagnostics::interval_events.end());
+}
+
+TEST(ImprovedNbcX9Test, RetainsTheExactHalfspaceRayOptimization) {
   const matrix_integer matrix =
       symmetric_matrix(4, {6, -4, 5, -5, 6, -7, 5, 10, -10, 14});
   bool improved = false;
@@ -363,24 +382,24 @@ TEST(ImprovedNbcX6Test, RetainsTheExactHalfspaceRayOptimization) {
     for (size_t index = 0; index < 4; ++index)
       if ((mask & (uint64_t{1} << index)) != 0)
         indices.push_back(index);
-    (void)model::improved_nbc_x6_check_support_for_testing(matrix, indices);
+    (void)model::improved_nbc_x9_check_support_for_testing(matrix, indices);
     improved =
-        model::improved_nbc_x6_optimized_certificate_count_for_testing() > 0;
+        model::improved_nbc_x9_optimized_certificate_count_for_testing() > 0;
   }
   EXPECT_TRUE(improved);
 }
 
-TEST(ImprovedNbcX6Test,
+TEST(ImprovedNbcX9Test,
      PrefersWidthThenUpperEndpointForEveryIntervalCandidate) {
-  EXPECT_TRUE(model::improved_nbc_x6_prefers_ray_candidate_for_testing(
+  EXPECT_TRUE(model::improved_nbc_x9_prefers_ray_candidate_for_testing(
       33, 22, 0, 99, 29, 20, 99, 0));
-  EXPECT_FALSE(model::improved_nbc_x6_prefers_ray_candidate_for_testing(
+  EXPECT_FALSE(model::improved_nbc_x9_prefers_ray_candidate_for_testing(
       35, 21, 99, 0, 29, 22, 0, 99));
-  EXPECT_TRUE(model::improved_nbc_x6_prefers_ray_candidate_for_testing(
+  EXPECT_TRUE(model::improved_nbc_x9_prefers_ray_candidate_for_testing(
       30, 20, 0, 99, 29, 20, 99, 0));
 }
 
-TEST(ImprovedNbcX6Test,
+TEST(ImprovedNbcX9Test,
      ShrinksTheLowerEndpointWithoutShrinkingTheOptimizedUpperEndpoint) {
   const matrix_integer matrix =
       symmetric_matrix(4, {1, 0, 1, 1, 1, -2, -2, 1, 0, 1});
@@ -388,7 +407,7 @@ TEST(ImprovedNbcX6Test,
   support lower = context.make();
   support upper = context.make();
 
-  ASSERT_TRUE(model::improved_nbc_x6_certificate_for_testing(matrix, {0, 1},
+  ASSERT_TRUE(model::improved_nbc_x9_certificate_for_testing(matrix, {0, 1},
                                                              lower, upper));
   EXPECT_TRUE(context.contains(lower, 0));
   EXPECT_FALSE(context.contains(lower, 1));
@@ -396,7 +415,7 @@ TEST(ImprovedNbcX6Test,
     EXPECT_TRUE(context.contains(upper, index));
 }
 
-TEST(ImprovedNbcX6Test,
+TEST(ImprovedNbcX9Test,
      AcceptsAFreeUpperEndpointGainWhileShrinkingTheLowerEndpoint) {
   const matrix_integer matrix =
       symmetric_matrix(4, {1, 0, 0, 1, 1, -1, -1, 1, 0, 1});
@@ -404,7 +423,7 @@ TEST(ImprovedNbcX6Test,
   support lower = context.make();
   support upper = context.make();
 
-  ASSERT_TRUE(model::improved_nbc_x6_certificate_for_testing(matrix, {0, 1},
+  ASSERT_TRUE(model::improved_nbc_x9_certificate_for_testing(matrix, {0, 1},
                                                              lower, upper));
   EXPECT_TRUE(context.contains(lower, 0));
   EXPECT_FALSE(context.contains(lower, 1));
@@ -412,7 +431,7 @@ TEST(ImprovedNbcX6Test,
     EXPECT_TRUE(context.contains(upper, index));
 }
 
-TEST(ImprovedNbcX6Test, AcceptsAnExactlyBetterTargetedLpCertificate) {
+TEST(ImprovedNbcX9Test, AcceptsAnExactlyBetterTargetedLpCertificate) {
   const matrix_integer matrix =
       symmetric_matrix(6, {20, -1, -4, -2, 15, 0,  21, -5, 3,  7, -2,
                            20, 0,  -7, 5,  23, -8, -1, 24, -7, 24});
@@ -420,19 +439,19 @@ TEST(ImprovedNbcX6Test, AcceptsAnExactlyBetterTargetedLpCertificate) {
   support lower = context.make();
   support upper = context.make();
 
-  ASSERT_TRUE(model::improved_nbc_x6_certificate_for_testing(matrix, {0, 2, 3},
+  ASSERT_TRUE(model::improved_nbc_x9_certificate_for_testing(matrix, {0, 2, 3},
                                                              lower, upper));
-  EXPECT_GT(model::improved_nbc_x6_targeted_lp_attempt_count_for_testing(), 0U);
-  EXPECT_GT(model::improved_nbc_x6_targeted_lp_feasible_count_for_testing(),
+  EXPECT_GT(model::improved_nbc_x9_targeted_lp_attempt_count_for_testing(), 0U);
+  EXPECT_GT(model::improved_nbc_x9_targeted_lp_feasible_count_for_testing(),
             0U);
   EXPECT_GT(
-      model::improved_nbc_x6_targeted_lp_exact_candidate_count_for_testing(),
+      model::improved_nbc_x9_targeted_lp_exact_candidate_count_for_testing(),
       0U);
-  EXPECT_EQ(model::improved_nbc_x6_targeted_lp_accepted_count_for_testing(),
+  EXPECT_EQ(model::improved_nbc_x9_targeted_lp_accepted_count_for_testing(),
             1U);
 }
 
-TEST(ImprovedNbcX6Test, RepeatsExactLpEnlargementBeforeShrinking) {
+TEST(ImprovedNbcX9Test, RepeatsExactLpEnlargementBeforeShrinking) {
   matrix_integer matrix(9, 9);
   for (size_t row = 0; row < 9; ++row)
     for (size_t column = 0; column < 9; ++column)
@@ -453,60 +472,59 @@ TEST(ImprovedNbcX6Test, RepeatsExactLpEnlargementBeforeShrinking) {
   support lower = context.make();
   support upper = context.make();
 
-  ASSERT_TRUE(model::improved_nbc_x6_certificate_for_testing(matrix, {0, 1, 2},
+  ASSERT_TRUE(model::improved_nbc_x9_certificate_for_testing(matrix, {0, 1, 2},
                                                              lower, upper));
   EXPECT_GT(
-      model::improved_nbc_x6_targeted_lp_exact_candidate_count_for_testing(),
+      model::improved_nbc_x9_targeted_lp_exact_candidate_count_for_testing(),
       1U);
-  EXPECT_EQ(model::improved_nbc_x6_targeted_lp_prepare_count_for_testing(),
-            1U);
+  EXPECT_EQ(model::improved_nbc_x9_targeted_lp_prepare_count_for_testing(), 1U);
 }
 
-TEST(ImprovedNbcX6Test, StoresDickinsonIntervalsInTheBufferedNbcState) {
+TEST(ImprovedNbcX9Test, StoresDickinsonIntervalsInTheBufferedNbcState) {
   const std::vector<std::pair<uint64_t, uint64_t>> intervals{{0b001, 0b011},
                                                              {0b100, 0b110}};
-  EXPECT_EQ(model::improved_nbc_x6_uncovered_count(3, 1, intervals), 1U);
-  EXPECT_EQ(model::improved_nbc_x6_uncovered_count(3, 2, intervals), 1U);
+  EXPECT_EQ(model::improved_nbc_x9_uncovered_count(3, 1, intervals), 1U);
+  EXPECT_EQ(model::improved_nbc_x9_uncovered_count(3, 2, intervals), 1U);
 
   const std::vector<std::pair<uint64_t, uint64_t>> padded_network_interval{
       {0b00001, 0b01111}};
   EXPECT_EQ(
-      model::improved_nbc_x6_uncovered_count(5, 2, padded_network_interval),
+      model::improved_nbc_x9_uncovered_count(5, 2, padded_network_interval),
       7U);
 
   const std::vector<std::pair<uint64_t, uint64_t>> singular_pair_interval{
       {0b00011, 0b01111}};
   EXPECT_EQ(
-      model::improved_nbc_x6_uncovered_count(5, 2, singular_pair_interval), 9U);
+      model::improved_nbc_x9_uncovered_count(5, 2, singular_pair_interval), 9U);
 }
 
-TEST(ImprovedNbcX6Test, EncodesUpwardDownwardAndExactSupportBlocks) {
+TEST(ImprovedNbcX9Test, EncodesUpwardDownwardAndExactSupportBlocks) {
   const std::vector<std::vector<size_t>> none;
   const std::vector<std::vector<size_t>> support_01{{0, 1}};
 
   EXPECT_EQ(
-      model::improved_nbc_x6_uncovered_count(3, 1, support_01, none, none), 3U);
+      model::improved_nbc_x9_uncovered_count(3, 1, support_01, none, none), 3U);
   EXPECT_EQ(
-      model::improved_nbc_x6_uncovered_count(3, 2, support_01, none, none), 2U);
+      model::improved_nbc_x9_uncovered_count(3, 2, support_01, none, none), 2U);
   EXPECT_EQ(
-      model::improved_nbc_x6_uncovered_count(3, 3, support_01, none, none), 0U);
+      model::improved_nbc_x9_uncovered_count(3, 3, support_01, none, none), 0U);
 
   EXPECT_EQ(
-      model::improved_nbc_x6_uncovered_count(3, 1, none, support_01, none), 1U);
+      model::improved_nbc_x9_uncovered_count(3, 1, none, support_01, none), 1U);
   EXPECT_EQ(
-      model::improved_nbc_x6_uncovered_count(3, 2, none, support_01, none), 2U);
+      model::improved_nbc_x9_uncovered_count(3, 2, none, support_01, none), 2U);
   EXPECT_EQ(
-      model::improved_nbc_x6_uncovered_count(3, 3, none, support_01, none), 1U);
+      model::improved_nbc_x9_uncovered_count(3, 3, none, support_01, none), 1U);
 
   EXPECT_EQ(
-      model::improved_nbc_x6_uncovered_count(3, 1, none, none, support_01), 3U);
+      model::improved_nbc_x9_uncovered_count(3, 1, none, none, support_01), 3U);
   EXPECT_EQ(
-      model::improved_nbc_x6_uncovered_count(3, 2, none, none, support_01), 2U);
+      model::improved_nbc_x9_uncovered_count(3, 2, none, none, support_01), 2U);
   EXPECT_EQ(
-      model::improved_nbc_x6_uncovered_count(3, 3, none, none, support_01), 1U);
+      model::improved_nbc_x9_uncovered_count(3, 3, none, none, support_01), 1U);
 }
 
-TEST(ImprovedNbcX6Test, PreservesExactCombinedClassifications) {
+TEST(ImprovedNbcX9Test, PreservesExactCombinedClassifications) {
   const auto strict = model::classify(symmetric_matrix(2, {2, -1, 2}));
   EXPECT_TRUE(strict.is_copositive);
   EXPECT_TRUE(strict.is_strictly_copositive);
@@ -520,14 +538,14 @@ TEST(ImprovedNbcX6Test, PreservesExactCombinedClassifications) {
   EXPECT_FALSE(negative.is_strictly_copositive);
 }
 
-TEST(ImprovedNbcX6Test, DoesNotRepeatSupportsAcrossCompactedCardinalityLayers) {
+TEST(ImprovedNbcX9Test, DoesNotRepeatSupportsAcrossCompactedCardinalityLayers) {
   const auto classification = model::classify(
       symmetric_matrix(5, {1, 2, 0, -2, 4, 4, 3, 0, -1, 1, 3, 2, 5, -3, 5}));
   EXPECT_TRUE(classification.is_copositive);
   EXPECT_TRUE(classification.is_strictly_copositive);
 }
 
-TEST(ImprovedNbcX6Test, ExhaustivelyClassifiesSmallTwoByTwoIntegerMatrices) {
+TEST(ImprovedNbcX9Test, ExhaustivelyClassifiesSmallTwoByTwoIntegerMatrices) {
   for (slong diagonal_0 = -2; diagonal_0 <= 2; ++diagonal_0) {
     for (slong off_diagonal = -2; off_diagonal <= 2; ++off_diagonal) {
       for (slong diagonal_1 = -2; diagonal_1 <= 2; ++diagonal_1) {
@@ -551,7 +569,7 @@ TEST(ImprovedNbcX6Test, ExhaustivelyClassifiesSmallTwoByTwoIntegerMatrices) {
   }
 }
 
-TEST(ImprovedNbcX6Test, MatchesTheIndependentExactThreeByThreeCriterion) {
+TEST(ImprovedNbcX9Test, MatchesTheIndependentExactThreeByThreeCriterion) {
   for (slong a00 = -1; a00 <= 1; ++a00) {
     for (slong a01 = -1; a01 <= 1; ++a01) {
       for (slong a02 = -1; a02 <= 1; ++a02) {
@@ -577,11 +595,11 @@ TEST(ImprovedNbcX6Test, MatchesTheIndependentExactThreeByThreeCriterion) {
   }
 }
 
-TEST(ImprovedNbcX6Test, AppliesPairCurvaturePrepass) {
+TEST(ImprovedNbcX9Test, AppliesPairCurvaturePrepass) {
   const auto pair_excluded = model::classify(symmetric_matrix(2, {1, 2, 1}));
   EXPECT_TRUE(pair_excluded.is_copositive);
   EXPECT_TRUE(pair_excluded.is_strictly_copositive);
-  EXPECT_EQ(model::improved_nbc_x6_pair_upward_count_for_testing(), 1U);
+  EXPECT_EQ(model::improved_nbc_x9_pair_upward_count_for_testing(), 1U);
 }
 
 } // namespace

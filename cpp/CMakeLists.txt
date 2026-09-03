@@ -124,6 +124,13 @@ target_link_libraries(coposit_core PUBLIC ${FLINT_LIBRARIES} ${MPFR_LIBRARY} ${G
 add_library(coposit::core ALIAS coposit_core)
 
 if(COPOSIT_BUILD_EXPERIMENTS)
+    find_library(LAPACKE_LIBRARY NAMES lapacke flexiblas openblas)
+    if(NOT LAPACKE_LIBRARY)
+        find_file(LAPACKE_LIBRARY NAMES libflexiblas.so.3 PATHS /lib64 /usr/lib64)
+    endif()
+    if(NOT LAPACKE_LIBRARY)
+        message(FATAL_ERROR "improved_nbc_x9 requires a LAPACKE-compatible library")
+    endif()
     add_library(coposit_fractional_milp STATIC fractional_milp.cpp)
     target_link_libraries(coposit_fractional_milp PUBLIC coposit_core)
     add_library(coposit::fractional_milp ALIAS coposit_fractional_milp)
@@ -181,7 +188,7 @@ set(COPOSIT_COMBINED_CLASSIFICATION_MODELS
     multithreaded_cbdd_dickinson ceiling_pruned_dickinson kernel_cone_dickinson affine_companion_dickinson
     layered_singular_lift_dickinson
     breadth_first_singular_lift_dickinson
-    czdd_dickinson sat_dickinson sat_halfspace_dickinson sat_halfspace_rays_dickinson sat_b1 sat_b2 sat_b3 clasp_b3 bdd_b3 sat_b4 sat_b5 nbc_b6 nbc_b7 improved_nbc_b7 improved_nbc_x2 improved_nbc_x3 improved_nbc_x4 improved_nbc_x5 improved_nbc_x6 improved_nbc_x7 improved_nbc_x8 interval_supports_g3 minimal_sat_g4 cadical_x1 dual_frontier_nbc dual_frontier_nbc_two dual_frontier_nbc_three dual_frontier_nbc_four improved_nbc_b8 improved_nbc_b9 improved_nbc_g2 sat_c1 sat_c2 sat_c3 sat_c4 f1 f2 g1 milp_1 sat_a1 sat_a2 sat_a3 sat_a4 sat_a5
+    czdd_dickinson sat_dickinson sat_halfspace_dickinson sat_halfspace_rays_dickinson sat_b1 sat_b2 sat_b3 clasp_b3 bdd_b3 sat_b4 sat_b5 nbc_b6 nbc_b7 improved_nbc_b7 improved_nbc_x2 improved_nbc_x3 improved_nbc_x4 improved_nbc_x5 improved_nbc_x6 improved_nbc_x7 improved_nbc_x8 improved_nbc_x9 interval_supports_g3 minimal_sat_g4 cadical_x1 dual_frontier_nbc dual_frontier_nbc_two dual_frontier_nbc_three dual_frontier_nbc_four improved_nbc_b8 improved_nbc_b9 improved_nbc_g2 sat_c1 sat_c2 sat_c3 sat_c4 f1 f2 g1 milp_1 sat_a1 sat_a2 sat_a3 sat_a4 sat_a5
     sat_halfspace_lp_dickinson
     sat_halfspace_milp_dickinson sat_halfspace_rays_lookahead_dickinson
     sat_halfspace_rays_wide_dickinson
@@ -237,6 +244,7 @@ set(COPOSIT_COPOSITIVE_MODELS
     improved_nbc_x6
     improved_nbc_x7
     improved_nbc_x8
+    improved_nbc_x9
     interval_supports_g3
     minimal_sat_g4
     cadical_x1
@@ -353,12 +361,16 @@ function(add_coposit_model_interfaces model_name)
                OR model_name STREQUAL "improved_nbc_x6"
                OR model_name STREQUAL "improved_nbc_x7"
                OR model_name STREQUAL "improved_nbc_x8"
+               OR model_name STREQUAL "improved_nbc_x9"
                OR model_name STREQUAL "dual_frontier_nbc"
                OR model_name STREQUAL "dual_frontier_nbc_two" OR model_name STREQUAL "dual_frontier_nbc_three"
                OR model_name STREQUAL "dual_frontier_nbc_four"
                OR model_name STREQUAL "improved_nbc_b8"
                OR model_name STREQUAL "improved_nbc_b9" OR model_name STREQUAL "improved_nbc_g2")
             target_link_libraries(${model_target} PRIVATE coposit_improved_nbc_upward_supports)
+            if(model_name STREQUAL "improved_nbc_x9")
+                target_link_libraries(${model_target} PRIVATE ${LAPACKE_LIBRARY})
+            endif()
         elseif(model_name STREQUAL "interval_supports_g3")
             target_link_libraries(${model_target} PRIVATE coposit_interval_supports)
         elseif(model_name STREQUAL "minimal_sat_g4")
@@ -419,6 +431,7 @@ add_coposit_model_interfaces(improved_nbc_x5)
 add_coposit_model_interfaces(improved_nbc_x6)
 add_coposit_model_interfaces(improved_nbc_x7)
 add_coposit_model_interfaces(improved_nbc_x8)
+add_coposit_model_interfaces(improved_nbc_x9)
 add_coposit_model_interfaces(interval_supports_g3)
 add_coposit_model_interfaces(minimal_sat_g4)
 add_coposit_model_interfaces(cadical_x1)
@@ -808,6 +821,13 @@ if(COPOSIT_BUILD_TESTS AND BUILD_TESTING)
     target_compile_definitions(test_improved_nbc_x7 PRIVATE COPOSIT_IMPROVED_NBC_X7_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
     target_link_libraries(test_improved_nbc_x7 PRIVATE coposit_core coposit_improved_nbc_upward_supports GTest::gtest_main)
     add_test(NAME ImprovedNbcX7ModelTests COMMAND test_improved_nbc_x7)
+
+    add_executable(test_improved_nbc_x9
+        ../models/hadeler-based/improved_nbc_x9/test_solver.cpp
+        ../models/hadeler-based/improved_nbc_x9/solver.cpp)
+    target_compile_definitions(test_improved_nbc_x9 PRIVATE COPOSIT_IMPROVED_NBC_X9_TESTING=1 COPOSIT_ENABLE_TIMEOUTS=1)
+    target_link_libraries(test_improved_nbc_x9 PRIVATE coposit_core coposit_improved_nbc_upward_supports ${LAPACKE_LIBRARY} GTest::gtest_main)
+    add_test(NAME ImprovedNbcX9ModelTests COMMAND test_improved_nbc_x9)
 
     add_executable(test_improved_nbc_x8
         ../models/hadeler-based/improved_nbc_x8/test_solver.cpp

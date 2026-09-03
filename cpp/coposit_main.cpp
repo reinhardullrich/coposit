@@ -61,6 +61,7 @@ constexpr const char *models[] = {
     "improved_nbc_x6",
     "improved_nbc_x7",
     "improved_nbc_x8",
+    "improved_nbc_x9",
     "interval_supports_g3",
     "minimal_sat_g4",
     "cadical_x1",

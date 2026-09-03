@@ -17,6 +17,7 @@
 #include <cstdint>
 #include <limits>
 #include <optional>
+#include <random>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -27,6 +28,324 @@
 namespace coposit::model {
 
 namespace {
+
+extern "C" int LAPACKE_dsyev(int matrix_layout, char jobz, char uplo, int n,
+                             double *a, int lda, double *w);
+
+constexpr int lapack_col_major = 102;
+constexpr std::uint64_t spectral_rhs_scale = 1'000'000'000ULL;
+
+struct floating_rhs_candidate {
+  size_t upper_size = 0;
+  std::vector<double> rhs;
+};
+
+class spectral_guide {
+public:
+  explicit spectral_guide(size_t dimension) : dimension_(dimension) {}
+
+  void prepare(const matrix_integer &matrix) {
+    if (prepared_)
+      return;
+    prepared_ = true;
+    std::vector<double> column_major(dimension_ * dimension_);
+    matrix_.resize(dimension_ * dimension_);
+    slong maximum_exponent = std::numeric_limits<slong>::min();
+    for (size_t row = 0; row < dimension_; ++row) {
+      for (size_t column = 0; column <= row; ++column) {
+        if (matrix(row, column).is_zero())
+          continue;
+        slong exponent = 0;
+        static_cast<void>(matrix(row, column).to_dbl_2exp(exponent));
+        maximum_exponent = std::max(maximum_exponent, exponent);
+      }
+    }
+    if (maximum_exponent == std::numeric_limits<slong>::min())
+      return;
+
+    for (size_t row = 0; row < dimension_; ++row) {
+      timeout_checkpoint();
+      for (size_t column = 0; column < dimension_; ++column) {
+        const auto entry = matrix(row, column);
+        double value = 0.0;
+        if (!entry.is_zero()) {
+          slong exponent = 0;
+          const double mantissa = entry.to_dbl_2exp(exponent);
+          const slong difference = exponent - maximum_exponent;
+          value = difference < -1074
+                      ? 0.0
+                      : std::scalbn(mantissa, static_cast<int>(difference));
+        }
+        matrix_[row * dimension_ + column] = value;
+        column_major[column * dimension_ + row] = value;
+      }
+    }
+
+    std::vector<double> eigenvalues(dimension_);
+    const int info = LAPACKE_dsyev(
+        lapack_col_major, 'V', 'U', static_cast<int>(dimension_),
+        column_major.data(), static_cast<int>(dimension_), eigenvalues.data());
+    if (info != 0)
+      throw std::runtime_error("spectral eigendecomposition failed");
+    const double scale = std::max(1.0, std::abs(eigenvalues.back()));
+    const double tolerance = 256.0 * std::numeric_limits<double>::epsilon() *
+                             scale * static_cast<double>(dimension_);
+    while (negative_count_ < dimension_ &&
+           eigenvalues[negative_count_] < -tolerance)
+      ++negative_count_;
+    vectors_.resize(dimension_ * negative_count_);
+    for (size_t row = 0; row < dimension_; ++row)
+      for (size_t column = 0; column < negative_count_; ++column)
+        vectors_[row * negative_count_ + column] =
+            column_major[column * dimension_ + row];
+  }
+
+  std::vector<floating_rhs_candidate>
+  candidates(const std::vector<size_t> &indices,
+             const matrix_integer &exact_base) const {
+    if (negative_count_ == 0)
+      return {};
+    std::vector<double> base = scaled_vector(exact_base);
+    std::vector<floating_rhs_candidate> result;
+    score_point(indices, base, result);
+    for (const auto &direction : directions(indices)) {
+      timeout_checkpoint();
+      sweep_direction(indices, base, direction, result);
+    }
+    return result;
+  }
+
+private:
+  static void normalize(std::vector<double> &values) {
+    long double square_sum = 0.0L;
+    for (const double value : values)
+      square_sum += static_cast<long double>(value) * value;
+    const double norm = std::sqrt(static_cast<double>(square_sum));
+    if (!(norm > 1e-14) || !std::isfinite(norm)) {
+      values.clear();
+      return;
+    }
+    for (double &value : values)
+      value /= norm;
+  }
+
+  static std::vector<double> scaled_vector(const matrix_integer &values) {
+    slong maximum_exponent = std::numeric_limits<slong>::min();
+    std::vector<double> result(values.rows());
+    std::vector<slong> exponents(values.rows());
+    for (size_t row = 0; row < values.rows(); ++row) {
+      if (values(row, 0).is_zero()) {
+        exponents[row] = std::numeric_limits<slong>::min();
+        continue;
+      }
+      result[row] = values(row, 0).to_dbl_2exp(exponents[row]);
+      maximum_exponent = std::max(maximum_exponent, exponents[row]);
+    }
+    for (size_t row = 0; row < values.rows(); ++row) {
+      if (exponents[row] == std::numeric_limits<slong>::min())
+        continue;
+      const slong difference = exponents[row] - maximum_exponent;
+      result[row] =
+          difference < -1074
+              ? 0.0
+              : std::scalbn(result[row], static_cast<int>(difference));
+    }
+    return result;
+  }
+
+  std::vector<std::vector<double>>
+  directions(const std::vector<size_t> &indices) const {
+    std::vector<std::vector<double>> columns;
+    for (size_t mode = 0; mode < negative_count_; ++mode) {
+      std::vector<double> direction(indices.size());
+      for (size_t local = 0; local < indices.size(); ++local)
+        direction[local] = vectors_[indices[local] * negative_count_ + mode];
+      normalize(direction);
+      if (!direction.empty())
+        columns.push_back(std::move(direction));
+    }
+
+    std::vector<std::vector<double>> result = columns;
+    for (size_t left = 0; left < columns.size(); ++left) {
+      for (size_t right = left + 1; right < columns.size(); ++right) {
+        for (const double sign : {-1.0, 1.0}) {
+          std::vector<double> direction(indices.size());
+          for (size_t local = 0; local < indices.size(); ++local)
+            direction[local] =
+                columns[left][local] + sign * columns[right][local];
+          normalize(direction);
+          if (!direction.empty())
+            result.push_back(std::move(direction));
+        }
+      }
+    }
+
+    if (columns.size() > 1) {
+      std::uint64_t seed = 0x9e3779b97f4a7c15ULL;
+      for (const size_t index : indices)
+        seed ^= index + 0x9e3779b97f4a7c15ULL + (seed << 6U) + (seed >> 2U);
+      std::mt19937_64 generator(seed);
+      std::normal_distribution<double> normal;
+      for (size_t sample = 0; sample < 32; ++sample) {
+        std::vector<double> direction(indices.size(), 0.0);
+        for (const auto &column : columns) {
+          const double coefficient = normal(generator);
+          for (size_t local = 0; local < indices.size(); ++local)
+            direction[local] += coefficient * column[local];
+        }
+        normalize(direction);
+        if (!direction.empty())
+          result.push_back(std::move(direction));
+      }
+    }
+    return result;
+  }
+
+  void multiply(const std::vector<size_t> &indices,
+                const std::vector<double> &point,
+                std::vector<double> &product) const {
+    product.assign(dimension_, 0.0);
+    for (size_t row = 0; row < dimension_; ++row)
+      for (size_t local = 0; local < indices.size(); ++local)
+        product[row] +=
+            matrix_[row * dimension_ + indices[local]] * point[local];
+  }
+
+  static void retain(std::vector<floating_rhs_candidate> &candidates,
+                     floating_rhs_candidate candidate) {
+    constexpr size_t limit = 12;
+    if (std::any_of(
+            candidates.begin(), candidates.end(), [&](const auto &current) {
+              double distance = 0.0;
+              for (size_t index = 0; index < current.rhs.size(); ++index)
+                distance = std::max(distance, std::abs(current.rhs[index] -
+                                                       candidate.rhs[index]));
+              return distance < 1e-9;
+            }))
+      return;
+    candidates.push_back(std::move(candidate));
+    std::stable_sort(candidates.begin(), candidates.end(),
+                     [](const auto &left, const auto &right) {
+                       return left.upper_size > right.upper_size;
+                     });
+    if (candidates.size() > limit)
+      candidates.resize(limit);
+  }
+
+  void score_point(const std::vector<size_t> &indices,
+                   const std::vector<double> &point,
+                   std::vector<floating_rhs_candidate> &candidates) const {
+    std::vector<double> product;
+    multiply(indices, point, product);
+    double inside_scale = 0.0;
+    for (const size_t index : indices)
+      inside_scale = std::max(inside_scale, std::abs(product[index]));
+    const double tolerance = 1e-10 * std::max(1.0, inside_scale);
+    for (const size_t index : indices)
+      if (!(product[index] > tolerance))
+        return;
+
+    floating_rhs_candidate candidate;
+    for (const double value : product)
+      candidate.upper_size += value >= -1e-11;
+    double maximum = 0.0;
+    for (const size_t index : indices)
+      maximum = std::max(maximum, product[index]);
+    if (!(maximum > 0.0) || !std::isfinite(maximum))
+      return;
+    candidate.rhs.reserve(indices.size());
+    for (const size_t index : indices)
+      candidate.rhs.push_back(product[index] / maximum);
+    retain(candidates, std::move(candidate));
+  }
+
+  void sweep_direction(const std::vector<size_t> &indices,
+                       const std::vector<double> &base,
+                       const std::vector<double> &direction,
+                       std::vector<floating_rhs_candidate> &candidates) const {
+    std::vector<double> base_product;
+    std::vector<double> direction_product;
+    multiply(indices, base, base_product);
+    multiply(indices, direction, direction_product);
+
+    double lower = -std::numeric_limits<double>::infinity();
+    double upper = std::numeric_limits<double>::infinity();
+    double scale = 0.0;
+    for (const double value : base_product)
+      scale = std::max(scale, std::abs(value));
+    const double floor = 1e-11 * std::max(1.0, scale);
+    for (const size_t index : indices) {
+      const double slope = direction_product[index];
+      if (std::abs(slope) < 1e-14) {
+        if (!(base_product[index] > floor))
+          return;
+        continue;
+      }
+      const double boundary = (floor - base_product[index]) / slope;
+      if (slope > 0.0)
+        lower = std::max(lower, boundary);
+      else
+        upper = std::min(upper, boundary);
+    }
+    if (!(lower < upper))
+      return;
+
+    std::vector<double> breakpoints;
+    for (size_t row = 0; row < dimension_; ++row) {
+      const double slope = direction_product[row];
+      if (std::abs(slope) < 1e-14)
+        continue;
+      const double root = -base_product[row] / slope;
+      if (root > lower && root < upper && std::isfinite(root))
+        breakpoints.push_back(root);
+    }
+    std::sort(breakpoints.begin(), breakpoints.end());
+    breakpoints.erase(std::unique(breakpoints.begin(), breakpoints.end(),
+                                  [](double left, double right) {
+                                    return std::abs(left - right) <=
+                                           1e-12 *
+                                               std::max({1.0, std::abs(left),
+                                                         std::abs(right)});
+                                  }),
+                      breakpoints.end());
+
+    std::vector<double> samples;
+    if (0.0 > lower && 0.0 < upper)
+      samples.push_back(0.0);
+    if (breakpoints.empty()) {
+      samples.push_back(std::isfinite(lower) && std::isfinite(upper)
+                            ? (lower + upper) / 2.0
+                            : 0.0);
+    } else {
+      samples.push_back(std::isfinite(lower)
+                            ? (lower + breakpoints.front()) / 2.0
+                            : breakpoints.front() -
+                                  std::max(1.0, std::abs(breakpoints.front())));
+      for (size_t index = 1; index < breakpoints.size(); ++index)
+        samples.push_back((breakpoints[index - 1] + breakpoints[index]) / 2.0);
+      samples.push_back(std::isfinite(upper)
+                            ? (breakpoints.back() + upper) / 2.0
+                            : breakpoints.back() +
+                                  std::max(1.0, std::abs(breakpoints.back())));
+    }
+
+    std::vector<double> point(base.size());
+    for (const double parameter : samples) {
+      if (!(parameter > lower && parameter < upper) ||
+          !std::isfinite(parameter))
+        continue;
+      for (size_t local = 0; local < base.size(); ++local)
+        point[local] = base[local] + parameter * direction[local];
+      score_point(indices, point, candidates);
+    }
+  }
+
+  size_t dimension_;
+  bool prepared_ = false;
+  size_t negative_count_ = 0;
+  std::vector<double> matrix_;
+  std::vector<double> vectors_;
+};
 
 struct positive_ratio {
   integer numerator;
@@ -168,7 +487,7 @@ private:
   std::vector<double> diagonal_;
 };
 
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
 size_t last_optimized_certificate_count = 0;
 size_t last_combined_ray_sweep_count = 0;
 size_t last_combined_ray_improvement_count = 0;
@@ -276,8 +595,8 @@ class dickinson_checker {
 public:
   dickinson_checker(size_t dimension, copositivity_mode mode)
       : support_context_(dimension), factorization_(dimension),
-        floating_filter_(dimension), product_(dimension),
-        candidate_product_(dimension),
+        floating_filter_(dimension), spectral_guide_(dimension),
+        product_(dimension), candidate_product_(dimension),
         shortlist_limit_(ray_shortlist_limit(dimension, dimension)),
         mode_(mode), diagnostics_(diagnostics::metric::support, dimension) {
     indices_.reserve(dimension);
@@ -290,8 +609,8 @@ public:
   dickinson_checker(size_t dimension,
                     copositivity_classification &classification)
       : support_context_(dimension), factorization_(dimension),
-        floating_filter_(dimension), product_(dimension),
-        candidate_product_(dimension),
+        floating_filter_(dimension), spectral_guide_(dimension),
+        product_(dimension), candidate_product_(dimension),
         shortlist_limit_(ray_shortlist_limit(dimension, dimension)),
         mode_(copositivity_mode::copositive), classification_(&classification),
         diagnostics_(diagnostics::metric::support, dimension) {
@@ -303,7 +622,7 @@ public:
   }
 
   bool check(const matrix_integer &matrix) {
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
     optimized_certificate_count_ = 0;
     combined_ray_sweep_count_ = 0;
     combined_ray_improvement_count_ = 0;
@@ -317,6 +636,7 @@ public:
     targeted_lp_accepted_count_ = 0;
     targeted_lp_prepare_count_ = 0;
 #endif
+    spectral_guide_.prepare(matrix);
     supports_.emplace(support_context_);
     install_pair_curvature_exclusions(matrix);
 
@@ -335,7 +655,7 @@ public:
     return finish(true);
   }
 
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
   bool check_support_for_testing(const matrix_integer &matrix,
                                  const std::vector<size_t> &indices) {
     support lower = support_context_.make();
@@ -353,6 +673,7 @@ public:
   bool optimize_support_for_testing(const matrix_integer &matrix,
                                     const std::vector<size_t> &indices,
                                     support &lower, support &upper) {
+    spectral_guide_.prepare(matrix);
     optimized_certificate_count_ = 0;
     combined_ray_sweep_count_ = 0;
     combined_ray_improvement_count_ = 0;
@@ -384,10 +705,11 @@ public:
     return result;
   }
 
-  bool optimize_support_vector_for_testing(
-      const matrix_integer &matrix, const std::vector<size_t> &indices,
-      support &lower, support &upper, matrix_integer &solution,
-      std::vector<integer> &product) {
+  bool optimize_support_vector_for_testing(const matrix_integer &matrix,
+                                           const std::vector<size_t> &indices,
+                                           support &lower, support &upper,
+                                           matrix_integer &solution,
+                                           std::vector<integer> &product) {
     const bool result =
         optimize_support_for_testing(matrix, indices, lower, upper);
     if (!result || !captured_vector_available_)
@@ -443,7 +765,7 @@ private:
     event << ']';
   }
 
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
   void record_test_interval(std::string_view stage, size_t detail = 0) const {
     if (!measure_support_for_testing_)
       return;
@@ -459,9 +781,8 @@ private:
       if (product_[row].sign() >= 0)
         upper.push_back(row + 1);
     }
-    improved_nbc_x6_diagnostics::record_interval(stage, detail,
-                                                  std::move(lower),
-                                                  std::move(upper));
+    improved_nbc_x9_diagnostics::record_interval(
+        stage, detail, std::move(lower), std::move(upper));
   }
 #endif
 
@@ -469,7 +790,7 @@ private:
     if (!diagnostics_.active())
       return;
     std::ostringstream event;
-    event << "model=improved_nbc_x6 n=" << product_.size()
+    event << "model=improved_nbc_x9 n=" << product_.size()
           << " frontier=" << certificate_frontier_ << " kind=dickinson source=";
     append_indices(event, indices_);
     event << " coverage=interval lower=";
@@ -487,7 +808,7 @@ private:
     if (!diagnostics_.active())
       return;
     std::ostringstream event;
-    event << "model=improved_nbc_x6 n=" << product_.size()
+    event << "model=improved_nbc_x9 n=" << product_.size()
           << " frontier=" << frontier << " kind=" << kind << " source=";
     append_indices(event, source);
     event << " coverage=" << coverage;
@@ -509,7 +830,7 @@ private:
     if (!diagnostics_.active())
       return;
     std::ostringstream event;
-    event << "model=improved_nbc_x6 n=" << product_.size()
+    event << "model=improved_nbc_x9 n=" << product_.size()
           << " frontier=high source=";
     append_indices(event, indices_);
     event << " floating_checked=yes exact_checked="
@@ -526,7 +847,7 @@ private:
                            size_t high) {
     while (low <= high) {
       diagnostics_.stage(low);
-      COPOSIT_IMPROVED_NBC_X6_DIAGNOSTICS("stage_low", low);
+      COPOSIT_IMPROVED_NBC_X9_DIAGNOSTICS("stage_low", low);
       supports_->start_cardinality(low);
       if (supports_->take_first(indices_))
         return process_selected_support(matrix,
@@ -545,7 +866,7 @@ private:
                             size_t &high) {
     while (low <= high) {
       diagnostics_.stage(high);
-      COPOSIT_IMPROVED_NBC_X6_DIAGNOSTICS("stage_high", high);
+      COPOSIT_IMPROVED_NBC_X9_DIAGNOSTICS("stage_high", high);
       supports_->start_cardinality(high, true);
       if (supports_->take_first(indices_, true))
         return process_selected_support(matrix, pruning_direction::downward,
@@ -565,7 +886,7 @@ private:
     certificate_frontier_ = from_low_frontier ? "low" : "high";
     diagnostics_.visit_support();
     diagnostics_.secondary();
-    COPOSIT_IMPROVED_NBC_X6_DIAGNOSTICS(
+    COPOSIT_IMPROVED_NBC_X9_DIAGNOSTICS(
         from_low_frontier ? "process_low" : "process_high", indices_.size());
     return process_subset(matrix, direction, from_low_frontier);
   }
@@ -587,8 +908,8 @@ private:
         supports_->add_pair_upward_closure(first, second);
         diagnostics_.certificate();
         record_pair_curvature_certificate(first, second);
-        COPOSIT_IMPROVED_NBC_X6_DIAGNOSTICS("pair_upward", 2);
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+        COPOSIT_IMPROVED_NBC_X9_DIAGNOSTICS("pair_upward", 2);
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
         ++pair_curvature_exclusion_count_;
 #endif
       }
@@ -602,9 +923,9 @@ private:
       floating_filter_.prepare(matrix);
       if (!floating_filter_.looks_positive_semidefinite(indices_)) {
         record_high_support_without_certificate(false);
-        COPOSIT_IMPROVED_NBC_X6_DIAGNOSTICS("high_float_reject",
+        COPOSIT_IMPROVED_NBC_X9_DIAGNOSTICS("high_float_reject",
                                             indices_.size());
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
         ++high_float_rejection_count_;
 #endif
         return true;
@@ -793,11 +1114,12 @@ private:
 
     calculate_nonsingular_product(matrix, solution_, 0, denominator, product_);
     current_score_ = score(solution_, 0, product_);
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
     if (measure_support_for_testing_) {
       record_test_interval("all_ones");
       last_traditional_interval_available = true;
-      last_traditional_lower_size = current_score_.upper_size - current_score_.width;
+      last_traditional_lower_size =
+          current_score_.upper_size - current_score_.width;
       last_traditional_upper_size = current_score_.upper_size;
       last_traditional_interval_ns = static_cast<std::uint64_t>(
           std::chrono::duration_cast<std::chrono::nanoseconds>(
@@ -837,7 +1159,7 @@ private:
           bool improved = false;
           if (!optimize_direction(direction, improved, true))
             return false;
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
           if (improved)
             record_test_interval("coordinate_ray", indices_[direction] + 1);
 #endif
@@ -855,10 +1177,10 @@ private:
 
     if (!targeted_lp_ready || !has_targeted_lp_problem()) {
       shrink_lower_preserving_upper(matrix);
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
       record_test_interval("final_shrink");
 #endif
-      return add_certificate();
+      return finalize_spectral_halfspace(matrix, denominator);
     }
 
     rays_solution_ = solution_;
@@ -875,14 +1197,14 @@ private:
     }
     if (!lp_improved) {
       shrink_lower_preserving_upper(matrix);
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
       record_test_interval("final_shrink");
 #endif
-      return add_certificate();
+      return finalize_spectral_halfspace(matrix, denominator);
     }
 
     shrink_lower_preserving_upper(matrix);
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
     record_test_interval("lp_shrink");
 #endif
     const coverage_score targeted_score = score(solution_, 0, product_);
@@ -893,7 +1215,7 @@ private:
     product_ = rays_product_;
     current_score_ = score(solution_, 0, product_);
     shrink_lower_preserving_upper(matrix);
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
     record_test_interval("rays_shrink");
 #endif
     const coverage_score rays_score = score(solution_, 0, product_);
@@ -903,12 +1225,145 @@ private:
       solution_ = targeted_solution_;
       product_ = targeted_product_;
       current_score_ = targeted_score;
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
       ++targeted_lp_accepted_count_;
 #endif
     }
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
     record_test_interval(selected_lp ? "selected_lp" : "selected_rays");
+#endif
+    return finalize_spectral_halfspace(matrix, denominator);
+  }
+
+  void prepare_inverse_directions(const matrix_integer &matrix,
+                                  const integer &denominator) {
+    const size_t dimension = indices_.size();
+    directions_.resize(dimension, dimension);
+    for (size_t row = 0; row < dimension; ++row) {
+      for (size_t column = 0; column < dimension; ++column) {
+        if (row == column)
+          directions_(row, column).set_one();
+        else
+          directions_(row, column).set_zero();
+      }
+    }
+    integer direction_denominator;
+    factorization_.solve_inplace(directions_, direction_denominator,
+                                 principal_);
+    assert(direction_denominator.compare(denominator) == 0);
+    direction_products_.resize(matrix.rows(), dimension);
+    for (size_t direction = 0; direction < dimension; ++direction)
+      calculate_nonsingular_product(matrix, directions_, direction,
+                                    direction_denominator, direction_products_,
+                                    direction);
+  }
+
+  bool install_spectral_rhs(const floating_rhs_candidate &candidate,
+                            bool &installed) {
+    installed = false;
+    lp_coefficients_.resize(candidate.rhs.size());
+    for (size_t column = 0; column < candidate.rhs.size(); ++column) {
+      const double value = candidate.rhs[column];
+      if (!(value > 0.0) || !std::isfinite(value))
+        return true;
+      const std::uint64_t scaled =
+          static_cast<std::uint64_t>(std::llround(value * spectral_rhs_scale));
+      if (scaled == 0)
+        return true;
+      fmpz_set_ui(lp_coefficients_[column].native_handle(),
+                  static_cast<ulong>(scaled));
+    }
+    multiply_directions(directions_, direction_products_, lp_coefficients_,
+                        solution_, product_);
+    if (all_nonpositive(solution_, 0))
+      return false;
+    current_score_ = score(solution_, 0, product_);
+    remove_common_content();
+    installed = true;
+    return true;
+  }
+
+  void install_spectral_coefficients(const std::vector<integer> &coefficients) {
+    multiply_directions(directions_, direction_products_, coefficients,
+                        solution_, product_);
+    current_score_ = score(solution_, 0, product_);
+    remove_common_content();
+  }
+
+  bool run_halfspace_cleanup() {
+    bool pass_improved = false;
+    do {
+      pass_improved = false;
+      ray_shortlist_.clear();
+      for (size_t direction = 0; direction < indices_.size(); ++direction) {
+        bool improved = false;
+        if (!optimize_direction(direction, improved, true))
+          return false;
+        pass_improved |= improved;
+        if (current_score_.width + 1 == product_.size())
+          break;
+      }
+      if (!pass_improved && current_score_.width + 1 < product_.size() &&
+          !try_combined_rays())
+        return false;
+    } while (pass_improved && current_score_.width + 1 < product_.size());
+    return true;
+  }
+
+  bool finalize_spectral_halfspace(const matrix_integer &matrix,
+                                   const integer &denominator) {
+    const coverage_score x6_score = score(solution_, 0, product_);
+    if (indices_.size() <= 1 || x6_score.width + 1 == matrix.rows())
+      return add_certificate();
+
+    const std::vector<floating_rhs_candidate> candidates =
+        spectral_guide_.candidates(indices_, solution_);
+    if (candidates.empty())
+      return add_certificate();
+
+    x6_solution_ = solution_;
+    x6_product_ = product_;
+    prepare_inverse_directions(matrix, denominator);
+
+    bool have_spectral_candidate = false;
+    coverage_score best_spectral_score;
+    for (const floating_rhs_candidate &candidate : candidates) {
+      timeout_checkpoint();
+      bool installed = false;
+      if (!install_spectral_rhs(candidate, installed))
+        return false;
+      if (!installed)
+        continue;
+      shrink_lower_preserving_upper(matrix);
+      const coverage_score candidate_score = score(solution_, 0, product_);
+      if (!have_spectral_candidate ||
+          better_score(candidate_score, best_spectral_score)) {
+        spectral_coefficients_ = lp_coefficients_;
+        best_spectral_score = candidate_score;
+        have_spectral_candidate = true;
+      }
+    }
+    if (!have_spectral_candidate) {
+      solution_ = x6_solution_;
+      product_ = x6_product_;
+      current_score_ = x6_score;
+      return add_certificate();
+    }
+
+    install_spectral_coefficients(spectral_coefficients_);
+    if (!run_halfspace_cleanup())
+      return false;
+    shrink_lower_preserving_upper(matrix);
+    const coverage_score hybrid_score = score(solution_, 0, product_);
+    if (!better_score(hybrid_score, x6_score)) {
+      solution_ = x6_solution_;
+      product_ = x6_product_;
+      current_score_ = x6_score;
+    }
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
+    record_test_interval(better_score(hybrid_score, x6_score)
+                             ? "selected_spectral_halfspace"
+                             : "selected_x6");
 #endif
     return add_certificate();
   }
@@ -989,13 +1444,13 @@ private:
 
       std::vector<double> proposal;
       const detail::tiny_simplex::status status = lp.solve(proposal);
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
       ++targeted_lp_attempt_count_;
 #endif
       if (status != detail::tiny_simplex::status::optimal ||
           proposal[margin_column] < -1e-9)
         continue;
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
       ++targeted_lp_feasible_count_;
 #endif
       double simplex_sum = 0.0;
@@ -1061,7 +1516,7 @@ private:
       }
       ++outside;
     }
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
     ++targeted_lp_prepare_count_;
 #endif
   }
@@ -1081,7 +1536,8 @@ private:
       const double value = point[column] / maximum;
       if (!(value > 0.0) || !std::isfinite(value))
         return exact_lp_candidate_result::unchanged;
-      const uint64_t scaled = static_cast<uint64_t>(std::llround(value * scale));
+      const uint64_t scaled =
+          static_cast<uint64_t>(std::llround(value * scale));
       if (scaled == 0)
         return exact_lp_candidate_result::unchanged;
       fmpz_set_ui(lp_coefficients_[column].native_handle(),
@@ -1096,8 +1552,7 @@ private:
       if (lp_product_[lp_outside_rows_[row]].sign() < 0)
         return exact_lp_candidate_result::unchanged;
     }
-    const coverage_score candidate_score =
-        score(lp_solution_, 0, lp_product_);
+    const coverage_score candidate_score = score(lp_solution_, 0, lp_product_);
     if (!better_score(candidate_score, current_score_))
       return exact_lp_candidate_result::unchanged;
 
@@ -1105,11 +1560,10 @@ private:
     product_ = lp_product_;
     current_score_ = candidate_score;
     remove_common_content();
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
     ++targeted_lp_exact_candidate_count_;
-    record_test_interval(
-        "targeted_lp",
-        lp_outside_rows_[required_outside_rows.back()] + 1);
+    record_test_interval("targeted_lp",
+                         lp_outside_rows_[required_outside_rows.back()] + 1);
 #endif
     return exact_lp_candidate_result::improved;
   }
@@ -1197,7 +1651,7 @@ private:
     apply_candidate(direction, best_numerator_, best_denominator_);
     current_score_ = best_score_;
     improved = true;
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
     ++optimized_certificate_count_;
 #endif
     return true;
@@ -1503,10 +1957,10 @@ private:
     bool selected = false;
     for (size_t ray = 0; ray < ray_count; ++ray) {
       install_combined_direction(ray);
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
       ++combined_ray_sweep_count_;
 #endif
-      COPOSIT_IMPROVED_NBC_X6_DIAGNOSTICS("combined_ray", ray + 1);
+      COPOSIT_IMPROVED_NBC_X9_DIAGNOSTICS("combined_ray", ray + 1);
       if (!search_direction(0, false))
         return false;
       if (!best_numerator_.is_zero() &&
@@ -1526,7 +1980,7 @@ private:
     install_combined_direction(selected_ray);
     apply_candidate(0, selected_numerator, selected_denominator);
     current_score_ = selected_score;
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
     ++optimized_certificate_count_;
     ++combined_ray_improvement_count_;
     record_test_interval("combined_ray", selected_ray + 1);
@@ -1731,7 +2185,7 @@ private:
       }
     }
 
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
     if (captured_lower_ != nullptr) {
       support_context_.copy(*captured_lower_, lower);
       support_context_.copy(*captured_upper_, upper);
@@ -1747,12 +2201,12 @@ private:
     record_interval_certificate(lower, upper);
     support_context_.release(std::move(lower));
     support_context_.release(std::move(upper));
-    COPOSIT_IMPROVED_NBC_X6_DIAGNOSTICS("dickinson", indices_.size());
+    COPOSIT_IMPROVED_NBC_X9_DIAGNOSTICS("dickinson", indices_.size());
     return true;
   }
 
   bool add_curvature_exclusion() {
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
     ++support_curvature_exclusion_count_;
     if (captured_lower_ != nullptr) {
       support lower = support_context_.make();
@@ -1785,7 +2239,7 @@ private:
                                product_.size());
     record_closure_certificate("support_curvature", "upward",
                                certificate_frontier_, indices_);
-    COPOSIT_IMPROVED_NBC_X6_DIAGNOSTICS("support_upward", indices_.size());
+    COPOSIT_IMPROVED_NBC_X9_DIAGNOSTICS("support_upward", indices_.size());
   }
 
   void add_downward_closure(std::string_view kind) {
@@ -1799,15 +2253,15 @@ private:
     diagnostics_.certificate();
     record_closure_certificate(kind, "downward", certificate_frontier_,
                                indices_);
-    COPOSIT_IMPROVED_NBC_X6_DIAGNOSTICS("downward", indices_.size());
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+    COPOSIT_IMPROVED_NBC_X9_DIAGNOSTICS("downward", indices_.size());
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
     ++downward_count_;
 #endif
   }
 
   bool finish(bool result) {
     diagnostics_.finish();
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
     publish_test_counters();
 #endif
     return result;
@@ -1823,7 +2277,7 @@ private:
     }
   }
 
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
   void publish_test_counters() const noexcept {
     last_optimized_certificate_count = optimized_certificate_count_;
     last_combined_ray_sweep_count = combined_ray_sweep_count_;
@@ -1843,6 +2297,7 @@ private:
   support_context support_context_;
   fraction_free_ldlt_factorization factorization_;
   floating_positive_semidefinite_filter floating_filter_;
+  spectral_guide spectral_guide_;
   matrix_integer principal_;
   matrix_integer solution_;
   matrix_integer directions_;
@@ -1851,13 +2306,16 @@ private:
   matrix_integer combined_products_;
   matrix_integer rays_solution_;
   matrix_integer targeted_solution_;
+  matrix_integer x6_solution_;
   matrix_integer lp_solution_;
   std::vector<integer> product_;
   std::vector<integer> candidate_product_;
   std::vector<integer> rays_product_;
   std::vector<integer> targeted_product_;
+  std::vector<integer> x6_product_;
   std::vector<integer> lp_product_;
   std::vector<integer> lp_coefficients_;
+  std::vector<integer> spectral_coefficients_;
   std::vector<size_t> lp_outside_rows_;
   std::vector<size_t> lp_required_rows_;
   std::vector<double> lp_scaled_rows_;
@@ -1884,7 +2342,7 @@ private:
   copositivity_classification *classification_ = nullptr;
   diagnostics::tracker diagnostics_;
   std::optional<improved_nbc_upward_supports> supports_;
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
   size_t optimized_certificate_count_ = 0;
   size_t combined_ray_sweep_count_ = 0;
   size_t combined_ray_improvement_count_ = 0;
@@ -1920,90 +2378,90 @@ copositivity_classification classify(const matrix_integer &matrix) {
   return result;
 }
 
-#ifdef COPOSIT_IMPROVED_NBC_X6_TESTING
-bool improved_nbc_x6_prefers_negative_singular_orientation_for_testing(
+#ifdef COPOSIT_IMPROVED_NBC_X9_TESTING
+bool improved_nbc_x9_prefers_negative_singular_orientation_for_testing(
     size_t positive_products, size_t negative_products) noexcept {
   return negative_orientation_has_larger_upper(positive_products,
                                                negative_products);
 }
 
-size_t improved_nbc_x6_optimized_certificate_count_for_testing() noexcept {
+size_t improved_nbc_x9_optimized_certificate_count_for_testing() noexcept {
   return last_optimized_certificate_count;
 }
 
-size_t improved_nbc_x6_combined_ray_sweep_count_for_testing() noexcept {
+size_t improved_nbc_x9_combined_ray_sweep_count_for_testing() noexcept {
   return last_combined_ray_sweep_count;
 }
 
-size_t improved_nbc_x6_combined_ray_improvement_count_for_testing() noexcept {
+size_t improved_nbc_x9_combined_ray_improvement_count_for_testing() noexcept {
   return last_combined_ray_improvement_count;
 }
 
-size_t improved_nbc_x6_pair_curvature_exclusion_count_for_testing() noexcept {
+size_t improved_nbc_x9_pair_curvature_exclusion_count_for_testing() noexcept {
   return last_pair_curvature_exclusion_count;
 }
 
 size_t
-improved_nbc_x6_support_curvature_exclusion_count_for_testing() noexcept {
+improved_nbc_x9_support_curvature_exclusion_count_for_testing() noexcept {
   return last_support_curvature_exclusion_count;
 }
 
-size_t improved_nbc_x6_pair_upward_count_for_testing() noexcept {
+size_t improved_nbc_x9_pair_upward_count_for_testing() noexcept {
   return last_pair_curvature_exclusion_count;
 }
 
-size_t improved_nbc_x6_support_upward_count_for_testing() noexcept {
+size_t improved_nbc_x9_support_upward_count_for_testing() noexcept {
   return last_support_curvature_exclusion_count;
 }
 
-size_t improved_nbc_x6_downward_count_for_testing() noexcept {
+size_t improved_nbc_x9_downward_count_for_testing() noexcept {
   return last_downward_count;
 }
 
-size_t improved_nbc_x6_high_float_rejection_count_for_testing() noexcept {
+size_t improved_nbc_x9_high_float_rejection_count_for_testing() noexcept {
   return last_high_float_rejection_count;
 }
 
-size_t improved_nbc_x6_targeted_lp_attempt_count_for_testing() noexcept {
+size_t improved_nbc_x9_targeted_lp_attempt_count_for_testing() noexcept {
   return last_targeted_lp_attempt_count;
 }
 
-size_t improved_nbc_x6_targeted_lp_feasible_count_for_testing() noexcept {
+size_t improved_nbc_x9_targeted_lp_feasible_count_for_testing() noexcept {
   return last_targeted_lp_feasible_count;
 }
 
 size_t
-improved_nbc_x6_targeted_lp_exact_candidate_count_for_testing() noexcept {
+improved_nbc_x9_targeted_lp_exact_candidate_count_for_testing() noexcept {
   return last_targeted_lp_exact_candidate_count;
 }
 
-size_t improved_nbc_x6_targeted_lp_accepted_count_for_testing() noexcept {
+size_t improved_nbc_x9_targeted_lp_accepted_count_for_testing() noexcept {
   return last_targeted_lp_accepted_count;
 }
 
-size_t improved_nbc_x6_targeted_lp_prepare_count_for_testing() noexcept {
+size_t improved_nbc_x9_targeted_lp_prepare_count_for_testing() noexcept {
   return last_targeted_lp_prepare_count;
 }
 
-bool improved_nbc_x6_floating_psd_candidate_for_testing(
+bool improved_nbc_x9_floating_psd_candidate_for_testing(
     const matrix_integer &matrix, const std::vector<size_t> &indices) {
   floating_positive_semidefinite_filter filter(matrix.rows());
   filter.prepare(matrix);
   return filter.looks_positive_semidefinite(indices);
 }
 
-bool improved_nbc_x6_reduced_hessian_is_positive_definite_for_testing(
+bool improved_nbc_x9_reduced_hessian_is_positive_definite_for_testing(
     const matrix_integer &matrix, const std::vector<size_t> &indices) {
   return dickinson_checker(matrix.rows(), copositivity_mode::copositive)
       .reduced_hessian_is_positive_definite_for_testing(matrix, indices);
 }
 
-size_t improved_nbc_x6_shortlist_limit_for_testing(size_t matrix_dimension,
+size_t improved_nbc_x9_shortlist_limit_for_testing(size_t matrix_dimension,
                                                    size_t support_dimension) {
   return ray_shortlist_limit(matrix_dimension, support_dimension);
 }
 
-bool improved_nbc_x6_prefers_ray_candidate_for_testing(
+bool improved_nbc_x9_prefers_ray_candidate_for_testing(
     size_t candidate_upper, size_t candidate_width, size_t candidate_gains,
     size_t candidate_losses, size_t current_upper, size_t current_width,
     size_t current_gains, size_t current_losses) {
@@ -2012,21 +2470,21 @@ bool improved_nbc_x6_prefers_ray_candidate_for_testing(
       true, {current_width, current_upper}, current_gains, current_losses);
 }
 
-bool improved_nbc_x6_check_support_for_testing(
+bool improved_nbc_x9_check_support_for_testing(
     const matrix_integer &matrix, const std::vector<size_t> &indices) {
   return dickinson_checker(matrix.rows(),
                            copositivity_mode::strictly_copositive)
       .check_support_for_testing(matrix, indices);
 }
 
-bool improved_nbc_x6_certificate_for_testing(const matrix_integer &matrix,
+bool improved_nbc_x9_certificate_for_testing(const matrix_integer &matrix,
                                              const std::vector<size_t> &indices,
                                              support &lower, support &upper) {
   return dickinson_checker(matrix.rows(), copositivity_mode::copositive)
       .optimize_support_for_testing(matrix, indices, lower, upper);
 }
 
-bool improved_nbc_x6_certificate_and_vector_for_testing(
+bool improved_nbc_x9_certificate_and_vector_for_testing(
     const matrix_integer &matrix, const std::vector<size_t> &indices,
     support &lower, support &upper, matrix_integer &solution,
     std::vector<integer> &product) {
@@ -2035,27 +2493,27 @@ bool improved_nbc_x6_certificate_and_vector_for_testing(
                                            solution, product);
 }
 
-size_t improved_nbc_x6_fixed_support_upper_size_for_testing() noexcept {
+size_t improved_nbc_x9_fixed_support_upper_size_for_testing() noexcept {
   return last_fixed_support_upper_size;
 }
 
-bool improved_nbc_x6_traditional_interval_available_for_testing() noexcept {
+bool improved_nbc_x9_traditional_interval_available_for_testing() noexcept {
   return last_traditional_interval_available;
 }
 
-size_t improved_nbc_x6_traditional_lower_size_for_testing() noexcept {
+size_t improved_nbc_x9_traditional_lower_size_for_testing() noexcept {
   return last_traditional_lower_size;
 }
 
-size_t improved_nbc_x6_traditional_upper_size_for_testing() noexcept {
+size_t improved_nbc_x9_traditional_upper_size_for_testing() noexcept {
   return last_traditional_upper_size;
 }
 
-std::uint64_t improved_nbc_x6_traditional_interval_ns_for_testing() noexcept {
+std::uint64_t improved_nbc_x9_traditional_interval_ns_for_testing() noexcept {
   return last_traditional_interval_ns;
 }
 
-std::uint64_t improved_nbc_x6_interval_ns_for_testing() noexcept {
+std::uint64_t improved_nbc_x9_interval_ns_for_testing() noexcept {
   return last_x6_interval_ns;
 }
 
@@ -2064,7 +2522,7 @@ bool count_uncovered_support(void *opaque, const std::vector<size_t> &) {
   return true;
 }
 
-size_t improved_nbc_x6_uncovered_count(
+size_t improved_nbc_x9_uncovered_count(
     size_t dimension, size_t cardinality,
     const std::vector<std::pair<uint64_t, uint64_t>> &intervals) {
   support_context context(dimension);
@@ -2091,7 +2549,7 @@ size_t improved_nbc_x6_uncovered_count(
   return count;
 }
 
-size_t improved_nbc_x6_pair_exclusion_uncovered_count(size_t dimension,
+size_t improved_nbc_x9_pair_exclusion_uncovered_count(size_t dimension,
                                                       size_t cardinality,
                                                       size_t first,
                                                       size_t second) {
@@ -2106,7 +2564,7 @@ size_t improved_nbc_x6_pair_exclusion_uncovered_count(size_t dimension,
   return count;
 }
 
-size_t improved_nbc_x6_uncovered_count(
+size_t improved_nbc_x9_uncovered_count(
     size_t dimension, size_t cardinality,
     const std::vector<std::vector<size_t>> &upward,
     const std::vector<std::vector<size_t>> &downward,
@@ -2148,7 +2606,7 @@ size_t improved_nbc_x6_uncovered_count(
   return count;
 }
 
-size_t improved_nbc_x6_interval_clause_size(size_t dimension,
+size_t improved_nbc_x9_interval_clause_size(size_t dimension,
                                             uint64_t lower_mask,
                                             uint64_t upper_mask) {
   size_t lower_size = 0;

@@ -21,7 +21,7 @@ reported as `false`.
 
 The eight literature baselines, `adaptive_sponsel_copomatrix`, `dense_bitset_dickinson`, all CBDD Dickinson
 variants, `ceiling_pruned_dickinson`, `layered_singular_lift_dickinson`, `breadth_first_singular_lift_dickinson`, `sat_dickinson`,
-`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_b1`, `sat_b2`, `sat_b3`, `sat_b4`, `sat_b5`, `nbc_b6`, `nbc_b7`, `improved_nbc_b7`, `improved_nbc_x2`, `improved_nbc_x3`, `improved_nbc_x4`, `improved_nbc_x5`, `improved_nbc_x6`, `improved_nbc_x7`, `improved_nbc_x8`, `interval_supports_g3`, `minimal_sat_g4`, `cadical_x1`, `improved_nbc_b8`, `improved_nbc_b9`, `improved_nbc_g2`, `sat_c1`, `sat_c2`,
+`sat_halfspace_dickinson`, `sat_halfspace_rays_dickinson`, `sat_b1`, `sat_b2`, `sat_b3`, `sat_b4`, `sat_b5`, `nbc_b6`, `nbc_b7`, `improved_nbc_b7`, `improved_nbc_x2`, `improved_nbc_x3`, `improved_nbc_x4`, `improved_nbc_x5`, `improved_nbc_x6`, `improved_nbc_x7`, `improved_nbc_x8`, `improved_nbc_x9`, `interval_supports_g3`, `minimal_sat_g4`, `cadical_x1`, `improved_nbc_b8`, `improved_nbc_b9`, `improved_nbc_g2`, `sat_c1`, `sat_c2`,
 `sat_c3`, `sat_c4`, `f1`, `f2`, `g1`, `milp_1`, `sat_a1`, `sat_a2`, `sat_a3`, `sat_a4`, `sat_a5`, `sat_halfspace_lp_dickinson`, `sat_halfspace_milp_dickinson`,
 `sat_halfspace_rays_lookahead_dickinson`,
 `sat_halfspace_rays_wide_dickinson`, `cbdd_halfspace_dickinson`,
@@ -276,6 +276,7 @@ Their canonical source directories and compact lineage inventory are under
 | `improved_nbc_x6` | Current incumbent: Improved NBC-X3 with successful targeted LP upper-endpoint enlargements repeated before shrinking the lower endpoint once; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_x6/ALGORITHM.md). |
 | `improved_nbc_x7` | Improved NBC-X6 with at most two exactly successful LP targets compared per continuation round, retaining the stronger endpoint before continuing; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_x7/ALGORITHM.md). |
 | `improved_nbc_x8` | Improved NBC-X6 with curvature-first pruning and a complete local maximum-halfspace MILP whenever the ordinary all-ones Dickinson endpoint is not full; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_x8/ALGORITHM.md). |
+| `improved_nbc_x9` | Improved NBC-X6 plus floating spectral right-hand-side proposals, exact candidate verification, and one exact Halfspace-Rays cleanup from the best proposal; [`ALGORITHM.md`](../models/hadeler-based/improved_nbc_x9/ALGORITHM.md). |
 | `interval_supports_g3` | Improved NBC-B7's mathematics and alternating frontiers with the direct exact interval-support generator replacing Improved NBC; [`ALGORITHM.md`](../models/hadeler-based/interval_supports_g3/ALGORITHM.md). |
 | `minimal_sat_g4` | Improved NBC-B7's mathematics and alternating frontiers with a minimal non-learning DPLL engine using unit and exact-cardinality propagation; [`ALGORITHM.md`](../models/hadeler-based/minimal_sat_g4/ALGORITHM.md). |
 | `cadical_x1` | Arbitrary uncovered CaDiCaL seeds expanded into one Schur-guided maximal-chain pass, with deferred exact curvature closures and Dickinson intervals; [`ALGORITHM.md`](../models/hadeler-based/cadical_x1/ALGORITHM.md). |

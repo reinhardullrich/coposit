@@ -29,6 +29,8 @@ This file routes to every other Markdown document under `aidocs/` without duplic
 
 ## Research
 
+- `COPOSITIVITY_CHECKING_METHODS.md` — **literature review** — membership-focused taxonomy of complete and partial solvers and
+  positive-certificate methods for CP, SCP, or boundary CP, including their numerical and exact limitations.
 - `POLYA_LOWER_BOUND_DOWNWARD_PRUNING.md` — **research finding** — the exact level-one Pólya lower bound, its pair/triple
   obstruction hypergraph, top-down maximal-safe-support search, downward-pruning implications, cost, limits, and proposed diagnostic.
 - `COPOSITIVITY_CURVATURE_HADELER_DICKINSON.md` — **theory paper** — an intuition-first unified treatment of simplex faces,

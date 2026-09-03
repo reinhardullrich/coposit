@@ -28,6 +28,8 @@ bool sat_halfspace_rays_prefers_ray_candidate_for_testing(size_t candidate_upper
 bool sat_halfspace_rays_check_support_for_testing(const matrix_integer& matrix, const std::vector<size_t>& indices);
 bool sat_halfspace_rays_certificate_for_testing(
     const matrix_integer& matrix, const std::vector<size_t>& indices, support& lower, support& upper);
+bool sat_halfspace_rays_certificate_from_rhs_for_testing(const matrix_integer& matrix, const std::vector<size_t>& indices,
+                                                         const matrix_integer& rhs, support& lower, support& upper);
 size_t sat_halfspace_rays_fixed_support_upper_size_for_testing() noexcept;
 size_t sat_halfspace_rays_uncovered_count(
     size_t dimension, size_t cardinality, const std::vector<std::pair<uint64_t, uint64_t>>& intervals);
@@ -97,6 +99,23 @@ TEST(SatHalfspaceRaysDickinsonTest, ExposesTheExactOptimizedFixedSupportCertific
     EXPECT_TRUE(context.contains(lower, 0));
     EXPECT_FALSE(context.contains(lower, 1));
     EXPECT_FALSE(context.contains(lower, 2));
+    EXPECT_TRUE(context.contains(upper, 0));
+    EXPECT_TRUE(context.contains(upper, 1));
+    EXPECT_TRUE(context.contains(upper, 2));
+}
+
+TEST(SatHalfspaceRaysDickinsonTest, StartsTheExactRaceFromAPositiveCustomRightHandSide)
+{
+    matrix_integer identity;
+    identity.set_identity(3);
+    matrix_integer rhs(2, 1);
+    rhs(0, 0) = integer(2);
+    rhs(1, 0) = integer(1);
+    support_context context(3);
+    support lower = context.make();
+    support upper = context.make();
+
+    EXPECT_TRUE(model::sat_halfspace_rays_certificate_from_rhs_for_testing(identity, {0, 1}, rhs, lower, upper));
     EXPECT_TRUE(context.contains(upper, 0));
     EXPECT_TRUE(context.contains(upper, 1));
     EXPECT_TRUE(context.contains(upper, 2));

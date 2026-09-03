@@ -2,6 +2,18 @@
 
 This append-only file records meaningful decisions, results, and evidence that are not clear from Git. Do not log routine edits here.
 
+## 2026-09-02 — Spectral–Halfspace cleanup does not displace X6
+
+- Added `improved_nbc_x9` as an isolated X6 experiment. It uses floating negative-eigenvector directions to propose alternative
+  right-hand sides, verifies every candidate exactly, and applies one exact Halfspace--Rays cleanup to the best spectral proposal.
+  The proposal replaces X6's interval only when its exact Dickinson score is better.
+- The complete 130-test Release suite passed after registration, all 46 Smoke Set cases retained their known combined CP/SCP
+  classifications, and both corpus databases passed their integrity checks.
+- Against X6, X9 gained no completed cases: Core-and-Stress remained 436/469 at five seconds, BPQY Quick remained 6/6 at 180
+  seconds, and the fixed Peng panel remained 4/5 at 180 seconds. X9's paired median runtime was respectively 11.39%, 32.08%, and
+  10.16% slower. It widened intervals and reduced support work on the Peng panel, but its added exact candidate work cost more than
+  it saved; X6 remains the incumbent.
+
 ## 2026-08-31 — Public documentation website
 
 - Added the public Sphinx documentation at `https://reinhardullrich.github.io/coposit/`, following FracESSA's small Alabaster,

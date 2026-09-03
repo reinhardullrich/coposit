@@ -394,6 +394,18 @@ public:
         publish_test_counters();
         return result;
     }
+
+    bool optimize_support_from_rhs_for_testing(const matrix_integer& matrix, const std::vector<size_t>& indices,
+                                               const matrix_integer& rhs, support& lower, support& upper)
+    {
+        if (rhs.rows() != indices.size() || rhs.cols() != 1) throw std::invalid_argument("seed RHS has the wrong shape");
+        for (size_t row = 0; row < rhs.rows(); ++row)
+            if (rhs(row, 0).sign() <= 0) throw std::invalid_argument("seed RHS must be strictly positive");
+        seeded_rhs_ = &rhs;
+        const bool result = optimize_support_for_testing(matrix, indices, lower, upper);
+        seeded_rhs_ = nullptr;
+        return result;
+    }
 #endif
 
 private:
@@ -452,6 +464,11 @@ private:
     bool process_nonsingular_subset(const matrix_integer& matrix)
     {
         const size_t dimension = indices_.size();
+#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+        if (seeded_rhs_ != nullptr)
+            solution_ = *seeded_rhs_;
+        else
+#endif
         for (size_t row = 0; row < dimension; ++row) solution_(row, 0).set_one();
 
         integer denominator;
@@ -459,7 +476,12 @@ private:
         assert(denominator.sign() > 0);
         if (all_nonpositive(solution_, 0)) return false;
 
-        calculate_nonsingular_product(matrix, solution_, 0, denominator, product_);
+#ifdef COPOSIT_SAT_HALFSPACE_RAYS_DICKINSON_TESTING
+        if (seeded_rhs_ != nullptr)
+            calculate_product(matrix, solution_, 0, product_);
+        else
+#endif
+            calculate_nonsingular_product(matrix, solution_, 0, denominator, product_);
         current_score_ = score(solution_, 0, product_);
         if (dimension > 1 && current_score_.width + 1 < matrix.rows()) {
             directions_.resize(dimension, dimension);
@@ -1024,6 +1046,7 @@ private:
     size_t combined_ray_improvement_count_ = 0;
     support* captured_lower_ = nullptr;
     support* captured_upper_ = nullptr;
+    const matrix_integer* seeded_rhs_ = nullptr;
 #endif
 };
 
@@ -1088,6 +1111,13 @@ bool sat_halfspace_rays_certificate_for_testing(
 {
     return dickinson_checker(matrix.rows(), copositivity_mode::copositive)
         .optimize_support_for_testing(matrix, indices, lower, upper);
+}
+
+bool sat_halfspace_rays_certificate_from_rhs_for_testing(const matrix_integer& matrix, const std::vector<size_t>& indices,
+                                                         const matrix_integer& rhs, support& lower, support& upper)
+{
+    return dickinson_checker(matrix.rows(), copositivity_mode::copositive)
+        .optimize_support_from_rhs_for_testing(matrix, indices, rhs, lower, upper);
 }
 
 size_t sat_halfspace_rays_fixed_support_upper_size_for_testing() noexcept
